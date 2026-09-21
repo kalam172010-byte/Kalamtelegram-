@@ -1,0 +1,7 @@
+{
+  "name": "Kalam FF Panel - Telegram Bot & Admin Hub",
+  "description": "Full-featured Telegram Store Bot simulator, payment gateway manager, key vault, and administrative control center for Kalam FF Panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

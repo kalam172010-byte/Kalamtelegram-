@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "user_id": { "type": "number", "required": true },
+        "email": { "type": "string", "required": false },
+        "phone": { "type": "string", "required": false },
+        "first_name": { "type": "string", "required": true },
+        "username": { "type": "string", "required": false },
+        "balance": { "type": "number", "required": true },
+        "account_type": { "type": "string", "required": true },
+        "orders_count": { "type": "number", "required": true },
+        "spent": { "type": "number", "required": true },
+        "joined_date": { "type": "string", "required": true },
+        "is_reseller": { "type": "number", "required": true },
+        "is_vip": { "type": "number", "required": true },
+        "is_banned": { "type": "number", "required": true },
+        "auth_provider": { "type": "string", "required": false },
+        "avatar_url": { "type": "string", "required": false }
+      }
+    },
+    "Bot": {
+      "collection": "bots",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "owner_id": { "type": "number", "required": true },
+        "owner_email": { "type": "string", "required": false },
+        "name": { "type": "string", "required": true },
+        "username": { "type": "string", "required": true },
+        "bot_token": { "type": "string", "required": true },
+        "status": { "type": "string", "required": true },
+        "description": { "type": "string", "required": false },
+        "theme_color": { "type": "string", "required": false },
+        "created_at": { "type": "string", "required": true },
+        "payment_gateway": { "type": "map", "required": true },
+        "reseller_api": { "type": "map", "required": true },
+        "stats": { "type": "map", "required": false }
+      }
+    },
+    "Product": {
+      "collection": "products",
+      "fields": {
+        "id": { "type": "number", "required": true },
+        "category": { "type": "string", "required": true },
+        "panel_name": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "price_inr": { "type": "number", "required": true },
+        "reseller_price": { "type": "number", "required": true },
+        "stock": { "type": "number", "required": true },
+        "apk_link": { "type": "string", "required": false },
+        "validity": { "type": "string", "required": true },
+        "device_limit": { "type": "string", "required": true },
+        "is_active": { "type": "number", "required": true },
+        "delivery_mode": { "type": "string", "required": false },
+        "provider_product_id": { "type": "string", "required": false },
+        "provider_duration": { "type": "string", "required": false }
+      }
+    },
+    "Key": {
+      "collection": "keys",
+      "fields": {
+        "id": { "type": "number", "required": true },
+        "product_id": { "type": "number", "required": true },
+        "key_text": { "type": "string", "required": true },
+        "is_used": { "type": "number", "required": true }
+      }
+    },
+    "Order": {
+      "collection": "orders",
+      "fields": {
+        "id": { "type": "number", "required": true },
+        "user_id": { "type": "number", "required": true },
+        "product_name": { "type": "string", "required": true },
+        "price_paid": { "type": "number", "required": true },
+        "delivered_key": { "type": "string", "required": true },
+        "purchase_date": { "type": "string", "required": true }
+      }
+    },
+    "Transaction": {
+      "collection": "transactions",
+      "fields": {
+        "order_id": { "type": "string", "required": true },
+        "user_id": { "type": "number", "required": true },
+        "amount_inr": { "type": "number", "required": true },
+        "status": { "type": "string", "required": true },
+        "timestamp": { "type": "number", "required": true },
+        "upi_id": { "type": "string", "required": false },
+        "utr": { "type": "string", "required": false }
+      }
+    },
+    "Ticket": {
+      "collection": "tickets",
+      "fields": {
+        "id": { "type": "number", "required": true },
+        "user_id": { "type": "number", "required": true },
+        "message": { "type": "string", "required": true },
+        "status": { "type": "string", "required": true },
+        "created_at": { "type": "string", "required": true },
+        "admin_reply": { "type": "string", "required": false }
+      }
+    },
+    "Setting": {
+      "collection": "settings",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "bot_token": { "type": "string", "required": false },
+        "bot_username": { "type": "string", "required": false },
+        "admin_id": { "type": "number", "required": false }
+      }
+    }
+  }
+}
