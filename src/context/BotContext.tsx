@@ -278,7 +278,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [activeTab, setActiveTab] = useState<ViewTab>(() => {
     const savedAuth = localStorage.getItem('kalam_bot_auth_logged_in');
-    return savedAuth === 'false' ? 'auth' : 'my_bots';
+    return savedAuth === 'false' ? 'auth' : 'dashboard';
   });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentFsmState, setCurrentFsmState] = useState<string | null>(null);
@@ -2530,6 +2530,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         setIsAuthenticated(true);
         localStorage.setItem('kalam_bot_auth_logged_in', 'true');
         setIsAuthModalOpen(false);
+        setActiveTab('dashboard');
         // Persist to Cloud Firestore
         setDoc(doc(db, 'users', String(matched.user_id)), updated, { merge: true }).catch(() => {});
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
@@ -2563,6 +2564,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       setIsAuthenticated(true);
       localStorage.setItem('kalam_bot_auth_logged_in', 'true');
       setIsAuthModalOpen(false);
+      setActiveTab('dashboard');
       // Persist to Cloud Firestore
       setDoc(doc(db, 'users', String(newUser.user_id)), newUser, { merge: true }).catch(() => {});
       confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
@@ -2614,6 +2616,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
+    setActiveTab('dashboard');
     // Sync to Firestore
     setDoc(doc(db, 'users', String(matched.user_id)), matched, { merge: true }).catch(() => {});
     confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
@@ -2684,6 +2687,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
+    setActiveTab('dashboard');
     // Sync to Cloud Firestore
     setDoc(doc(db, 'users', String(newUser.user_id)), newUser, { merge: true }).catch(() => {});
     confetti({ particleCount: 80, spread: 80, origin: { y: 0.6 } });

@@ -263,30 +263,30 @@ export const TelegramBotView: React.FC = () => {
       )}
 
       {/* Input Bar */}
-      <div className="p-3 md:p-4 bg-[#17212b] border-t border-slate-800 shrink-0 z-10">
+      <div className="p-2.5 sm:p-3 md:p-4 bg-[#17212b] border-t border-slate-800 shrink-0 z-10 pb-[max(env(safe-area-inset-bottom),0.65rem)]">
         {currentFsmState && (
-          <div className="mb-2 px-3.5 py-1.5 bg-cyan-950/80 border border-cyan-500/40 rounded-xl flex items-center justify-between text-xs text-cyan-200">
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-              <span>Awaiting input for: <b>{currentFsmState.replace(/_/g, ' ')}</b></span>
+          <div className="mb-2 px-3 py-1.5 bg-cyan-950/90 border border-cyan-500/40 rounded-xl flex items-center justify-between text-xs text-cyan-200">
+            <span className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
+              <span className="truncate">Input for: <b>{currentFsmState.replace(/_/g, ' ')}</b></span>
             </span>
             <button
               type="button"
               onClick={() => sendUserMessage('/cancel')}
-              className="text-xs font-bold underline text-rose-300 hover:text-rose-200 cursor-pointer"
+              className="text-xs font-bold underline text-rose-300 hover:text-rose-200 cursor-pointer ml-2 shrink-0"
             >
               Cancel
             </button>
           </div>
         )}
 
-        <form onSubmit={handleSend} className="flex items-center gap-2.5 max-w-5xl mx-auto">
+        <form onSubmit={handleSend} className="flex items-center gap-2 max-w-5xl mx-auto">
           {/* Commands toggle button */}
           <button
             type="button"
             onClick={() => setShowCommandsMenu(!showCommandsMenu)}
             title="Bot Commands Menu"
-            className="p-3 rounded-2xl bg-slate-800 text-slate-200 hover:text-cyan-400 hover:bg-slate-700 transition cursor-pointer shrink-0 border border-slate-700/60"
+            className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-800 text-slate-200 hover:text-cyan-400 active:scale-95 transition cursor-pointer shrink-0 border border-slate-700/60 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -297,14 +297,14 @@ export const TelegramBotView: React.FC = () => {
             value={inputText || ''}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={currentFsmState ? "Type your input here..." : "Type a message or /command..."}
-            className="flex-1 bg-slate-900 text-slate-100 placeholder:text-slate-500 text-sm md:text-base px-4 py-3 rounded-2xl border border-slate-700/80 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition shadow-inner"
+            className="flex-1 bg-slate-900 text-slate-100 placeholder:text-slate-500 text-sm md:text-base px-3.5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-700/80 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition shadow-inner min-h-[44px]"
           />
 
           {/* Send Button */}
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="p-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md cursor-pointer shrink-0"
+            className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-md cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <Send className="w-5 h-5" />
           </button>
@@ -313,7 +313,7 @@ export const TelegramBotView: React.FC = () => {
 
       {/* QR Code Popup Modal */}
       {selectedQrOrder && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-sm">
             <button
               type="button"

@@ -147,80 +147,80 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-t-3xl sm:rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
+        <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                Create New Telegram Store Bot
-                <span className="text-[11px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-semibold border border-cyan-500/30">
-                  Step {step} of 3
+              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                Create Telegram Bot
+                <span className="text-[10px] sm:text-[11px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-semibold border border-cyan-500/30">
+                  Step {step}/3
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
-                Deploy your separate automated Telegram shop with custom payment gateway & reseller keys.
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate max-w-[240px] sm:max-w-none">
+                Deploy your automated Telegram shop with custom gateway & keys.
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition min-h-[40px] min-w-[40px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Step Progression Bar */}
-        <div className="bg-slate-950/60 px-6 py-2.5 border-b border-slate-800/80 flex items-center justify-between text-xs">
+        <div className="bg-slate-950/80 px-3 sm:px-6 py-2 border-b border-slate-800/80 flex items-center justify-between text-xs shrink-0 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setStep(1)}
-            className={`flex items-center gap-2 font-semibold transition ${
-              step === 1 ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1.5 sm:gap-2 font-semibold transition shrink-0 ${
+              step === 1 ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
               step === 1 ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'
             }`}>1</span>
-            Bot Credentials
+            <span className="text-[11px] sm:text-xs">Bot Credentials</span>
           </button>
-          <div className="w-8 h-[1px] bg-slate-800"></div>
+          <div className="w-4 sm:w-8 h-[1px] bg-slate-800 shrink-0"></div>
           <button
             type="button"
             onClick={() => setStep(2)}
-            className={`flex items-center gap-2 font-semibold transition ${
-              step === 2 ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1.5 sm:gap-2 font-semibold transition shrink-0 ${
+              step === 2 ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
               step === 2 ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'
             }`}>2</span>
-            Payment Gateway API
+            <span className="text-[11px] sm:text-xs">Payment Gateway</span>
           </button>
-          <div className="w-8 h-[1px] bg-slate-800"></div>
+          <div className="w-4 sm:w-8 h-[1px] bg-slate-800 shrink-0"></div>
           <button
             type="button"
             onClick={() => setStep(3)}
-            className={`flex items-center gap-2 font-semibold transition ${
-              step === 3 ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1.5 sm:gap-2 font-semibold transition shrink-0 ${
+              step === 3 ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
               step === 3 ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'
             }`}>3</span>
-            Reseller Provider API
+            <span className="text-[11px] sm:text-xs">Reseller API</span>
           </button>
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleCreateSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleCreateSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1 pb-safe">
           {step === 1 && (
             <div className="space-y-4">
               <div className="bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3.5 flex items-start gap-3">

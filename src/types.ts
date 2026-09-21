@@ -223,4 +223,4 @@ export interface ChatMessage {
   };
 }
 
-export type ViewTab = 'my_bots' | 'create_bot' | 'bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
+export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
