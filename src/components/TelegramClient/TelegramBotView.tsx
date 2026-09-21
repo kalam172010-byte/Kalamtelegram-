@@ -164,26 +164,54 @@ export const TelegramBotView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Embedded QR Preview if Order Info Present */}
+                {/* Embedded Rich QR Code Card if Order Info Present */}
                 {msg.order_info && (
-                  <div className="mt-3.5 p-3.5 bg-slate-950/90 rounded-xl border border-cyan-500/40 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2.5 bg-cyan-500/20 text-cyan-400 rounded-xl">
-                        <QrCode className="w-6 h-6" />
+                  <div className="mt-3.5 p-4 bg-slate-950/95 rounded-2xl border border-cyan-500/40 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-cyan-500/20 text-cyan-400 rounded-lg">
+                          <QrCode className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">Scan & Pay via UPI</div>
+                          <div className="text-[11px] font-mono text-cyan-300">Order: {msg.order_info.order_id}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs md:text-sm font-bold text-white">FamPay UPI Invoice</div>
-                        <div className="text-xs md:text-sm text-emerald-400 font-bold">₹{msg.order_info.amount.toFixed(2)}</div>
+                      <div className="text-sm font-black text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-lg">
+                        ₹{(Number(msg.order_info.amount) || 0).toFixed(2)}
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedQrOrder(msg.order_info)}
-                      className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs md:text-sm font-bold shadow-md cursor-pointer transition"
-                    >
-                      Open QR
-                    </button>
+                    {/* QR Code Container */}
+                    <div className="bg-white p-3 rounded-xl flex items-center justify-center max-w-[200px] mx-auto shadow-inner ring-2 ring-cyan-500/30">
+                      {msg.order_info.qr_url ? (
+                        <img
+                          src={msg.order_info.qr_url}
+                          alt="UPI Payment QR Code"
+                          className="w-44 h-44 object-contain select-none cursor-pointer"
+                          onClick={() => setSelectedQrOrder(msg.order_info)}
+                          title="Click to expand QR Code"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-44 h-44 flex items-center justify-center text-slate-800">
+                          <QrCode className="w-32 h-32" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <div className="text-[11px] text-slate-400 font-mono truncate">
+                        UPI: <span className="text-slate-200 font-semibold">{msg.order_info.upi_id}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedQrOrder(msg.order_info)}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow transition cursor-pointer shrink-0"
+                      >
+                        🔍 Fullscreen QR
+                      </button>
+                    </div>
                   </div>
                 )}
 

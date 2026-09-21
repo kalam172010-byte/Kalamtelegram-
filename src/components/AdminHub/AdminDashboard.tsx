@@ -176,11 +176,23 @@ export const AdminDashboard: React.FC = () => {
     requires_android_id: 0
   });
 
-  // User management state
+  // User management & payment credit state
   const [userSearch, setUserSearch] = useState('');
   const [selectedUserForModal, setSelectedUserForModal] = useState<number | null>(null);
   const [balanceAdjustAmt, setBalanceAdjustAmt] = useState<string>('100');
+  const [balanceAdjustReason, setBalanceAdjustReason] = useState<string>('Manual Payment (UPI/Admin)');
+  const [balanceNotifyTg, setBalanceNotifyTg] = useState<boolean>(true);
+  const [modalBalanceStatus, setModalBalanceStatus] = useState<string | null>(null);
   const [warnMessageText, setWarnMessageText] = useState('');
+
+  // Quick Direct Payment Portal state
+  const [directPayUserId, setDirectPayUserId] = useState<string>('');
+  const [directPayAmount, setDirectPayAmount] = useState<string>('100');
+  const [directPayReason, setDirectPayReason] = useState<string>('Direct UPI Payment');
+  const [directPayCustomReason, setDirectPayCustomReason] = useState<string>('');
+  const [directPayNotify, setDirectPayNotify] = useState<boolean>(true);
+  const [directPayStatus, setDirectPayStatus] = useState<{ type: 'success' | 'error'; text: string; details?: string } | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
   // Ticket reply state
   const [replyTicketId, setReplyTicketId] = useState<number | null>(null);
@@ -677,6 +689,211 @@ export const AdminDashboard: React.FC = () => {
         {/* ================= USERS TAB ================= */}
         {adminTab === 'users' && (
           <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Direct User Payment / Balance Credit Card */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 border border-emerald-500/30 p-5 rounded-2xl shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      Direct User Payment & Wallet Credit System
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                        Admin Instant Top-Up
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Credit any payment amount (₹) to any Telegram user. Syncs with Bot Database, Firestore, and notifies user in real-time.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top-up Form */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+                {/* User Selector / UID Input */}
+                <div className="md:col-span-4 space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span>Target Telegram User</span>
+                    <span className="text-[10px] text-cyan-400">Choose or Type ID</span>
+                  </label>
+                  <div className="space-y-1.5">
+                    <select
+                      value={directPayUserId}
+                      onChange={(e) => setDirectPayUserId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-500"
+                    >
+                      <option value="">-- Select Existing User --</option>
+                      {allUsers.map(u => (
+                        <option key={u.user_id} value={String(u.user_id)}>
+                          UID: {u.user_id} | {u.first_name} (@{u.username || 'none'}) - Bal: ₹{u.balance}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={directPayUserId}
+                      onChange={(e) => setDirectPayUserId(e.target.value)}
+                      placeholder="Or enter any Telegram User ID (e.g. 12846461)..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-cyan-300 outline-none focus:border-emerald-500 placeholder:text-slate-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Amount with Preset Buttons */}
+                <div className="md:col-span-4 space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Payment Amount to Credit (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={directPayAmount}
+                      onChange={(e) => setDirectPayAmount(e.target.value)}
+                      placeholder="e.g. 100, 500, 1000..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-sm font-bold text-emerald-400 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  {/* Preset Amount Pills */}
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {['10', '50', '100', '200', '500', '1000', '2000', '5000'].map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setDirectPayAmount(preset)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                          directPayAmount === preset
+                            ? 'bg-emerald-500 text-slate-950 font-bold shadow'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                        }`}
+                      >
+                        +₹{preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Payment Method / Reason & Action */}
+                <div className="md:col-span-4 space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300">
+                      Payment Reason / TXN Note
+                    </label>
+                    <select
+                      value={directPayReason}
+                      onChange={(e) => setDirectPayReason(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-500 mb-1.5"
+                    >
+                      <option value="Direct UPI Payment">UPI / QR Code Transfer</option>
+                      <option value="Google Pay (GPay) Payment">Google Pay (GPay)</option>
+                      <option value="PhonePe Payment">PhonePe</option>
+                      <option value="Paytm Wallet / UPI">Paytm</option>
+                      <option value="Direct Bank Transfer / IMPS">Bank Transfer (IMPS/NEFT)</option>
+                      <option value="Crypto USDT Deposit">Crypto USDT Deposit</option>
+                      <option value="Bonus Credit / Cashback">Bonus Credit / Promo Reward</option>
+                      <option value="Custom Note">Custom Note / TXN ID...</option>
+                    </select>
+                    {directPayReason === 'Custom Note' && (
+                      <input
+                        type="text"
+                        value={directPayCustomReason}
+                        onChange={(e) => setDirectPayCustomReason(e.target.value)}
+                        placeholder="Enter custom TXN ID / Note..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-emerald-500"
+                      />
+                    )}
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer mb-2 select-none">
+                      <input
+                        type="checkbox"
+                        checked={directPayNotify}
+                        onChange={(e) => setDirectPayNotify(e.target.checked)}
+                        className="rounded border-slate-700 text-emerald-500 focus:ring-0"
+                      />
+                      <span>⚡ Send Real-Time Telegram Receipt to User</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      disabled={isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0}
+                      onClick={async () => {
+                        const targetUid = Number(directPayUserId);
+                        const amt = Number(directPayAmount);
+                        if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt)) return;
+
+                        setIsProcessingPayment(true);
+                        setDirectPayStatus(null);
+                        const finalReason = directPayReason === 'Custom Note' && directPayCustomReason.trim()
+                          ? directPayCustomReason.trim()
+                          : directPayReason;
+
+                        try {
+                          updateUserBalance(targetUid, amt, finalReason, directPayNotify);
+                          const userObj = allUsers.find(u => u.user_id === targetUid);
+                          const updatedBal = (userObj ? userObj.balance : 0) + amt;
+
+                          setDirectPayStatus({
+                            type: 'success',
+                            text: `Successfully credited ₹${amt.toFixed(2)} to User #${targetUid}!`,
+                            details: `New Balance: ₹${updatedBal.toFixed(2)} | Note: ${finalReason} | Telegram Alert: ${directPayNotify ? 'Sent' : 'Skipped'}`
+                          });
+                        } catch (err: any) {
+                          setDirectPayStatus({
+                            type: 'error',
+                            text: `Failed to credit balance: ${err.message || 'Unknown error'}`
+                          });
+                        } finally {
+                          setIsProcessingPayment(false);
+                        }
+                      }}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                        isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0
+                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50 hover:shadow-emerald-900/50'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      {isProcessingPayment ? 'Processing Credit...' : `Credit ₹${directPayAmount || '0'} to User Wallet`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Alert Banner */}
+              {directPayStatus && (
+                <div className={`mt-3 p-3 rounded-xl border text-xs flex items-start justify-between gap-3 ${
+                  directPayStatus.type === 'success'
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {directPayStatus.type === 'success' ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-bold block">{directPayStatus.text}</span>
+                      {directPayStatus.details && (
+                        <span className="text-[11px] opacity-80">{directPayStatus.details}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDirectPayStatus(null)}
+                    className="text-slate-400 hover:text-white text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Search & Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
               <div className="relative flex-1 min-w-[240px]">
@@ -712,7 +929,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-3.5">Level</th>
                       <th className="p-3.5">Orders / Spent</th>
                       <th className="p-3.5">Status</th>
-                      <th className="p-3.5 text-right">Manage</th>
+                      <th className="p-3.5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
@@ -757,13 +974,28 @@ export const AdminDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedUserForModal(user.user_id)}
-                            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
-                          >
-                            Inspect & Modify
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDirectPayUserId(String(user.user_id));
+                                setBalanceAdjustAmt('100');
+                                setSelectedUserForModal(user.user_id);
+                              }}
+                              className="px-2.5 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                              title="Add / Credit Balance directly to this user"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                              <span>+ Add Money</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUserForModal(user.user_id)}
+                              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                            >
+                              Inspect & Modify
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2541,30 +2773,104 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Balance Modifier */}
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <label className="text-xs text-slate-400 block font-semibold">Modify Balance Amount (₹)</label>
-                <div className="flex gap-2">
+              {/* Balance Modifier & Payment Credit */}
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Add / Modify User Balance</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Real-time Telegram Sync</span>
+                </div>
+
+                {/* Preset Amount Pills */}
+                <div className="flex flex-wrap gap-1">
+                  {['10', '50', '100', '200', '500', '1000', '2000', '5000'].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setBalanceAdjustAmt(preset)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                        balanceAdjustAmt === preset
+                          ? 'bg-emerald-500 text-slate-950 font-bold'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      +₹{preset}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+                      <input
+                        type="number"
+                        value={balanceAdjustAmt}
+                        onChange={(e) => setBalanceAdjustAmt(e.target.value)}
+                        placeholder="Amount (₹)"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-emerald-400 outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
                   <input
-                    type="number"
-                    value={balanceAdjustAmt}
-                    onChange={(e) => setBalanceAdjustAmt(e.target.value)}
-                    className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200"
+                    type="text"
+                    value={balanceAdjustReason}
+                    onChange={(e) => setBalanceAdjustReason(e.target.value)}
+                    placeholder="Reason / Note (e.g., Manual UPI payment, GPay #1234)"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-emerald-500"
                   />
-                  <button
-                    type="button"
-                    onClick={() => updateUserBalance(u.user_id, Number(balanceAdjustAmt))}
-                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    + Add Funds
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateUserBalance(u.user_id, -Number(balanceAdjustAmt))}
-                    className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    - Deduct Funds
-                  </button>
+
+                  <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={balanceNotifyTg}
+                      onChange={(e) => setBalanceNotifyTg(e.target.checked)}
+                      className="rounded border-slate-700 text-emerald-500 focus:ring-0"
+                    />
+                    <span>Notify user instantly on Telegram with receipt</span>
+                  </label>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={!balanceAdjustAmt || Number(balanceAdjustAmt) <= 0}
+                      onClick={() => {
+                        const amt = Number(balanceAdjustAmt);
+                        if (!amt || amt <= 0) return;
+                        updateUserBalance(u.user_id, amt, balanceAdjustReason, balanceNotifyTg);
+                        setModalBalanceStatus(`Credited +₹${amt.toFixed(2)} to ${u.first_name}!`);
+                        setTimeout(() => setModalBalanceStatus(null), 3000);
+                      }}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow flex items-center justify-center gap-1 disabled:opacity-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Funds (+₹{balanceAdjustAmt || '0'})
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!balanceAdjustAmt || Number(balanceAdjustAmt) <= 0}
+                      onClick={() => {
+                        const amt = Number(balanceAdjustAmt);
+                        if (!amt || amt <= 0) return;
+                        updateUserBalance(u.user_id, -amt, balanceAdjustReason, balanceNotifyTg);
+                        setModalBalanceStatus(`Deducted -₹${amt.toFixed(2)} from ${u.first_name}!`);
+                        setTimeout(() => setModalBalanceStatus(null), 3000);
+                      }}
+                      className="py-2 px-3 bg-rose-600/80 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                    >
+                      - Deduct
+                    </button>
+                  </div>
+
+                  {modalBalanceStatus && (
+                    <div className="p-2 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{modalBalanceStatus}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

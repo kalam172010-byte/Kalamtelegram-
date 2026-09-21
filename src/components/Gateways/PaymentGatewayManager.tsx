@@ -17,6 +17,8 @@ import {
   Bot
 } from 'lucide-react';
 import { PaymentGatewayConfig } from '../../types';
+import { generateQrDataUrl, buildUpiUri } from '../../utils/qrGenerator';
+import { Download, Check } from 'lucide-react';
 
 export const PaymentGatewayManager: React.FC = () => {
   const {
@@ -404,26 +406,52 @@ export const PaymentGatewayManager: React.FC = () => {
           <div className="space-y-5">
             {/* Dynamic QR Preview Card */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <QrCode className="w-4 h-4 text-emerald-400" />
-                Live Bot Payment QR Preview
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <QrCode className="w-4 h-4 text-emerald-400" />
+                  Live Bot Payment QR Preview
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                  AUTO-UPDATED
+                </span>
+              </div>
 
               <div className="bg-white p-4 rounded-xl flex flex-col items-center justify-center shadow-inner">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&cu=INR`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                    buildUpiUri({
+                      upiId: upiId || 'kalampanel@fam',
+                      payeeName: merchantName || 'Kalam FF Panel',
+                      note: `Deposit ${activeBot.username}`
+                    })
+                  )}`}
                   alt="UPI QR Code"
-                  className="w-40 h-40 object-contain"
+                  className="w-44 h-44 object-contain"
                   referrerPolicy="no-referrer"
+                  onError={async (e) => {
+                    try {
+                      const dataUrl = await generateQrDataUrl(
+                        buildUpiUri({
+                          upiId: upiId || 'kalampanel@fam',
+                          payeeName: merchantName || 'Kalam FF Panel'
+                        })
+                      );
+                      (e.target as HTMLImageElement).src = dataUrl;
+                    } catch (err) {
+                      // ignore
+                    }
+                  }}
                 />
-                <div className="text-center mt-2">
-                  <div className="text-xs font-bold text-slate-900">{merchantName}</div>
-                  <div className="text-[11px] font-mono text-slate-600 font-semibold">{upiId}</div>
+                <div className="text-center mt-2.5">
+                  <div className="text-xs font-bold text-slate-900">{merchantName || 'Kalam FF Panel'}</div>
+                  <div className="text-[11px] font-mono text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded mt-0.5">
+                    {upiId || 'kalampanel@fam'}
+                  </div>
                 </div>
               </div>
 
               <div className="text-[11px] text-slate-400 leading-relaxed bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                ⚡ Any customer in <b>@{activeBot.username}</b> typing <span className="font-mono text-cyan-300">/add_balance</span> will scan this dynamic QR to complete their transaction.
+                ⚡ Any customer in <b>@{activeBot.username}</b> selecting <span className="font-mono text-cyan-300">Add Balance</span> will scan this QR to instantly deposit money into your UPI wallet.
               </div>
             </div>
 

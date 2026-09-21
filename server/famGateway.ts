@@ -1,6 +1,7 @@
 import { dbStore } from './storage';
 import { telegramEngine } from './telegramEngine';
 import { Transaction, User } from '../src/types';
+import QRCode from 'qrcode';
 
 export interface FamGatewayOrderResult {
   success: boolean;
@@ -46,6 +47,8 @@ class FamGatewayService {
     redirectUrl?: string;
     customerMobile?: string;
   }): Promise<FamGatewayOrderResult> {
+    const rawAmt = Number(params.amount);
+    const safeAmount = (!params.amount || isNaN(rawAmt) || rawAmt <= 0) ? 100 : rawAmt;
     const apiKey = this.getApiKey();
     const settings = dbStore.getData().settings;
 
@@ -53,13 +56,18 @@ class FamGatewayService {
       // Fallback if no API key is provided yet
       const fallbackOrderId = 'ORD_LOCAL_' + Math.floor(100000 + Math.random() * 900000);
       const upiId = settings.fampay_upi_id || 'kalampanel@fam';
-      const upiUri = `upi://pay?pa=${upiId}&pn=KalamPanel&am=${params.amount}&tn=${fallbackOrderId}&cu=INR`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
+      const upiUri = `upi://pay?pa=${upiId}&pn=KalamPanel&am=${safeAmount.toFixed(2)}&tn=${fallbackOrderId}&cu=INR`;
+      let qrUrl = '';
+      try {
+        qrUrl = await QRCode.toDataURL(upiUri, { width: 360, margin: 2, errorCorrectionLevel: 'M' });
+      } catch (e) {
+        qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
+      }
 
       const newTxn: Transaction = {
         order_id: fallbackOrderId,
         user_id: params.userId,
-        amount_inr: params.amount,
+        amount_inr: safeAmount,
         status: 'pending',
         timestamp: Date.now(),
         qr_url: qrUrl,
@@ -75,7 +83,7 @@ class FamGatewayService {
         payment_url: upiUri,
         qr_url: qrUrl,
         upi_intent: upiUri,
-        amount: params.amount,
+        amount: safeAmount,
         error: 'FamGateway API Key not set. Using UPI Direct mode.'
       };
     }
@@ -85,7 +93,7 @@ class FamGatewayService {
 
     try {
       const payload: any = {
-        amount: Number(params.amount.toFixed(2)),
+        amount: Number(safeAmount.toFixed(2)),
         redirect_url: redirectUrl,
         order_id: customOrderId
       };
@@ -119,9 +127,16 @@ class FamGatewayService {
 
       const orderId = resData.order_id || resData.id || customOrderId;
       const paymentUrl = resData.payment_url || resData.payment_link || resData.checkout_url || resData.url || '';
-      const qrUrl = resData.qr_image || resData.qr_url || resData.qr_code ||
-        (paymentUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentUrl)}` : undefined);
-      const upiIntent = resData.upi_intent || resData.upi_url || paymentUrl;
+      const upiIntent = resData.upi_intent || resData.upi_url || paymentUrl || `upi://pay?pa=${settings.fampay_upi_id || 'kalampanel@fam'}&pn=KalamPanel&am=${params.amount.toFixed(2)}&tn=${orderId}&cu=INR`;
+      
+      let qrUrl = resData.qr_image || resData.qr_url || resData.qr_code || '';
+      if (!qrUrl || qrUrl.length < 10) {
+        try {
+          qrUrl = await QRCode.toDataURL(upiIntent || paymentUrl, { width: 360, margin: 2, errorCorrectionLevel: 'M' });
+        } catch (e) {
+          qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiIntent || paymentUrl)}`;
+        }
+      }
 
       // Save Transaction
       const newTxn: Transaction = {
@@ -131,7 +146,7 @@ class FamGatewayService {
         status: 'pending',
         timestamp: Date.now(),
         qr_url: qrUrl,
-        upi_id: resData.upi_id || settings.fampay_upi_id,
+        upi_id: resData.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
         expires_at: Date.now() + 20 * 60 * 1000
       };
 
@@ -142,7 +157,7 @@ class FamGatewayService {
       return {
         success: true,
         order_id: String(orderId),
-        payment_url: paymentUrl,
+        payment_url: paymentUrl || upiIntent,
         qr_url: qrUrl,
         upi_intent: upiIntent,
         amount: params.amount,
@@ -154,8 +169,13 @@ class FamGatewayService {
       // Fallback to direct UPI so users can still pay seamlessly
       const fallbackOrderId = 'ORD_FB_' + Math.floor(100000 + Math.random() * 900000);
       const upiId = settings.fampay_upi_id || 'kalampanel@fam';
-      const upiUri = `upi://pay?pa=${upiId}&pn=KalamPanel&am=${params.amount}&tn=${fallbackOrderId}&cu=INR`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
+      const upiUri = `upi://pay?pa=${upiId}&pn=KalamPanel&am=${params.amount.toFixed(2)}&tn=${fallbackOrderId}&cu=INR`;
+      let qrUrl = '';
+      try {
+        qrUrl = await QRCode.toDataURL(upiUri, { width: 360, margin: 2, errorCorrectionLevel: 'M' });
+      } catch (e) {
+        qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
+      }
 
       const newTxn: Transaction = {
         order_id: fallbackOrderId,
@@ -242,7 +262,11 @@ class FamGatewayService {
   /**
    * Process and finalize a successful payment, crediting the user balance and sending alerts
    */
-  public async processSuccessfulPayment(orderId: string, customAmount?: number): Promise<{ success: boolean; user?: User; error?: string }> {
+  public async processSuccessfulPayment(
+    orderId: string,
+    customAmount?: number,
+    utr?: string
+  ): Promise<{ success: boolean; user?: User; error?: string }> {
     const data = dbStore.getData();
     const txn = data.transactions.find(t => t.order_id === orderId);
 
@@ -257,6 +281,9 @@ class FamGatewayService {
 
     // Mark as paid
     txn.status = 'paid';
+    if (utr) {
+      txn.utr = utr;
+    }
     const creditAmount = customAmount || txn.amount_inr;
 
     const user = data.users.find(u => u.user_id === txn.user_id);
@@ -266,23 +293,29 @@ class FamGatewayService {
 
     user.balance += creditAmount;
     dbStore.updateUser(user.user_id, { balance: user.balance });
-    dbStore.logActivity(user.user_id, 'FAMGATEWAY_AUTO_CREDIT', `Auto-credited +₹${creditAmount.toFixed(2)} (Order #${orderId})`);
+    dbStore.logActivity(
+      user.user_id,
+      'PAYMENT_AUTO_CREDIT',
+      `Auto-credited +₹${creditAmount.toFixed(2)} (Order #${orderId}${utr ? `, UTR: ${utr}` : ''})`
+    );
     dbStore.saveData();
 
     // 1. Notify the user immediately on Telegram
     try {
+      const utrLine = utr ? `🧾 <b>UTR / Ref ID:</b> <code>${utr}</code>\n` : '';
       await telegramEngine.sendMessage(
         user.user_id,
-        `🎉 <b>PAYMENT RECEIVED & CONFIRMED!</b> 🎉\n\n` +
+        `🎉 <b>PAYMENT CONFIRMED & WALLET CREDITED!</b> 🎉\n\n` +
         `✅ <b>Status:</b> Payment Successfully Verified\n` +
         `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
+        utrLine +
         `💰 <b>Amount Credited:</b> <b>+₹${creditAmount.toFixed(2)}</b>\n` +
         `💳 <b>New Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n\n` +
-        `<i>Your wallet is ready. You can now purchase your favorite Free Fire panel keys instantly!</i>`,
+        `<i>Your funds are ready! You can now purchase your favorite Free Fire panel keys instantly from the store.</i>`,
         {
           inline_keyboard: [
             [{ text: '🛒 Open Product Store', callback_data: 'shop_categories' }],
-            [{ text: '👤 View My Profile', callback_data: 'profile' }]
+            [{ text: '👤 View My Profile & Keys', callback_data: 'profile' }]
           ]
         }
       );
@@ -296,11 +329,12 @@ class FamGatewayService {
       try {
         await telegramEngine.sendMessage(
           settings.admin_id,
-          `💰 <b>AUTOMATIC PAYMENT RECEIVED (FAMGATEWAY)</b>\n\n` +
+          `💰 <b>AUTOMATIC PAYMENT VERIFIED & CREDITED</b>\n\n` +
           `👤 <b>Customer:</b> ${user.first_name} (@${user.username || user.user_id})\n` +
           `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
           `💵 <b>Amount:</b> <b>₹${creditAmount.toFixed(2)}</b>\n` +
           `🧾 <b>Order ID:</b> <code>${orderId}</code>\n` +
+          (utr ? `📌 <b>UTR / Ref:</b> <code>${utr}</code>\n` : '') +
           `💳 <b>User's New Balance:</b> ₹${user.balance.toFixed(2)}\n` +
           `⏰ <b>Time:</b> ${new Date().toLocaleString()}`
         );

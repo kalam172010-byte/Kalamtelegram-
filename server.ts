@@ -67,62 +67,96 @@ async function startServer() {
   // 5. Manage Products (Add, Edit, Delete, Stock/Key refill)
   app.post('/api/products', (req, res) => {
     try {
-      const { action, product, productId, keys } = req.body;
-      const data = dbStore.getData();
+      const { action, product, productId, keys, keyId } = req.body;
 
-      if (action === 'create') {
-        data.products.push(product);
+      if (action === 'create' && product) {
+        dbStore.addProduct(product, keys);
         dbStore.logActivity(12846461, 'CREATE_PRODUCT', `Created product: ${product.name}`);
-      } else if (action === 'update') {
-        const idx = data.products.findIndex(p => p.id === product.id);
-        if (idx !== -1) {
-          data.products[idx] = product;
-          dbStore.logActivity(12846461, 'UPDATE_PRODUCT', `Updated product: ${product.name}`);
-        }
+      } else if (action === 'update' && product) {
+        dbStore.updateProduct(Number(product.id), product);
+        dbStore.logActivity(12846461, 'UPDATE_PRODUCT', `Updated product: ${product.name}`);
       } else if (action === 'delete') {
-        data.products = data.products.filter(p => p.id !== Number(productId));
-        dbStore.logActivity(12846461, 'DELETE_PRODUCT', `Deleted product ID: ${productId}`);
+        const idToDelete = Number(productId);
+        dbStore.deleteProduct(idToDelete);
+        dbStore.logActivity(12846461, 'DELETE_PRODUCT', `Deleted product ID: ${idToDelete}`);
       } else if (action === 'add_keys') {
-        if (Array.isArray(keys)) {
-          for (const k of keys) {
-            data.productKeys.push({
-              id: Date.now() + Math.floor(Math.random() * 1000),
-              product_id: Number(productId),
-              key_text: k,
-              is_used: 0
-            });
-          }
-          const prod = data.products.find(p => p.id === Number(productId));
-          if (prod) prod.stock += keys.length;
-          dbStore.logActivity(12846461, 'INJECT_KEYS', `Added ${keys.length} keys to product ID ${productId}`);
-        }
+        const id = Number(productId);
+        dbStore.injectProductKeys(id, keys || []);
+        dbStore.logActivity(12846461, 'INJECT_KEYS', `Added ${(keys || []).length} keys to product ID ${id}`);
+      } else if (action === 'delete_key') {
+        const id = Number(keyId);
+        dbStore.deleteProductKey(id);
+        dbStore.logActivity(12846461, 'DELETE_KEY', `Deleted key ID ${id}`);
       }
 
-      dbStore.saveData();
-      res.json({ success: true, products: data.products, productKeys: data.productKeys });
+      const currentData = dbStore.getData();
+      res.json({ success: true, products: currentData.products, productKeys: currentData.productKeys });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
   // 6. Manage Users (Balance adjustment, VIP/Reseller toggle, Bans, Warnings)
-  app.post('/api/users', (req, res) => {
+  app.post('/api/users', async (req, res) => {
     try {
-      const { action, userId, amount, is_reseller, is_vip, is_banned, warning_count } = req.body;
-      const data = dbStore.getData();
-      const user = data.users.find(u => u.user_id === Number(userId));
+      const { action, userId, amount, is_reseller, is_vip, is_banned, warning_count, reason, notifyTelegram } = req.body;
+      const numUserId = Number(userId);
 
-      if (!user) {
-        return res.status(404).json({ success: false, error: 'User not found' });
+      if (!numUserId) {
+        return res.status(400).json({ success: false, error: 'Valid userId is required' });
       }
 
       if (action === 'balance') {
-        user.balance = Math.max(0, user.balance + amount);
-        if (amount < 0) {
-          user.spent += Math.abs(amount);
+        const delta = Number(amount);
+        const result = dbStore.adjustUserBalance(numUserId, delta, reason || 'Admin Wallet Adjustment');
+
+        // Deliver instant Telegram notification receipt to user
+        if (notifyTelegram !== false && telegramEngine) {
+          try {
+            const isAdd = delta >= 0;
+            const notifText = isAdd
+              ? `🎉 <b>WALLET RECHARGE SUCCESSFUL!</b>\n\n` +
+                `💰 <b>Amount Credited:</b> ₹${delta.toFixed(2)}\n` +
+                `💳 <b>New Wallet Balance:</b> ₹${result.newBalance.toFixed(2)}\n` +
+                `📝 <b>Reference:</b> ${reason || 'Admin Payment Credit'}\n\n` +
+                `<i>Your funds are now active! Use the button below to browse panel keys.</i>`
+              : `⚠️ <b>WALLET BALANCE ADJUSTMENT</b>\n\n` +
+                `🔻 <b>Amount Deducted:</b> ₹${Math.abs(delta).toFixed(2)}\n` +
+                `💳 <b>Updated Balance:</b> ₹${result.newBalance.toFixed(2)}\n` +
+                `📝 <b>Reason:</b> ${reason || 'Admin Adjustment'}`;
+
+            const inlineKeyboard = {
+              inline_keyboard: [
+                [
+                  { text: '🛒 Open Store & Buy Keys', callback_data: 'shop_categories' },
+                  { text: '💳 Check Wallet', callback_data: 'user_balance' }
+                ]
+              ]
+            };
+
+            await telegramEngine.sendMessage(numUserId, notifText, inlineKeyboard);
+          } catch (tgErr: any) {
+            console.warn(`Telegram balance notification notice for UID ${numUserId}:`, tgErr.message);
+          }
         }
-        dbStore.logActivity(user.user_id, 'BALANCE_ADJUST', `${amount >= 0 ? '+' : ''}₹${amount} (New: ₹${user.balance})`);
-      } else if (action === 'update_role') {
+
+        const data = dbStore.getData();
+        return res.json({
+          success: true,
+          user: result.user,
+          users: data.users,
+          transactions: data.transactions
+        });
+      }
+
+      const data = dbStore.getData();
+      let user = data.users.find(u => u.user_id === numUserId);
+
+      if (!user) {
+        user = dbStore.getOrCreateUser(numUserId, `User ${numUserId}`, `user_${numUserId}`);
+      }
+
+      if (action === 'update_role') {
         if (is_reseller !== undefined) user.is_reseller = is_reseller ? 1 : 0;
         if (is_vip !== undefined) user.is_vip = is_vip ? 1 : 0;
         if (is_banned !== undefined) user.is_banned = is_banned ? 1 : 0;
@@ -131,7 +165,7 @@ async function startServer() {
       }
 
       dbStore.saveData();
-      res.json({ success: true, user, users: data.users });
+      res.json({ success: true, user, users: data.users, transactions: data.transactions });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }

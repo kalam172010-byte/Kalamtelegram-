@@ -182,6 +182,39 @@ export class DatabaseStore {
     return this.data.users[idx];
   }
 
+  public adjustUserBalance(userId: number, delta: number, reason = 'Admin Adjustment'): { user: User; oldBalance: number; newBalance: number } {
+    let user = this.data.users.find(u => u.user_id === userId);
+    if (!user) {
+      user = this.getOrCreateUser(userId, `User ${userId}`, `user_${userId}`);
+    }
+    const oldBalance = user.balance;
+    user.balance = Math.max(0, Math.round((user.balance + delta) * 100) / 100);
+    if (delta < 0) {
+      user.spent = Math.round((user.spent + Math.abs(delta)) * 100) / 100;
+    }
+
+    if (!Array.isArray(this.data.transactions)) {
+      this.data.transactions = [];
+    }
+
+    this.data.transactions.unshift({
+      order_id: `ADMIN_TOPUP_${Date.now()}`,
+      user_id: userId,
+      amount_inr: Math.abs(delta),
+      status: 'paid',
+      timestamp: Date.now(),
+      sender_name: reason || (delta >= 0 ? 'Admin Wallet Top-Up' : 'Admin Balance Adjustment')
+    });
+
+    this.logActivity(
+      userId,
+      'ADMIN_BALANCE_CREDIT',
+      `${delta >= 0 ? '+' : ''}₹${delta} (${reason}) - New Balance: ₹${user.balance}`
+    );
+    this.saveData();
+    return { user, oldBalance, newBalance: user.balance };
+  }
+
   public updateSettings(updates: Partial<Settings>): Settings {
     this.data.settings = { ...this.data.settings, ...updates };
     this.saveData();
@@ -196,6 +229,92 @@ export class DatabaseStore {
 
   public getProduct(id: number): Product | undefined {
     return this.data.products.find(p => p.id === id);
+  }
+
+  public addProduct(product: Product, keys?: string[]): Product {
+    const newId = this.data.products.length > 0 ? Math.max(...this.data.products.map(p => p.id)) + 1 : 1;
+    const finalProduct: Product = {
+      ...product,
+      id: product.id || newId
+    };
+    this.data.products.unshift(finalProduct);
+
+    if (Array.isArray(keys) && keys.length > 0) {
+      for (const k of keys) {
+        const cleanK = k.trim();
+        if (cleanK) {
+          this.data.productKeys.unshift({
+            id: Date.now() + Math.floor(Math.random() * 10000),
+            product_id: finalProduct.id,
+            key_text: cleanK,
+            is_used: 0
+          });
+        }
+      }
+    }
+
+    this.saveData();
+    return finalProduct;
+  }
+
+  public updateProduct(id: number, updates: Partial<Product>): Product | null {
+    const idx = this.data.products.findIndex(p => p.id === id);
+    if (idx === -1) return null;
+    this.data.products[idx] = { ...this.data.products[idx], ...updates };
+    this.saveData();
+    return this.data.products[idx];
+  }
+
+  public deleteProduct(id: number): boolean {
+    const initialLen = this.data.products.length;
+    this.data.products = this.data.products.filter(p => p.id !== id);
+    this.data.productKeys = this.data.productKeys.filter(k => k.product_id !== id);
+    this.saveData();
+    return this.data.products.length < initialLen;
+  }
+
+  public injectProductKeys(productId: number, keys: string[]): number {
+    let added = 0;
+    if (Array.isArray(keys)) {
+      for (const k of keys) {
+        const cleanK = k.trim();
+        if (cleanK) {
+          this.data.productKeys.unshift({
+            id: Date.now() + Math.floor(Math.random() * 10000) + added,
+            product_id: productId,
+            key_text: cleanK,
+            is_used: 0
+          });
+          added++;
+        }
+      }
+      const prod = this.data.products.find(p => p.id === productId);
+      if (prod) {
+        prod.stock += added;
+      }
+      this.saveData();
+    }
+    return added;
+  }
+
+  public deleteProductKey(keyId: number): boolean {
+    const key = this.data.productKeys.find(k => k.id === keyId);
+    if (!key) return false;
+    this.data.productKeys = this.data.productKeys.filter(k => k.id !== keyId);
+    if (!key.is_used) {
+      const prod = this.data.products.find(p => p.id === key.product_id);
+      if (prod) {
+        prod.stock = Math.max(0, prod.stock - 1);
+      }
+    }
+    this.saveData();
+    return true;
+  }
+
+  public addTransaction(transaction: Transaction): Transaction {
+    this.data.transactions = [transaction, ...this.data.transactions.filter(t => t.order_id !== transaction.order_id)];
+    this.saveData();
+    return transaction;
   }
 
   public setFsmState(userId: number, state: string, data?: any) {

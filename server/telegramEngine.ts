@@ -2,6 +2,7 @@ import { dbStore } from './storage';
 import { Product, User, Order, Ticket } from '../src/types';
 import { famGateway } from './famGateway';
 import { bantiResellerService } from './bantiResellerApi';
+import QRCode from 'qrcode';
 
 export interface BotStatus {
   isRunning: boolean;
@@ -224,6 +225,50 @@ class TelegramEngine {
       payload.reply_markup = replyMarkup;
     }
     return await this.callApi('sendMessage', payload);
+  }
+
+  public async sendPhoto(chatId: number, photoUrl: string, caption?: string, replyMarkup?: any): Promise<any> {
+    const payload: any = {
+      chat_id: chatId,
+      photo: photoUrl,
+      parse_mode: 'HTML'
+    };
+    if (caption) {
+      payload.caption = caption;
+    }
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
+    return await this.callApi('sendPhoto', payload);
+  }
+
+  public async sendPhotoBuffer(chatId: number, buffer: Buffer, caption?: string, replyMarkup?: any): Promise<any> {
+    const token = dbStore.getData().settings.bot_token;
+    if (!token || token.includes('exampleToken')) {
+      throw new Error('Telegram Bot Token is not configured');
+    }
+
+    const formData = new FormData();
+    formData.append('chat_id', String(chatId));
+    formData.append('photo', new Blob([new Uint8Array(buffer)], { type: 'image/png' }), 'payment_qr.png');
+    formData.append('parse_mode', 'HTML');
+    if (caption) {
+      formData.append('caption', caption);
+    }
+    if (replyMarkup) {
+      formData.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
+    }
+
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.description || 'Failed to send photo buffer');
+    }
+    return result.result;
   }
 
   public async editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: any): Promise<any> {
@@ -590,14 +635,98 @@ class TelegramEngine {
 
     if (fsm && fsm.state === 'wait_for_custom_balance') {
       dbStore.setFsmState(user.user_id, 'idle');
-      const amount = parseFloat(text);
+      // Clean up string (e.g. ₹150, 150rs, 150.00 -> 150)
+      const cleanNum = text.replace(/[^0-9.]/g, '');
+      const amount = parseFloat(cleanNum);
       if (isNaN(amount) || amount < 10 || amount > 100000) {
-        await this.sendMessage(chatId, `❌ <b>Invalid Amount</b>\nPlease enter a valid numerical deposit between ₹10 and ₹1,00,000.\n\nUse /cancel to abort.`, this.getMainMenuKeyboard(user));
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid Deposit Amount</b>\n\nPlease enter a valid numerical deposit between <b>₹10</b> and <b>₹1,00,000</b> (e.g., <code>150</code>, <code>500</code>).\n\n<i>Type /cancel to return to main menu.</i>`,
+          this.getMainMenuKeyboard(user)
+        );
         return;
       }
 
       await this.sendPaymentInstructions(chatId, user, amount);
       return;
+    }
+
+    if (fsm && fsm.state === 'wait_for_utr') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      const utr = text.replace(/[^0-9a-zA-Z]/g, '').trim();
+
+      if (!utr || utr.length < 8) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid UTR / Reference ID</b>\n\nA standard UPI Reference / UTR Number is 12 digits (e.g., <code>428912345678</code>). Please verify on your UPI app receipt and try again.\n\n<i>Type /cancel to return to main menu.</i>`,
+          this.getMainMenuKeyboard(user)
+        );
+        return;
+      }
+
+      const allTxns = dbStore.getData().transactions;
+      const alreadyClaimed = allTxns.some(
+        t => t.utr && t.utr.toUpperCase() === utr.toUpperCase() && t.status === 'paid'
+      );
+
+      if (alreadyClaimed) {
+        await this.sendMessage(
+          chatId,
+          `⚠️ <b>Duplicate UTR Detected</b>\n\nThis UTR Number (<code>${utr}</code>) has already been claimed in the system! If you believe this is an error, please contact admin support.`,
+          this.getMainMenuKeyboard(user)
+        );
+        return;
+      }
+
+      // Find the user's pending order
+      const orderId = fsm.data?.orderId;
+      let txn = orderId ? allTxns.find(t => t.order_id === orderId) : null;
+      if (!txn) {
+        // Look for any pending transaction for this user in last 1 hour
+        const userPending = allTxns
+          .filter(t => t.user_id === user.user_id && t.status === 'pending')
+          .sort((a, b) => b.timestamp - a.timestamp);
+        if (userPending.length > 0) {
+          txn = userPending[0];
+        }
+      }
+
+      const amountToCredit = fsm.data?.amount || txn?.amount_inr || 100;
+      const finalOrderId = txn?.order_id || `ORD_${user.user_id}_${Date.now()}`;
+
+      if (!txn) {
+        dbStore.addTransaction({
+          order_id: finalOrderId,
+          user_id: user.user_id,
+          amount_inr: amountToCredit,
+          status: 'pending',
+          timestamp: Date.now()
+        });
+      }
+
+      await famGateway.processSuccessfulPayment(finalOrderId, amountToCredit, utr);
+      return;
+    }
+
+    // Auto-detect 12-digit UTR if user pastes it directly in chat without FSM
+    const cleanDigits = text.replace(/[^0-9]/g, '');
+    if (cleanDigits.length === 12 && !text.startsWith('/')) {
+      const allTxns = dbStore.getData().transactions;
+      const userPending = allTxns
+        .filter(t => t.user_id === user.user_id && t.status === 'pending')
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      if (userPending.length > 0) {
+        const txn = userPending[0];
+        const alreadyClaimed = allTxns.some(
+          t => t.utr && t.utr === cleanDigits && t.status === 'paid'
+        );
+
+        if (!alreadyClaimed) {
+          await famGateway.processSuccessfulPayment(txn.order_id, txn.amount_inr, cleanDigits);
+          return;
+        }
+      }
     }
 
     if (user.user_id === settings.admin_id && text.startsWith('/reply_')) {
@@ -712,14 +841,18 @@ class TelegramEngine {
       return;
     }
 
-    if (data === 'cat_nonroot' || data === 'cat_root' || data === 'cat_pc') {
+    if (data.startsWith('cat_')) {
       let categoryName = 'ANDROID NON ROOT PANEL';
       if (data === 'cat_root') categoryName = 'ANDROID ROOT PANEL';
-      if (data === 'cat_pc') categoryName = 'PC PANEL';
+      else if (data === 'cat_pc') categoryName = 'PC PANEL';
+      else if (data === 'cat_nonroot') categoryName = 'ANDROID NON ROOT PANEL';
+      else categoryName = data.replace('cat_', '');
 
-      const products = dbStore.getData().products.filter(p => p.category === categoryName && p.is_active === 1);
+      const products = dbStore.getData().products.filter(p => 
+        p.category.toLowerCase() === categoryName.toLowerCase() && p.is_active === 1
+      );
 
-      let text = `📦 <b>${categoryName} PACKAGES</b>\n\n`;
+      let text = `📦 <b>${categoryName.toUpperCase()} PACKAGES</b>\n\n`;
       if (products.length === 0) {
         text += `<i>No products currently available in this category. Check back soon!</i>`;
       } else {
@@ -745,8 +878,16 @@ class TelegramEngine {
       const prodId = Number(data.replace('prod_', ''));
       const product = dbStore.getProduct(prodId);
 
-      if (!product) {
-        await this.answerCallback(cb.id, 'Product not found!', true);
+      if (!product || !product.is_active) {
+        await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
+        const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
         return;
       }
 
@@ -811,8 +952,16 @@ class TelegramEngine {
       const prodId = Number(data.replace('buy_', ''));
       const product = dbStore.getProduct(prodId);
 
-      if (!product) {
-        await this.answerCallback(cb.id, 'Product not found!', true);
+      if (!product || !product.is_active) {
+        await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
+        const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
         return;
       }
 
@@ -886,8 +1035,45 @@ class TelegramEngine {
         await this.answerCallback(cb.id, '🎉 Payment Verified! Balance added to your wallet.', true);
         await this.sendProfileMessage(chatId, updatedUser, messageId);
       } else {
-        await this.answerCallback(cb.id, '⏳ Payment is still pending. Please complete the transaction in your UPI app and retry.', true);
+        await this.sendMessage(
+          chatId,
+          `⏳ <b>Payment Status: Pending</b>\n\n` +
+          `Order ID: <code>${orderId}</code>\n\n` +
+          `If you have already paid in your UPI app (GPay / PhonePe / Paytm / FamPay):\n` +
+          `👉 Click <b>"📝 Submit 12-Digit UTR"</b> below and send your UTR Reference Number for <b>instant automated credit</b>!`,
+          {
+            inline_keyboard: [
+              [{ text: '📝 Submit 12-Digit UTR Number', callback_data: `submit_utr_${orderId}` }],
+              [{ text: '🔄 Retry Check Status', callback_data: `check_order_${orderId}` }],
+              [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+            ]
+          }
+        );
       }
+      return;
+    }
+
+    if (data.startsWith('submit_utr_')) {
+      const orderId = data.replace('submit_utr_', '');
+      const txn = dbStore.getData().transactions.find(t => t.order_id === orderId);
+      const amount = txn?.amount_inr || 100;
+
+      dbStore.setFsmState(user.user_id, 'wait_for_utr', { orderId, amount });
+      await this.sendMessage(
+        chatId,
+        `📝 <b>SUBMIT 12-DIGIT UPI REFERENCE / UTR NUMBER</b>\n\n` +
+        `Order ID: <code>${orderId}</code>\n` +
+        `Amount: <b>₹${amount.toFixed(2)}</b>\n\n` +
+        `👇 <b>Please reply with your 12-digit UTR Number from your payment receipt:</b>\n` +
+        `• <b>PhonePe:</b> UTR / Transaction ID (12 digits)\n` +
+        `• <b>Google Pay:</b> UPI Transaction ID (12 digits)\n` +
+        `• <b>Paytm:</b> UPI Ref No (12 digits)\n` +
+        `• <b>FamPay:</b> Reference ID (12 digits)\n\n` +
+        `<i>Example: <code>428912345678</code>\nSend /cancel to abort.</i>`,
+        {
+          inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'main_menu' }]]
+        }
+      );
       return;
     }
 
@@ -1191,48 +1377,93 @@ class TelegramEngine {
     const settings = dbStore.getData().settings;
     const redirectUrl = settings.famgateway_redirect_url || `https://t.me/${settings.bot_username || 'KalamFFPanelBot'}`;
 
-    // Create automated order via FamGateway
+    // 1. Create or register order in FamGateway & database
     const orderRes = await famGateway.createOrder({
       amount,
       userId: user.user_id,
       redirectUrl
     });
 
-    const orderId = orderRes.order_id || 'ORD_' + Math.floor(100000 + Math.random() * 900000);
+    const orderId = orderRes.order_id || `ORD_${user.user_id}_${Math.floor(Date.now() / 1000)}`;
     const upiId = settings.fampay_upi_id || 'kalampanel@fam';
-    const qrUrl = orderRes.qr_url || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(orderRes.payment_url || upiId)}`;
+    const payeeName = settings.bot_name || 'Kalam FF Panel';
+    const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
 
-    const text = `⚡ <b>AUTOMATIC PAYMENT (FAMGATEWAY UPI)</b> ⚡\n\n` +
-      `💰 <b>Amount:</b> <b>₹${amount.toFixed(2)}</b>\n` +
+    // 2. Generate PNG QR Code Buffer (Native Buffer upload to Telegram)
+    let qrBuffer: Buffer | null = null;
+    try {
+      qrBuffer = await QRCode.toBuffer(orderRes.payment_url || upiUri, {
+        width: 500,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+    } catch (qrErr) {
+      console.warn('QRCode buffer generation failed:', qrErr);
+    }
+
+    const publicQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=10&data=${encodeURIComponent(orderRes.payment_url || upiUri)}`;
+
+    const text = `⚡ <b>AUTOMATIC UPI PAYMENT & QR CODE</b> ⚡\n\n` +
+      `💰 <b>Amount to Pay:</b> <b>₹${amount.toFixed(2)}</b>\n` +
       `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
       `🏦 <b>UPI ID:</b> <code>${upiId}</code>\n` +
-      `⏳ <b>Status:</b> 🟡 <i>Awaiting Payment (Auto-Detect)...</i>\n\n` +
-      `📱 <b>HOW TO PAY:</b>\n` +
-      `1️⃣ Click the <b>"💳 Pay Now (FamPay / UPI)"</b> button below, or scan the QR code.\n` +
-      `2️⃣ Complete the payment using FamPay, PhonePe, Paytm, or GooglePay.\n` +
-      `3️⃣ <b>Your balance will be credited AUTOMATICALLY</b> in seconds without manual proof!\n\n` +
-      `<i>You can also click "🔄 Check Payment Status" below to verify immediately.</i>\n` +
-      `<a href="${qrUrl}">View Payment QR Code</a>`;
+      `⏳ <b>Validity:</b> 15 Minutes (Auto-Confirming)\n\n` +
+      `📱 <b>SCAN & PAY INSTRUCTIONS:</b>\n` +
+      `1️⃣ Open <b>Google Pay, PhonePe, Paytm, FamPay, or BHIM</b>.\n` +
+      `2️⃣ Scan the QR Code image above OR tap <b>"💳 Pay via UPI App"</b>.\n` +
+      `3️⃣ Pay exact amount <b>₹${amount.toFixed(2)}</b>.\n` +
+      `4️⃣ <b>Your balance will be credited AUTOMATICALLY</b> in seconds!\n\n` +
+      `<i>👉 After paying, tap "🔄 Check Payment Status" or "📝 Submit 12-Digit UTR" below.</i>`;
 
     const keyboardButtons: any[] = [];
 
-    if (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://'))) {
-      keyboardButtons.push([
-        { text: '💳 Pay Now (FamPay / UPI / GPay)', url: orderRes.payment_url }
-      ]);
-    }
+    // Payment link button for mobile 1-tap checkout
+    const directPayUrl = (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://')))
+      ? orderRes.payment_url
+      : upiUri;
 
     keyboardButtons.push([
-      { text: '🔄 Check Payment Status', callback_data: `check_order_${orderId}` }
+      { text: '💳 Pay via UPI App (GPay/PhonePe/Paytm)', url: directPayUrl }
     ]);
 
     keyboardButtons.push([
-      { text: '💬 Contact Support', url: settings.support_telegram },
+      { text: '🔄 Check & Auto-Confirm Payment', callback_data: `check_order_${orderId}` }
+    ]);
+
+    keyboardButtons.push([
+      { text: '📝 Submit 12-Digit UTR Number', callback_data: `submit_utr_${orderId}` }
+    ]);
+
+    keyboardButtons.push([
+      { text: '💬 24/7 Support', url: settings.support_telegram },
       { text: '🔙 Back to Menu', callback_data: 'main_menu' }
     ]);
 
     const keyboard = { inline_keyboard: keyboardButtons };
 
+    // 3. Attempt Delivery: Try sending actual generated QR Photo Buffer first
+    if (qrBuffer) {
+      try {
+        await this.sendPhotoBuffer(chatId, qrBuffer, text, keyboard);
+        return;
+      } catch (bufErr: any) {
+        console.warn('sendPhotoBuffer failed, falling back to public QR URL:', bufErr.message);
+      }
+    }
+
+    // 4. Fallback: Try public QR URL
+    try {
+      await this.sendPhoto(chatId, publicQrUrl, text, keyboard);
+      return;
+    } catch (urlErr: any) {
+      console.warn('sendPhoto via URL failed, falling back to text:', urlErr.message);
+    }
+
+    // 5. Fallback: Text message
     if (messageId) {
       await this.editMessageText(chatId, messageId, text, keyboard);
     } else {

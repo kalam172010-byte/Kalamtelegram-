@@ -49,6 +49,7 @@ import {
   INITIAL_BOTS,
   UI_TEXTS
 } from '../data/defaultData';
+import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
 
 export interface BotContextType {
   // Authentication & Session
@@ -147,9 +148,10 @@ export interface BotContextType {
   addProduct: (prod: Omit<Product, 'id' | 'stock'>, keys: string[]) => void;
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number) => void;
+  removeProduct: (id: number) => void;
   injectProductKeys: (productId: number, keys: string[]) => void;
   deleteProductKey: (keyId: number) => void;
-  updateUserBalance: (userId: number, delta: number, reason?: string) => void;
+  updateUserBalance: (userId: number, delta: number, reason?: string, notifyTelegram?: boolean) => void;
   toggleUserBan: (userId: number) => void;
   warnUser: (userId: number, message: string) => void;
   toggleUserVip: (userId: number) => void;
@@ -326,10 +328,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(res => res.json())
       .then(serverData => {
         if (serverData) {
-          if (Array.isArray(serverData.products) && serverData.products.length > 0) {
+          if (Array.isArray(serverData.products)) {
             setProducts(serverData.products);
           }
-          if (Array.isArray(serverData.productKeys) && serverData.productKeys.length > 0) {
+          if (Array.isArray(serverData.productKeys)) {
             setProductKeys(serverData.productKeys);
           }
           if (serverData.settings) {
@@ -360,9 +362,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         snapshot.forEach((docSnap) => {
           cloudBots.push(docSnap.data() as BotInstance);
         });
-        if (cloudBots.length > 0) {
-          setBots(cloudBots);
-        }
+        setBots(cloudBots);
       }
     }, (err) => {
       console.warn('Firestore bots sync notice:', err.message);
@@ -370,14 +370,12 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Firestore Sync for Products
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      if (!snapshot.empty) {
-        const cloudProducts: Product[] = [];
-        snapshot.forEach((docSnap) => {
-          cloudProducts.push(docSnap.data() as Product);
-        });
-        if (cloudProducts.length > 0) {
-          setProducts(cloudProducts);
-        }
+      const cloudProducts: Product[] = [];
+      snapshot.forEach((docSnap) => {
+        cloudProducts.push(docSnap.data() as Product);
+      });
+      if (cloudProducts.length > 0 || !snapshot.empty) {
+        setProducts(cloudProducts);
       }
     }, (err) => {
       console.warn('Firestore products sync notice:', err.message);
@@ -1017,36 +1015,51 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Generate FamPay / FamGateway Order
   const generateFamPayOrder = async (amount: number) => {
+    const rawAmt = Number(amount);
+    const validAmount = (!amount || isNaN(rawAmt) || rawAmt <= 0) ? 100 : rawAmt;
     setIsBotTyping(true);
     let orderId = `ORD_${currentUser.user_id}_${Math.floor(Date.now() / 1000)}`;
     let qrUrl = '';
     let paymentUrl = '';
     const expiresAt = Date.now() + 15 * 60 * 1000;
-    const upiId = settings.fampay_upi_id || 'kalampanel@fam';
+    const upiId = activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam';
+    const payeeName = activeBot?.payment_gateway?.merchant_name || 'Kalam FF Panel';
     const expiresAtStr = new Date(expiresAt).toLocaleTimeString();
+
+    const upiUri = buildUpiUri({
+      upiId,
+      payeeName,
+      amount: validAmount,
+      orderId,
+      note: `Deposit ${orderId}`
+    });
 
     // Call server to create automated order
     try {
-      const liveRes = await createFamGatewayOrder(amount);
-      if (liveRes.success && liveRes.order_id) {
+      const liveRes = await createFamGatewayOrder(validAmount);
+      if (liveRes && liveRes.success && liveRes.order_id) {
         orderId = liveRes.order_id;
         qrUrl = liveRes.qr_url || '';
         paymentUrl = liveRes.payment_url || '';
       }
     } catch (e) {
-      // fallback
+      console.warn('createFamGatewayOrder fallback to local QR:', e);
+    }
+
+    if (!qrUrl || qrUrl.length < 10) {
+      try {
+        qrUrl = await generateQrDataUrl(paymentUrl || upiUri);
+      } catch (e) {
+        qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentUrl || upiUri)}`;
+      }
     }
 
     setIsBotTyping(false);
 
-    if (!qrUrl) {
-      qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`upi://pay?pa=${upiId}&pn=KalamFFPanel&am=${amount}&cu=INR&tn=${orderId}`)}`;
-    }
-
     const newTxn: Transaction = {
       order_id: orderId,
       user_id: currentUser.user_id,
-      amount_inr: amount,
+      amount_inr: validAmount,
       status: 'pending',
       timestamp: Math.floor(Date.now() / 1000),
       upi_id: upiId,
@@ -1055,7 +1068,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setTransactions(prev => [newTxn, ...prev.filter(t => t.order_id !== orderId)]);
-    logActivity(currentUser.user_id, 'GENERATE_INVOICE_FAMGATEWAY', `Amount: ${amount}, Order ID: ${orderId}`);
+    logActivity(currentUser.user_id, 'GENERATE_INVOICE_FAMGATEWAY', `Amount: ${validAmount}, Order ID: ${orderId}`);
 
     const kb: InlineKeyboardButton[][] = [];
 
@@ -1064,6 +1077,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           text: "💳 Pay with UPI / FamPay App",
           url: paymentUrl,
+          style: "success"
+        }
+      ]);
+    } else {
+      kb.push([
+        {
+          text: "💳 Pay via UPI App (GPay/PhonePe)",
+          url: upiUri,
           style: "success"
         }
       ]);
@@ -1079,6 +1100,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     kb.push([
       {
+        text: "📝 Submit 12-Digit UTR Number",
+        callback_data: `submit_utr_${orderId}`,
+        style: "primary"
+      }
+    ]);
+
+    kb.push([
+      {
         text: "Cancel Transaction",
         callback_data: "menu_add_balance",
         icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
@@ -1087,19 +1116,20 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
 
     const text = `🧾 <b>AUTOMATIC FAMGATEWAY UPI INVOICE</b>\n\n` +
-      `💵 <b>Amount:</b> ${fmtCurr(amount)}\n` +
+      `💵 <b>Amount to Pay:</b> ${fmtCurr(validAmount)}\n` +
       `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
       `🏦 <b>UPI ID:</b> <code>${upiId}</code>\n` +
       `⏳ <b>Expires:</b> <i>15 Minutes (${expiresAtStr})</i>\n` +
       `📅 <b>Created:</b> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n` +
       `📱 <b>Automatic Payment Instructions:</b>\n` +
-      `1️⃣ Scan the QR code or click Pay with UPI\n` +
-      `2️⃣ Pay exact amount <b>${fmtCurr(amount)}</b> in FamPay / PhonePe / GPay / Paytm\n` +
-      `3️⃣ <b>Your balance will be credited AUTOMATICALLY in real-time!</b>`;
+      `1️⃣ Scan the generated QR Code below or tap Pay via UPI\n` +
+      `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in FamPay / PhonePe / GPay / Paytm\n` +
+      `3️⃣ <b>Your balance will be credited AUTOMATICALLY in real-time!</b>\n\n` +
+      `<i>👉 If already paid, tap "Check & Verify Payment" or submit your 12-digit UTR below.</i>`;
 
     editLastBotMessage(text, kb, {
       order_id: orderId,
-      amount,
+      amount: validAmount,
       upi_id: upiId,
       expires_at: expiresAt,
       qr_url: qrUrl
@@ -1546,7 +1576,7 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
     }
 
     // 9. Add Balance Gateway Selection
-    if (callbackData === 'menu_add_balance') {
+    if (callbackData === 'menu_add_balance' || callbackData === 'add_balance' || callbackData === 'deposit') {
       logActivity(currentUser.user_id, 'VIEW_ADD_BALANCE');
       const text = renderUiText('add_balance_menu');
       const kb: InlineKeyboardButton[][] = [
@@ -1572,7 +1602,7 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
     }
 
     // 10. UPI Pay Preset Chips
-    if (callbackData === 'gateway_inr') {
+    if (callbackData === 'gateway_inr' || callbackData === 'upi_pay' || callbackData === 'fampay_deposit') {
       const text = `💵 <b>— FAMPAY UPI DEPOSIT —</b> 💵\n\nSelect amount to deposit:`;
       const kb: InlineKeyboardButton[][] = [
         [
@@ -1603,21 +1633,29 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       return;
     }
 
-    // 11. Quick pay chips
-    if (callbackData.startsWith('pay_')) {
-      const amt = Number(callbackData.replace('pay_', ''));
-      editLastBotMessage("⏳ <b>Generating Secure QR Code via FamPay...</b>");
-      setTimeout(() => {
-        generateFamPayOrder(amt);
-      }, 400);
-      return;
-    }
-
-    // 12. Custom Keypad
-    if (callbackData === 'custom_deposit_keypad') {
+    // 11. Custom Keypad / Input Trigger
+    if (callbackData === 'custom_deposit_keypad' || callbackData === 'pay_custom' || callbackData === 'custom_deposit') {
       setCurrentFsmState('custom_amount_input');
       setFsmData({ amount_str: '0' });
       renderKeypad('0');
+      return;
+    }
+
+    // 12. Quick pay preset amounts
+    if (callbackData.startsWith('pay_')) {
+      const valStr = callbackData.replace('pay_', '');
+      if (valStr === 'custom') {
+        setCurrentFsmState('custom_amount_input');
+        setFsmData({ amount_str: '0' });
+        renderKeypad('0');
+        return;
+      }
+      const rawAmt = Number(valStr);
+      const amt = (!isNaN(rawAmt) && rawAmt > 0) ? rawAmt : 100;
+      editLastBotMessage("⏳ <b>Generating Secure QR Code via FamPay...</b>");
+      setTimeout(() => {
+        generateFamPayOrder(amt);
+      }, 300);
       return;
     }
 
@@ -2090,7 +2128,18 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         return;
       }
 
-      if (cmd === '/balance') {
+      if (cmd === '/balance' || cmd === '/add_balance' || cmd === '/deposit' || cmd === '/pay') {
+        const parts = trimmed.split(' ');
+        if (parts.length > 1) {
+          const rawAmt = Number(parts[1].replace(/[^0-9.]/g, ''));
+          if (!isNaN(rawAmt) && rawAmt >= 10) {
+            pushBotMessage("⏳ <b>Generating Secure UPI QR Code...</b>");
+            setTimeout(() => {
+              generateFamPayOrder(rawAmt);
+            }, 300);
+            return;
+          }
+        }
         handleCallbackQuery('menu_add_balance');
         return;
       }
@@ -2114,6 +2163,41 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     // Handle FSM states
+    if (currentFsmState === 'custom_amount_input' || currentFsmState === 'wait_for_custom_balance') {
+      const cleanNum = trimmed.replace(/[^0-9.]/g, '');
+      const amt = Number(cleanNum);
+      if (isNaN(amt) || amt < 10) {
+        pushBotMessage("❌ Minimum deposit amount is ₹10. Please enter a valid number (e.g., 150):");
+        return;
+      }
+      setCurrentFsmState(null);
+      setFsmData({});
+      pushBotMessage("⏳ <b>Generating Secure UPI QR Code...</b>");
+      setTimeout(() => {
+        generateFamPayOrder(amt);
+      }, 300);
+      return;
+    }
+
+    if (currentFsmState === 'wait_for_utr') {
+      const utr = trimmed.replace(/[^0-9a-zA-Z]/g, '');
+      if (utr.length < 8) {
+        pushBotMessage("❌ Please enter a valid 12-digit UTR Reference Number from your payment receipt.");
+        return;
+      }
+
+      const orderId = fsmData?.orderId || (transactions.find(t => t.user_id === currentUser.user_id && t.status === 'pending')?.order_id);
+      if (orderId) {
+        setCurrentFsmState(null);
+        setFsmData({});
+        pushBotMessage("🔄 <b>Verifying your 12-digit UTR...</b>");
+        setTimeout(() => {
+          simulatePaymentSuccess(orderId);
+        }, 500);
+        return;
+      }
+    }
+
     if (currentFsmState === 'wait_for_redeem') {
       const code = trimmed.toUpperCase();
       const alreadyRedeemed = redeemed.some(r => r.user_id === currentUser.user_id && r.code === code);
@@ -2225,8 +2309,26 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       is_used: 0
     }));
 
-    setProducts(prev => [newProduct, ...prev]);
-    setProductKeys(prev => [...newKeyEntities, ...prev]);
+    setProducts(prev => {
+      const updated = [newProduct, ...prev.filter(p => p.id !== newId)];
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+    setProductKeys(prev => {
+      const updated = [...newKeyEntities, ...prev];
+      localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
+      return updated;
+    });
+    setBots(prev => {
+      const updated = prev.map(b => ({
+        ...b,
+        products: [newProduct, ...(b.products || []).filter(p => p.id !== newId)],
+        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
     logActivity(12846461, 'ADMIN_ADD_PRODUCT', `Added ${newProduct.name} (${cleanKeys.length} keys)`);
 
     // Sync in Real-Time to Cloud Firestore
@@ -2241,18 +2343,39 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         product: newProduct,
         keys: cleanKeys
       })
-    }).catch(err => console.warn('Failed to sync new product to server:', err));
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      }
+    })
+    .catch(err => console.warn('Failed to sync new product to server:', err));
   };
 
   const updateProduct = (id: number, fields: Partial<Product>) => {
     let updatedProduct: Product | undefined;
-    setProducts(prev => prev.map(p => {
-      if (p.id === id) {
-        updatedProduct = { ...p, ...fields };
-        return updatedProduct;
-      }
-      return p;
-    }));
+    setProducts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === id) {
+          updatedProduct = { ...p, ...fields };
+          return updatedProduct;
+        }
+        return p;
+      });
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+
+    setBots(prev => {
+      const updated = prev.map(b => ({
+        ...b,
+        products: (b.products || []).map(p => p.id === id ? { ...p, ...fields } : p)
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
     logActivity(12846461, 'ADMIN_UPDATE_PRODUCT', `Product #${id} updated`);
 
     if (updatedProduct) {
@@ -2267,17 +2390,70 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           action: 'update',
           product: updatedProduct
         })
-      }).catch(err => console.warn('Failed to sync product update to server:', err));
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.products)) {
+          setProducts(data.products);
+        }
+      })
+      .catch(err => console.warn('Failed to sync product update to server:', err));
     }
   };
 
   const deleteProduct = (id: number) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    setProductKeys(prev => prev.filter(k => k.product_id !== id));
-    logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${id} deleted`);
+    const numId = Number(id);
+    setProducts(prev => {
+      const updated = prev.filter(p => p.id !== numId);
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+    setProductKeys(prev => {
+      const updated = prev.filter(k => k.product_id !== numId);
+      localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
+      return updated;
+    });
+    setBots(prev => {
+      const updated = prev.map(b => ({
+        ...b,
+        products: (b.products || []).filter(p => p.id !== numId),
+        productKeys: (b.productKeys || []).filter(k => k.product_id !== numId)
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Invalidate active Telegram FSM state if it was referencing the deleted product
+    setFsmData(prev => {
+      if (prev && prev.productId === numId) {
+        setCurrentFsmState(null);
+        return {};
+      }
+      return prev;
+    });
+
+    // Clean up active Telegram Simulator chat messages that reference the deleted product
+    setMessages(prev => prev.map(msg => {
+      if (!msg.keyboard) return msg;
+      const filteredKeyboard = msg.keyboard.map(row => 
+        row.filter(btn => {
+          if (!btn.callback_data) return true;
+          if (btn.callback_data === `buy_${numId}`) return false;
+          if (btn.callback_data === `prod_${numId}`) return false;
+          return true;
+        })
+      ).filter(row => row.length > 0);
+
+      return {
+        ...msg,
+        keyboard: filteredKeyboard.length > 0 ? filteredKeyboard : undefined
+      };
+    }));
+
+    logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${numId} deleted`);
 
     // Sync deletion in Real-Time to Cloud Firestore
-    deleteDoc(doc(db, 'products', String(id))).catch(() => {});
+    deleteDoc(doc(db, 'products', String(numId))).catch(() => {});
 
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
@@ -2285,9 +2461,20 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'delete',
-        productId: id
+        productId: numId
       })
-    }).catch(err => console.warn('Failed to sync product deletion to server:', err));
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      }
+    })
+    .catch(err => console.warn('Failed to sync product deletion to server:', err));
+  };
+
+  const removeProduct = (id: number) => {
+    deleteProduct(id);
   };
 
   const injectProductKeys = (productId: number, keys: string[]) => {
@@ -2327,9 +2514,121 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
   };
 
-  const updateUserBalance = (userId: number, delta: number, reason = 'Admin Adjustment') => {
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, balance: Math.max(0, u.balance + delta) } : u));
-    logActivity(12846461, 'ADMIN_BALANCE_ADJUST', `User #${userId}: ${delta >= 0 ? '+' : ''}${delta} (${reason})`);
+  const updateUserBalance = (userId: number, delta: number, reason = 'Admin Adjustment', notifyTelegram = true) => {
+    const numUserId = Number(userId);
+    const numDelta = Number(delta);
+    if (isNaN(numUserId) || isNaN(numDelta)) return;
+
+    let targetUser: User | undefined;
+
+    setUsers(prev => {
+      let found = false;
+      const updated = prev.map(u => {
+        if (u.user_id === numUserId) {
+          found = true;
+          const newBal = Math.max(0, Math.round((u.balance + numDelta) * 100) / 100);
+          targetUser = {
+            ...u,
+            balance: newBal,
+            spent: numDelta < 0 ? Math.round((u.spent + Math.abs(numDelta)) * 100) / 100 : u.spent
+          };
+          return targetUser;
+        }
+        return u;
+      });
+
+      if (!found) {
+        const initialBal = Math.max(0, numDelta);
+        targetUser = {
+          user_id: numUserId,
+          first_name: `User ${numUserId}`,
+          username: `user_${numUserId}`,
+          balance: initialBal,
+          account_type: 'Regular',
+          orders_count: 0,
+          spent: 0,
+          joined_date: new Date().toISOString().substring(0, 19),
+          is_reseller: 0,
+          total_saved: 0,
+          is_banned: 0,
+          warnings: 0,
+          is_vip: 0
+        };
+        updated.unshift(targetUser);
+      }
+
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Record top-up transaction entry
+    const newTx: Transaction = {
+      order_id: `MANUAL_TOPUP_${Date.now()}`,
+      user_id: numUserId,
+      amount_inr: Math.abs(numDelta),
+      status: 'paid',
+      timestamp: Date.now(),
+      sender_name: reason || (numDelta >= 0 ? 'Admin Wallet Top-Up' : 'Admin Balance Adjustment')
+    };
+    setTransactions(prev => [newTx, ...prev]);
+
+    // Push simulated chat event if currently inspecting this user
+    if (currentUserId === numUserId) {
+      const isCredit = numDelta >= 0;
+      const simText = isCredit
+        ? `🎉 <b>WALLET RECHARGE SUCCESSFUL!</b>\n\n💰 <b>Amount Credited:</b> ₹${numDelta.toFixed(2)}\n📝 <b>Reference:</b> ${reason || 'Admin Payment Credit'}\n\n<i>Your funds are available immediately! Use /store to purchase panel keys.</i>`
+        : `⚠️ <b>WALLET BALANCE ADJUSTMENT</b>\n\n🔻 <b>Amount Deducted:</b> ₹${Math.abs(numDelta).toFixed(2)}\n📝 <b>Reason:</b> ${reason || 'Admin Adjustment'}`;
+
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `sim_topup_${Date.now()}`,
+          sender: 'bot',
+          text: simText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          keyboard: [
+            [{ text: '🛒 Open Store & Buy', callback_data: 'shop_categories' }, { text: '💳 Check Balance', callback_data: 'user_balance' }]
+          ]
+        }
+      ]);
+    }
+
+    logActivity(
+      12846461,
+      'ADMIN_BALANCE_ADJUST',
+      `User #${numUserId}: ${numDelta >= 0 ? '+' : ''}₹${numDelta} (${reason})`
+    );
+
+    // Sync to Firestore
+    const userDocRef = doc(db, 'users', String(numUserId));
+    setDoc(userDocRef, {
+      user_id: numUserId,
+      balance: targetUser ? targetUser.balance : Math.max(0, numDelta),
+      updated_at: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+
+    // Sync to Live Telegram Bot Engine Server via API
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'balance',
+        userId: numUserId,
+        amount: numDelta,
+        reason,
+        notifyTelegram
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.users)) {
+        setUsers(data.users);
+      }
+      if (data && Array.isArray(data.transactions)) {
+        setTransactions(data.transactions);
+      }
+    })
+    .catch(err => console.warn('Failed to sync user balance to server:', err));
   };
 
   const toggleUserBan = (userId: number) => {
@@ -2883,6 +3182,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         addProduct,
         updateProduct,
         deleteProduct,
+        removeProduct,
         injectProductKeys,
         deleteProductKey,
         updateUserBalance,
