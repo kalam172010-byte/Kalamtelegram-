@@ -321,6 +321,24 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Firebase Auth listener and Cloud Firestore real-time sync
   useEffect(() => {
+    // 0. Fetch initial data from backend server database
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(serverData => {
+        if (serverData) {
+          if (Array.isArray(serverData.products) && serverData.products.length > 0) {
+            setProducts(serverData.products);
+          }
+          if (Array.isArray(serverData.productKeys) && serverData.productKeys.length > 0) {
+            setProductKeys(serverData.productKeys);
+          }
+          if (serverData.settings) {
+            setSettings(prev => ({ ...prev, ...serverData.settings }));
+          }
+        }
+      })
+      .catch(err => console.warn('Backend initial load notice:', err));
+
     // 1. Firebase Auth listener
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       if (fbUser && fbUser.email) {
@@ -2210,17 +2228,66 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setProducts(prev => [newProduct, ...prev]);
     setProductKeys(prev => [...newKeyEntities, ...prev]);
     logActivity(12846461, 'ADMIN_ADD_PRODUCT', `Added ${newProduct.name} (${cleanKeys.length} keys)`);
+
+    // Sync in Real-Time to Cloud Firestore
+    setDoc(doc(db, 'products', String(newId)), newProduct).catch(() => {});
+
+    // Sync in Real-Time to Backend Server (Live Telegram Engine Storage)
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        product: newProduct,
+        keys: cleanKeys
+      })
+    }).catch(err => console.warn('Failed to sync new product to server:', err));
   };
 
   const updateProduct = (id: number, fields: Partial<Product>) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...fields } : p));
+    let updatedProduct: Product | undefined;
+    setProducts(prev => prev.map(p => {
+      if (p.id === id) {
+        updatedProduct = { ...p, ...fields };
+        return updatedProduct;
+      }
+      return p;
+    }));
     logActivity(12846461, 'ADMIN_UPDATE_PRODUCT', `Product #${id} updated`);
+
+    if (updatedProduct) {
+      // Sync in Real-Time to Cloud Firestore
+      setDoc(doc(db, 'products', String(id)), updatedProduct, { merge: true }).catch(() => {});
+
+      // Sync in Real-Time to Backend Server (Live Telegram Engine Storage)
+      fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          product: updatedProduct
+        })
+      }).catch(err => console.warn('Failed to sync product update to server:', err));
+    }
   };
 
   const deleteProduct = (id: number) => {
     setProducts(prev => prev.filter(p => p.id !== id));
     setProductKeys(prev => prev.filter(k => k.product_id !== id));
     logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${id} deleted`);
+
+    // Sync deletion in Real-Time to Cloud Firestore
+    deleteDoc(doc(db, 'products', String(id))).catch(() => {});
+
+    // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete',
+        productId: id
+      })
+    }).catch(err => console.warn('Failed to sync product deletion to server:', err));
   };
 
   const injectProductKeys = (productId: number, keys: string[]) => {
@@ -2237,6 +2304,17 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setProductKeys(prev => [...newKeyEntities, ...prev]);
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: p.stock + cleanKeys.length } : p));
     logActivity(12846461, 'ADMIN_INJECT_KEYS', `Added ${cleanKeys.length} keys to #${productId}`);
+
+    // Sync injected keys to Backend Server (Live Telegram Engine Storage)
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'add_keys',
+        productId: productId,
+        keys: cleanKeys
+      })
+    }).catch(err => console.warn('Failed to sync product keys to server:', err));
   };
 
   const deleteProductKey = (keyId: number) => {
@@ -2498,24 +2576,39 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       let finalName = googleName;
       let finalAvatar = googleAvatar;
 
-      // 1. Attempt Firebase Google Sign-In Popup if no explicit account passed
+      // 1. Trigger Google Account Chooser via Firebase Auth Popup
       if (!googleEmail) {
         try {
+          // Always ensure select_account prompt is active
+          googleProvider.setCustomParameters({ prompt: 'select_account' });
           const result = await signInWithPopup(auth, googleProvider);
           const fbUser = result.user;
-          finalEmail = fbUser.email || 'kalam172010@gmail.com';
-          finalName = fbUser.displayName || 'Google User';
+          if (!fbUser || !fbUser.email) {
+            return { success: false, error: 'No Google account was selected.' };
+          }
+          finalEmail = fbUser.email;
+          finalName = fbUser.displayName || fbUser.email.split('@')[0];
           finalAvatar = fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${finalName}`;
         } catch (popupErr: any) {
           console.warn('Firebase popup notice:', popupErr.message);
-          finalEmail = finalEmail || 'kalam172010@gmail.com';
-          finalName = finalName || 'Kalam (Google User)';
-          finalAvatar = finalAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80';
+          // If the user closed the popup or cancelled the account chooser, do NOT auto-login
+          if (
+            popupErr.code === 'auth/popup-closed-by-user' ||
+            popupErr.code === 'auth/cancelled-popup-request' ||
+            popupErr.message?.includes('closed-by-user')
+          ) {
+            return { success: false, error: 'Google sign-in was cancelled. Please choose an account.' };
+          }
+          return { success: false, error: popupErr.message || 'Failed to open Google account chooser.' };
         }
       }
 
-      const cleanEmail = (finalEmail || '').trim().toLowerCase();
-      let matched = cleanEmail ? users.find(u => u.email?.toLowerCase() === cleanEmail) : null;
+      if (!finalEmail) {
+        return { success: false, error: 'Please select a valid Google account.' };
+      }
+
+      const cleanEmail = finalEmail.trim().toLowerCase();
+      let matched = users.find(u => u.email?.toLowerCase() === cleanEmail);
 
       if (matched) {
         const updated: User = {
@@ -2541,7 +2634,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       const newUid = Math.floor(10000000 + Math.random() * 90000000);
       const newUser: User = {
         user_id: newUid,
-        first_name: finalName || 'Google User',
+        first_name: finalName || cleanEmail.split('@')[0],
         username: cleanEmail.split('@')[0] || `user_${newUid}`,
         email: cleanEmail,
         avatar_url: finalAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${finalName || 'user'}`,

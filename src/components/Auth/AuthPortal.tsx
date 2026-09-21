@@ -41,13 +41,13 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
   );
 
   // Form states
-  const [loginEmail, setLoginEmail] = useState('kalam172010@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Register states
-  const [regName, setRegName] = useState('Kalam');
+  const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -55,7 +55,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
   const [regAgreed, setRegAgreed] = useState(true);
 
   // Forgot password states
-  const [forgotEmail, setForgotEmail] = useState('kalam172010@gmail.com');
+  const [forgotEmail, setForgotEmail] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);

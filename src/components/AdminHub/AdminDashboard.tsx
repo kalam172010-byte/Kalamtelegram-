@@ -139,6 +139,7 @@ export const AdminDashboard: React.FC = () => {
   // Products state
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [showAddKeysModal, setShowAddKeysModal] = useState<number | null>(null);
   const [newKeysText, setNewKeysText] = useState('');
 
@@ -155,7 +156,23 @@ export const AdminDashboard: React.FC = () => {
     is_active: 1,
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
     provider_product_id: 'PID_FF_NONROOT_V1',
-    provider_duration: '1 Day',
+    provider_duration: '7 Days',
+    requires_android_id: 0
+  });
+
+  const [editProdForm, setEditProdForm] = useState({
+    category: 'ANDROID NON ROOT PANEL',
+    panel_name: '',
+    name: '',
+    price_inr: 250,
+    reseller_price: 150,
+    validity: '7 Days',
+    device_limit: '1 Device HWID',
+    apk_link: '',
+    is_active: 1,
+    delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
+    provider_product_id: 'PID_FF_NONROOT_V1',
+    provider_duration: '7 Days',
     requires_android_id: 0
   });
 
@@ -214,13 +231,13 @@ export const AdminDashboard: React.FC = () => {
         name: newProdForm.name,
         price_inr: Number(newProdForm.price_inr),
         reseller_price: Number(newProdForm.reseller_price),
-        validity: newProdForm.validity,
+        validity: newProdForm.validity || newProdForm.name,
         device_limit: newProdForm.device_limit,
         apk_link: newProdForm.apk_link,
         is_active: 1,
         delivery_mode: newProdForm.delivery_mode,
         provider_product_id: newProdForm.provider_product_id,
-        provider_duration: newProdForm.provider_duration,
+        provider_duration: newProdForm.provider_duration || newProdForm.validity || newProdForm.name,
         requires_android_id: Boolean(newProdForm.requires_android_id)
       },
       keysArray
@@ -240,9 +257,51 @@ export const AdminDashboard: React.FC = () => {
       is_active: 1,
       delivery_mode: 'api_provider',
       provider_product_id: 'PID_FF_NONROOT_V1',
-      provider_duration: '1 Day',
+      provider_duration: '7 Days',
       requires_android_id: 0
     });
+  };
+
+  const handleOpenEditProduct = (prod: Product) => {
+    setEditingProductId(prod.id);
+    setEditProdForm({
+      category: prod.category,
+      panel_name: prod.panel_name,
+      name: prod.name,
+      price_inr: prod.price_inr,
+      reseller_price: prod.reseller_price,
+      validity: prod.validity || prod.name,
+      device_limit: prod.device_limit || '1 Device HWID',
+      apk_link: prod.apk_link || '',
+      is_active: prod.is_active,
+      delivery_mode: prod.delivery_mode || 'api_provider',
+      provider_product_id: prod.provider_product_id || 'PID_FF_NONROOT_V1',
+      provider_duration: prod.provider_duration || prod.validity || prod.name,
+      requires_android_id: prod.requires_android_id ? 1 : 0
+    });
+  };
+
+  const handleUpdateProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProductId) return;
+
+    updateProduct(editingProductId, {
+      category: editProdForm.category,
+      panel_name: editProdForm.panel_name,
+      name: editProdForm.name,
+      price_inr: Number(editProdForm.price_inr),
+      reseller_price: Number(editProdForm.reseller_price),
+      validity: editProdForm.validity || editProdForm.name,
+      device_limit: editProdForm.device_limit,
+      apk_link: editProdForm.apk_link,
+      is_active: editProdForm.is_active,
+      delivery_mode: editProdForm.delivery_mode,
+      provider_product_id: editProdForm.provider_product_id,
+      provider_duration: editProdForm.provider_duration || editProdForm.validity || editProdForm.name,
+      requires_android_id: Boolean(editProdForm.requires_android_id)
+    });
+
+    setEditingProductId(null);
   };
 
   const handleInjectKeys = (productId: number) => {
@@ -580,6 +639,15 @@ export const AdminDashboard: React.FC = () => {
                             </button>
                           </td>
                           <td className="p-3.5 text-right space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditProduct(prod)}
+                              className="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20 rounded-lg transition cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
+                              title="Edit Product & Duration"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => setShowAddKeysModal(prod.id)}
@@ -2540,7 +2608,7 @@ export const AdminDashboard: React.FC = () => {
       {/* ================= ADD PRODUCT MODAL ================= */}
       {showAddProductModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Plus className="w-5 h-5 text-cyan-400" />
@@ -2549,7 +2617,7 @@ export const AdminDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowAddProductModal(false)}
-                className="text-slate-400 hover:text-white p-1"
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -2583,19 +2651,79 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-slate-400 mb-1 block">Package Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={newProdForm.name}
-                    onChange={(e) => setNewProdForm({ ...newProdForm, name: e.target.value })}
-                    placeholder="e.g. 7 Days"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
-                  />
+              {/* Product Duration & Validity Configuration */}
+              <div className="p-3 bg-cyan-950/20 border border-cyan-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                    ⏱ Product Duration / Validity (Manual Customization)
+                  </span>
+                  <span className="text-[10px] text-cyan-400/80">Shown to users & Provider</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 mb-1 block">Product / Package Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={newProdForm.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewProdForm({ 
+                          ...newProdForm, 
+                          name: val,
+                          validity: newProdForm.validity || val,
+                          provider_duration: newProdForm.provider_duration || val
+                        });
+                      }}
+                      placeholder="e.g. 7 Days VIP Key"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-400 mb-1 block">Custom Duration / Validity</label>
+                    <input
+                      type="text"
+                      required
+                      value={newProdForm.validity}
+                      onChange={(e) => setNewProdForm({ 
+                        ...newProdForm, 
+                        validity: e.target.value,
+                        provider_duration: e.target.value
+                      })}
+                      placeholder="e.g. 1 Day, 7 Days, 30 Days, 1 Year"
+                      className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl p-2 text-cyan-300 font-bold outline-none"
+                    />
+                  </div>
                 </div>
 
+                {/* Quick Duration Preset Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400 mr-1">Quick Presets:</span>
+                  {['1 Hour', '2 Hours', '6 Hours', '12 Hours', '1 Day', '3 Days', '7 Days', '15 Days', '30 Days', '60 Days', 'Lifetime'].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewProdForm({
+                        ...newProdForm,
+                        validity: preset,
+                        name: newProdForm.name ? newProdForm.name : preset,
+                        provider_duration: preset
+                      })}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                        newProdForm.validity === preset
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                          : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 mb-1 block">User Price (₹)</label>
                   <input
@@ -2705,18 +2833,14 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-slate-400 mb-1 block">Provider Duration</label>
-                      <select
+                      <label className="text-[10px] text-slate-400 mb-1 block">Provider Duration Match</label>
+                      <input
+                        type="text"
                         value={newProdForm.provider_duration}
                         onChange={(e) => setNewProdForm({ ...newProdForm, provider_duration: e.target.value })}
+                        placeholder="e.g. 7 Days"
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-200"
-                      >
-                        <option value="1 Hours">1 Hours</option>
-                        <option value="3 Hours">3 Hours</option>
-                        <option value="1 Day">1 Day</option>
-                        <option value="7 Days">7 Days</option>
-                        <option value="30 Days">30 Days</option>
-                      </select>
+                      />
                     </div>
 
                     <div className="col-span-2 flex items-center gap-2 pt-1">
@@ -2761,6 +2885,272 @@ export const AdminDashboard: React.FC = () => {
                   className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold shadow cursor-pointer transition"
                 >
                   Save & Inject to Vault
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= EDIT PRODUCT MODAL ================= */}
+      {editingProductId !== null && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                Edit Product & Duration (ID #{editingProductId})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingProductId(null)}
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateProductSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 mb-1 block">Category</label>
+                  <select
+                    value={editProdForm.category}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, category: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+                  >
+                    <option value="ANDROID NON ROOT PANEL">ANDROID NON ROOT PANEL</option>
+                    <option value="ANDROID ROOT PANEL">ANDROID ROOT PANEL</option>
+                    <option value="PC PANEL">PC PANEL</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 mb-1 block">Panel Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editProdForm.panel_name}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, panel_name: e.target.value })}
+                    placeholder="e.g. VIP ZERO PANEL"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Product Duration & Validity Configuration */}
+              <div className="p-3 bg-cyan-950/20 border border-cyan-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                    ⏱ Edit Duration / Validity (Manual Input)
+                  </span>
+                  <span className="text-[10px] text-cyan-400/80">Active in Bot & Catalog</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 mb-1 block">Product / Package Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editProdForm.name}
+                      onChange={(e) => setEditProdForm({ ...editProdForm, name: e.target.value })}
+                      placeholder="e.g. 7 Days"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-400 mb-1 block">Custom Duration / Validity</label>
+                    <input
+                      type="text"
+                      required
+                      value={editProdForm.validity}
+                      onChange={(e) => setEditProdForm({ 
+                        ...editProdForm, 
+                        validity: e.target.value,
+                        provider_duration: e.target.value
+                      })}
+                      placeholder="e.g. 1 Day, 7 Days, 30 Days, 1 Year"
+                      className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl p-2 text-cyan-300 font-bold outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Duration Preset Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400 mr-1">Quick Presets:</span>
+                  {['1 Hour', '2 Hours', '6 Hours', '12 Hours', '1 Day', '3 Days', '7 Days', '15 Days', '30 Days', '60 Days', 'Lifetime'].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setEditProdForm({
+                        ...editProdForm,
+                        validity: preset,
+                        name: editProdForm.name ? editProdForm.name : preset,
+                        provider_duration: preset
+                      })}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                        editProdForm.validity === preset
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                          : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 mb-1 block">User Price (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editProdForm.price_inr}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, price_inr: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-emerald-400 font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 mb-1 block">Reseller Price (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editProdForm.reseller_price}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, reseller_price: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-amber-300 font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 mb-1 block">Device Limit</label>
+                  <input
+                    type="text"
+                    value={editProdForm.device_limit}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, device_limit: e.target.value })}
+                    placeholder="1 Device HWID"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 mb-1 block">APK / Download Link</label>
+                  <input
+                    type="text"
+                    value={editProdForm.apk_link}
+                    onChange={(e) => setEditProdForm({ ...editProdForm, apk_link: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Settings */}
+              <div className="p-3 bg-slate-950/80 border border-indigo-500/30 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5" />
+                    Key Delivery Mode
+                  </span>
+                  <span className="text-[10px] text-slate-400">Automated vs Vault</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditProdForm({ ...editProdForm, delivery_mode: 'api_provider' })}
+                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
+                      editProdForm.delivery_mode === 'api_provider'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-slate-900 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    ⚡ Auto API
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditProdForm({ ...editProdForm, delivery_mode: 'hybrid' })}
+                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
+                      editProdForm.delivery_mode === 'hybrid'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-slate-900 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    🔄 Hybrid
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditProdForm({ ...editProdForm, delivery_mode: 'manual_vault' })}
+                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
+                      editProdForm.delivery_mode === 'manual_vault'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-slate-900 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    🔒 Vault Only
+                  </button>
+                </div>
+
+                {editProdForm.delivery_mode !== 'manual_vault' && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="text-[10px] text-slate-400 mb-1 block">Provider Product PID</label>
+                      <input
+                        type="text"
+                        value={editProdForm.provider_product_id}
+                        onChange={(e) => setEditProdForm({ ...editProdForm, provider_product_id: e.target.value })}
+                        placeholder="e.g. PID_FF_NONROOT_V1"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-indigo-300 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 mb-1 block">Provider Duration Match</label>
+                      <input
+                        type="text"
+                        value={editProdForm.provider_duration}
+                        onChange={(e) => setEditProdForm({ ...editProdForm, provider_duration: e.target.value })}
+                        placeholder="e.g. 7 Days"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-200"
+                      />
+                    </div>
+
+                    <div className="col-span-2 flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="reqAndroidIdEditModal"
+                        checked={Boolean(editProdForm.requires_android_id)}
+                        onChange={(e) => setEditProdForm({ ...editProdForm, requires_android_id: e.target.checked ? 1 : 0 })}
+                        className="rounded accent-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                      <label htmlFor="reqAndroidIdEditModal" className="text-slate-300 text-[11px] cursor-pointer">
+                        Requires Device Android ID (V1 Device Bound)?
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingProductId(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold shadow cursor-pointer transition"
+                >
+                  Update Product
                 </button>
               </div>
             </form>

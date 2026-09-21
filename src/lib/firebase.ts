@@ -41,6 +41,10 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 // Initialize Auth
 export const auth: Auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Force Google to always display the Account Chooser (select_account)
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 // Initialize Firestore with Database ID if specified
 export const db: Firestore = firebaseConfigJson.firestoreDatabaseId
