@@ -11,6 +11,8 @@ export interface PaymentGatewayConfig {
   usdt_trc20_address: string;
   usdt_to_inr_rate: number;
   auto_approve: boolean;
+  min_deposit_inr?: number;
+  max_deposit_inr?: number;
 }
 
 export interface ResellerApiConfig {
@@ -242,12 +244,16 @@ export interface Settings {
   reseller_min_balance: number;
   support_telegram: string;
   support_whatsapp: string;
+  apk_channel_link?: string;
+  official_channel_link?: string;
   ui_start_menu: string;
   ui_vip_menu: string;
   ui_add_balance_menu: string;
   usdt_to_inr: number;
   vip_discount_percentage: number;
   vip_price_inr: number;
+  min_deposit_inr?: number;
+  max_deposit_inr?: number;
   [key: string]: any;
 }
 
@@ -282,4 +288,4 @@ export interface ChatMessage {
   };
 }
 
-export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
+export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'telegram' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';

@@ -714,6 +714,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (gatewayUpdates.upi_id) newSettingFields.fampay_upi_id = gatewayUpdates.upi_id;
     if (gatewayUpdates.api_key) newSettingFields.famgateway_api_key = gatewayUpdates.api_key;
     if (gatewayUpdates.merchant_name) (newSettingFields as any).merchant_name = gatewayUpdates.merchant_name;
+    if (gatewayUpdates.min_deposit_inr !== undefined) newSettingFields.min_deposit_inr = gatewayUpdates.min_deposit_inr;
+    if (gatewayUpdates.max_deposit_inr !== undefined) newSettingFields.max_deposit_inr = gatewayUpdates.max_deposit_inr;
 
     setSettings(prev => {
       const nextSettings = { ...prev, ...newSettingFields };
@@ -1193,7 +1195,32 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Generate FamPay / FamGateway Order
   const generateFamPayOrder = async (amount: number) => {
     const rawAmt = Number(amount);
-    const validAmount = (!amount || isNaN(rawAmt) || rawAmt <= 0) ? 100 : rawAmt;
+    const minDeposit = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 10;
+    const maxDeposit = activeBot?.payment_gateway?.max_deposit_inr ?? settings.max_deposit_inr ?? 50000;
+
+    if (rawAmt < minDeposit) {
+      editLastBotMessage(
+        `⚠️ <b>Minimum Deposit Limit: ₹${minDeposit}</b>\n\nThe minimum allowed deposit amount configured by the administrator is <b>₹${minDeposit}</b>.\nPlease choose or enter an amount greater than or equal to ₹${minDeposit}.`,
+        [
+          [{ text: '💳 Add Balance', callback_data: 'add_balance' }],
+          [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+        ]
+      );
+      return;
+    }
+
+    if (rawAmt > maxDeposit) {
+      editLastBotMessage(
+        `⚠️ <b>Maximum Deposit Limit: ₹${maxDeposit}</b>\n\nThe maximum allowed deposit amount per transaction is <b>₹${maxDeposit}</b>.\nPlease choose or enter an amount less than or equal to ₹${maxDeposit}.`,
+        [
+          [{ text: '💳 Add Balance', callback_data: 'add_balance' }],
+          [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+        ]
+      );
+      return;
+    }
+
+    const validAmount = (!amount || isNaN(rawAmt) || rawAmt <= 0) ? minDeposit : rawAmt;
     setIsBotTyping(true);
     let orderId = `ORD_${currentUser.user_id}_${Math.floor(Date.now() / 1000)}`;
     let qrUrl = '';
@@ -1203,6 +1230,18 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const payeeName = activeBot?.payment_gateway?.merchant_name || 'Kalam FF Panel';
     const expiresAtStr = new Date(expiresAt).toLocaleTimeString();
 
+    // Call server to create automated order on FamGateway in real time
+    try {
+      const liveRes = await createFamGatewayOrder(validAmount);
+      if (liveRes && liveRes.success && liveRes.order_id) {
+        orderId = String(liveRes.order_id);
+        qrUrl = liveRes.qr_url || '';
+        paymentUrl = liveRes.payment_url || '';
+      }
+    } catch (e) {
+      console.warn('createFamGatewayOrder fallback to direct UPI:', e);
+    }
+
     const upiUri = buildUpiUri({
       upiId,
       payeeName,
@@ -1210,18 +1249,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orderId,
       note: `Deposit ${orderId}`
     });
-
-    // Call server to create automated order
-    try {
-      const liveRes = await createFamGatewayOrder(validAmount);
-      if (liveRes && liveRes.success && liveRes.order_id) {
-        orderId = liveRes.order_id;
-        qrUrl = liveRes.qr_url || '';
-        paymentUrl = liveRes.payment_url || '';
-      }
-    } catch (e) {
-      console.warn('createFamGatewayOrder fallback to local QR:', e);
-    }
 
     if (!qrUrl || qrUrl.length < 10) {
       try {
@@ -1252,7 +1279,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (paymentUrl && (paymentUrl.startsWith('http://') || paymentUrl.startsWith('https://'))) {
       kb.push([
         {
-          text: "💳 Pay with UPI / FamPay App",
+          text: "🌐 Open FamGateway.in Checkout",
           url: paymentUrl,
           style: "success"
         }
@@ -1260,7 +1287,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       kb.push([
         {
-          text: "💳 Pay via UPI App (GPay/PhonePe)",
+          text: "💳 Pay via UPI App (PhonePe/GPay/Paytm)",
           url: upiUri,
           style: "success"
         }
@@ -1269,7 +1296,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     kb.push([
       {
-        text: "🔄 Check & Verify Payment",
+        text: "🔄 Check & Auto-Verify Payment",
         callback_data: `verify_${orderId}`,
         style: "primary"
       }
@@ -1292,17 +1319,18 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     ]);
 
-    const text = `🧾 <b>AUTOMATIC FAMGATEWAY UPI INVOICE</b>\n\n` +
+    const text = `🧾 <b>FAMGATEWAY.IN AUTOMATED UPI INVOICE</b>\n\n` +
       `💵 <b>Amount to Pay:</b> ${fmtCurr(validAmount)}\n` +
       `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
       `🏦 <b>UPI ID:</b> <code>${upiId}</code>\n` +
+      `🌐 <b>Gateway:</b> <b>FamGateway.in</b>\n` +
       `⏳ <b>Expires:</b> <i>15 Minutes (${expiresAtStr})</i>\n` +
       `📅 <b>Created:</b> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n` +
       `📱 <b>Automatic Payment Instructions:</b>\n` +
       `1️⃣ Scan the generated QR Code below or tap Pay via UPI\n` +
-      `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in FamPay / PhonePe / GPay / Paytm\n` +
-      `3️⃣ <b>Your balance will be credited AUTOMATICALLY in real-time!</b>\n\n` +
-      `<i>👉 If already paid, tap "Check & Verify Payment" or submit your 12-digit UTR below.</i>`;
+      `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in PhonePe / GPay / Paytm / FamPay\n` +
+      `3️⃣ <b>Your balance will be credited AUTOMATICALLY via FamGateway.in!</b>\n\n` +
+      `<i>👉 If already paid, tap "Check & Auto-Verify Payment" or submit your 12-digit UTR below.</i>`;
 
     editLastBotMessage(text, kb, {
       order_id: orderId,
@@ -1752,35 +1780,14 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       return;
     }
 
-    // 9. Add Balance Gateway Selection
-    if (callbackData === 'menu_add_balance' || callbackData === 'add_balance' || callbackData === 'deposit') {
+    // 9. Add Balance Gateway Selection & Presets (FamGateway.in)
+    if (callbackData === 'menu_add_balance' || callbackData === 'add_balance' || callbackData === 'deposit' || callbackData === 'gateway_inr' || callbackData === 'upi_pay' || callbackData === 'fampay_deposit') {
       logActivity(currentUser.user_id, 'VIEW_ADD_BALANCE');
-      const text = renderUiText('add_balance_menu');
-      const kb: InlineKeyboardButton[][] = [
-        [
-          {
-            text: "UPI PAY",
-            callback_data: "gateway_inr",
-            icon_custom_emoji_id: emojis.upi || DEFAULT_EMOJIS.upi,
-            style: "primary"
-          }
-        ],
-        [
-          {
-            text: "USDT Crypto (TRC20)",
-            callback_data: "gateway_crypto",
-            style: "primary"
-          }
-        ],
-        getBackKeyboard('back_main')[0]
-      ];
-      editLastBotMessage(text, kb);
-      return;
-    }
-
-    // 10. UPI Pay Preset Chips
-    if (callbackData === 'gateway_inr' || callbackData === 'upi_pay' || callbackData === 'fampay_deposit') {
-      const text = `💵 <b>— FAMPAY UPI DEPOSIT —</b> 💵\n\nSelect amount to deposit:`;
+      const text = `💳 <b>— FAMGATEWAY.IN INSTANT UPI RECHARGE —</b> 💳\n\n` +
+        `⚡ <i>Automated wallet deposit powered by <b>FamGateway.in</b></i>\n` +
+        `📱 <i>Supported: PhonePe, Google Pay, Paytm, FamPay & BHIM UPI</i>\n\n` +
+        `💵 <b>Current Balance:</b> <b>${fmtCurr(currentUser.balance)}</b>\n\n` +
+        `👉 <b>Select an amount to deposit:</b>`;
       const kb: InlineKeyboardButton[][] = [
         [
           { text: "₹50", callback_data: "pay_50", style: "primary" },
@@ -1799,8 +1806,8 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
         ],
         [
           {
-            text: "Back",
-            callback_data: "menu_add_balance",
+            text: "BACK TO MAIN MENU",
+            callback_data: "back_main",
             icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
             style: "danger"
           }
@@ -1829,10 +1836,7 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       }
       const rawAmt = Number(valStr);
       const amt = (!isNaN(rawAmt) && rawAmt > 0) ? rawAmt : 100;
-      editLastBotMessage("⏳ <b>Generating Secure QR Code via FamPay...</b>");
-      setTimeout(() => {
-        generateFamPayOrder(amt);
-      }, 300);
+      generateFamPayOrder(amt);
       return;
     }
 
@@ -1843,16 +1847,17 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
 
       if (action === 'confirm') {
         const amt = Number(amountStr);
-        if (amt < 10) {
-          pushBotMessage("❌ Minimum deposit is ₹10.");
+        const minDeposit = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 10;
+        if (amt < minDeposit) {
+          editLastBotMessage(`❌ Minimum deposit is ₹${minDeposit}. Please enter at least ₹${minDeposit}.`, [
+            [{ text: "🔙 Re-enter Amount", callback_data: "custom_deposit_keypad" }],
+            getBackKeyboard('menu_add_balance')[0]
+          ]);
           return;
         }
         setCurrentFsmState(null);
         setFsmData({});
-        editLastBotMessage("⏳ <b>Generating Secure QR Code...</b>");
-        setTimeout(() => {
-          generateFamPayOrder(amt);
-        }, 400);
+        generateFamPayOrder(amt);
         return;
       }
 
@@ -1870,25 +1875,41 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       return;
     }
 
-    // 13. Verify transaction callback
-    if (callbackData.startsWith('verify_')) {
-      const orderId = callbackData.replace('verify_', '');
+    // 13. Verify transaction callback & check order callback
+    if (callbackData.startsWith('verify_') || callbackData.startsWith('check_order_')) {
+      const orderId = callbackData.replace('verify_', '').replace('check_order_', '');
       handleVerifyPayment(orderId);
+      return;
+    }
+
+    // 13b. Submit 12-digit UTR
+    if (callbackData.startsWith('submit_utr_')) {
+      const orderId = callbackData.replace('submit_utr_', '');
+      setCurrentFsmState('wait_for_utr');
+      setFsmData({ orderId });
+      editLastBotMessage(
+        `📝 <b>SUBMIT 12-DIGIT UPI REFERENCE / UTR NUMBER</b>\n\n` +
+        `Order ID: <code>${orderId}</code>\n\n` +
+        `👇 <b>Please type your 12-digit UTR Reference Number in the chat box below:</b>\n` +
+        `• <b>PhonePe:</b> UTR / Transaction ID (12 digits)\n` +
+        `• <b>Google Pay:</b> UPI Transaction ID (12 digits)\n` +
+        `• <b>Paytm:</b> UPI Ref No (12 digits)\n` +
+        `• <b>FamPay:</b> Reference ID (12 digits)\n\n` +
+        `<i>Example: <code>428912345678</code></i>`,
+        getBackKeyboard('menu_add_balance')
+      );
       return;
     }
 
     // 14. Crypto Gateway
     if (callbackData === 'gateway_crypto') {
-      const msg = `🪙 <b>— BINANCE USDT DEPOSIT —</b> 🪙
-
-💵 <b>Exchange Rate:</b> 1 USDT = ₹${settings.usdt_to_inr}
-⚠️ <b>Network:</b> Please send via <b>TRC20</b> or <b>BEP20</b>.
-
-👇 <b>Send your USDT to this exact address:</b>
-<code>${settings.binance_address}</code>
-
-━━━━━━━━━━━━━━━━━━
-✅ <b>After sending the USDT, reply in chat with your exact TxID (Transaction Hash) to instantly claim your balance.</b>`;
+      const msg = `🪙 <b>— BINANCE USDT DEPOSIT —</b> 🪙\n\n` +
+        `💵 <b>Exchange Rate:</b> 1 USDT = ₹${settings.usdt_to_inr}\n` +
+        `⚠️ <b>Network:</b> Please send via <b>TRC20</b> or <b>BEP20</b>.\n\n` +
+        `👇 <b>Send your USDT to this exact address:</b>\n` +
+        `<code>${settings.binance_address}</code>\n\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `✅ <b>After sending the USDT, reply in chat with your exact TxID (Transaction Hash) to instantly claim your balance.</b>`;
 
       setCurrentFsmState('wait_for_crypto_txid');
       editLastBotMessage(msg, getBackKeyboard('menu_add_balance'));
@@ -2460,16 +2481,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     if (currentFsmState === 'custom_amount_input' || currentFsmState === 'wait_for_custom_balance') {
       const cleanNum = trimmed.replace(/[^0-9.]/g, '');
       const amt = Number(cleanNum);
-      if (isNaN(amt) || amt < 10) {
-        pushBotMessage("❌ Minimum deposit amount is ₹10. Please enter a valid number (e.g., 150):");
+      const minDeposit = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 10;
+      if (isNaN(amt) || amt < minDeposit) {
+        pushBotMessage(`❌ Minimum deposit amount is ₹${minDeposit}. Please enter a valid number (e.g., 150):`);
         return;
       }
       setCurrentFsmState(null);
       setFsmData({});
-      pushBotMessage("⏳ <b>Generating Secure UPI QR Code...</b>");
-      setTimeout(() => {
-        generateFamPayOrder(amt);
-      }, 300);
+      generateFamPayOrder(amt);
       return;
     }
 

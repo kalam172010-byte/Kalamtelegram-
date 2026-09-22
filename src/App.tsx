@@ -94,28 +94,35 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden select-none">
-      {/* Top Application Navigation Bar */}
-      <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800/90 px-3 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 shrink-0 z-30 shadow-md">
+    <div className="flex flex-col h-[100dvh] w-screen bg-[#030712] text-slate-100 font-sans overflow-hidden select-none relative">
+      {/* Liquid Glass Ambient Fluid Mesh Orbs in Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-gradient-to-br from-cyan-500/25 to-blue-600/20 rounded-full blur-[110px] animate-blob-1 opacity-70" />
+        <div className="absolute top-1/3 -right-28 w-[28rem] h-[28rem] bg-gradient-to-tr from-indigo-500/20 via-purple-600/15 to-cyan-400/20 rounded-full blur-[130px] animate-blob-2 opacity-65" />
+        <div className="absolute -bottom-32 left-1/3 w-[32rem] h-[32rem] bg-gradient-to-tl from-teal-500/15 via-emerald-600/10 to-blue-600/20 rounded-full blur-[120px] animate-blob-3 opacity-60" />
+      </div>
+
+      {/* Top Application Navigation Bar with Liquid Glass */}
+      <header className="liquid-glass border-b border-white/10 px-3 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 shrink-0 z-30 shadow-2xl shadow-cyan-950/30 sticky top-0">
         {/* Brand & Title */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white shadow-lg shadow-cyan-500/25 text-sm md:text-base shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-tr from-cyan-400 via-teal-400 to-blue-500 flex items-center justify-center font-black text-slate-950 shadow-lg shadow-cyan-500/30 text-sm md:text-base shrink-0 border border-white/40">
             ⚡
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 md:gap-2">
-              <span className="font-extrabold text-xs md:text-base text-white tracking-tight truncate">
+              <span className="font-extrabold text-xs md:text-base text-white tracking-tight truncate bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-transparent">
                 KALAM FF PANEL
               </span>
               {/* Active Bot Quick Switcher on Desktop */}
               {myBots.length > 0 ? (
-                <div className="hidden lg:flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="text-slate-400 font-medium">Bot:</span>
+                <div className="hidden lg:flex items-center gap-1.5 liquid-glass-pill px-2.5 py-1 rounded-xl text-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                  <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
                   <select
                     value={activeBot?.id || ''}
                     onChange={(e) => switchActiveBot(e.target.value)}
-                    className="bg-transparent font-bold text-cyan-400 focus:outline-none cursor-pointer"
+                    className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer text-xs"
                   >
                     {myBots.map((b) => (
                       <option key={b.id} value={b.id} className="bg-slate-900 text-white">
@@ -128,33 +135,34 @@ const AppContent: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab('my_bots')}
-                  className="hidden sm:flex items-center gap-1.5 bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 px-2.5 py-1 rounded-lg border border-cyan-500/30 text-xs font-bold transition"
+                  className="hidden sm:flex items-center gap-1.5 liquid-glass-pill text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition"
                 >
                   <Bot className="w-3.5 h-3.5" />
                   <span>+ Create Your Bot</span>
                 </button>
               )}
             </div>
-            {/* Mobile subtitle indicator */}
-            <div className="flex sm:hidden items-center gap-1.5 text-[10px] text-slate-400 leading-tight">
+            {/* Mobile bot badge & quick picker */}
+            <div className="flex sm:hidden items-center gap-1 text-[10px] text-slate-400 leading-tight">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block shrink-0"></span>
               {activeBot ? (
-                <span className="text-cyan-400 font-bold truncate">@{activeBot.username}</span>
+                <span className="text-cyan-300 font-bold truncate max-w-[130px]">@{activeBot.username}</span>
               ) : (
-                <span className="text-slate-400">Store Bot Creator</span>
+                <span className="text-slate-400">Multi-Bot Hub</span>
               )}
             </div>
           </div>
         </div>
 
         {/* Center Primary Tab Toggle (Desktop) */}
-        <div className="hidden sm:flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs md:text-sm font-semibold overflow-x-auto max-w-full">
+        <div className="hidden sm:flex items-center liquid-glass-pill p-1 rounded-2xl text-xs md:text-sm font-semibold overflow-x-auto max-w-full gap-0.5">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'dashboard'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <LayoutDashboard className="w-4 h-4 text-cyan-300" />
@@ -164,10 +172,10 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('my_bots')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'my_bots'
-                ? 'bg-cyan-600 text-white shadow font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Bot className="w-4 h-4 text-cyan-300" />
@@ -177,10 +185,10 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('bot')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'bot'
-                ? 'bg-cyan-600 text-white shadow font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Smartphone className="w-4 h-4" />
@@ -190,23 +198,23 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('gateways')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'gateways'
-                ? 'bg-emerald-600 text-white shadow font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-emerald-500/90 to-teal-600/90 text-white shadow-lg shadow-emerald-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <CreditCard className="w-4 h-4 text-emerald-300" />
-            <span>Payment Gateway</span>
+            <span>Gateways</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('reseller_api')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'reseller_api'
-                ? 'bg-purple-600 text-white shadow font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-purple-500/90 to-indigo-600/90 text-white shadow-lg shadow-purple-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Zap className="w-4 h-4 text-purple-300" />
@@ -217,10 +225,10 @@ const AppContent: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'admin'
-                  ? 'bg-indigo-600 text-white shadow font-bold'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-indigo-500/90 to-rose-600/90 text-white shadow-lg shadow-indigo-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               <Shield className="w-4 h-4" />
@@ -233,11 +241,11 @@ const AppContent: React.FC = () => {
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Mobile Active Bot Switcher Dropdown if multiple bots */}
           {myBots.length > 1 && (
-            <div className="sm:hidden flex items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[11px]">
+            <div className="sm:hidden flex items-center liquid-glass-pill px-2 py-1 rounded-xl text-[11px]">
               <select
                 value={activeBot?.id || ''}
                 onChange={(e) => switchActiveBot(e.target.value)}
-                className="bg-transparent font-bold text-cyan-400 focus:outline-none cursor-pointer max-w-[85px] truncate"
+                className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer max-w-[85px] truncate"
               >
                 {myBots.map((b) => (
                   <option key={b.id} value={b.id} className="bg-slate-900 text-white">
@@ -249,20 +257,25 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Balance Pill */}
-          <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab('bot')}
+            title="Click to add balance in bot"
+            className="flex items-center gap-1.5 liquid-glass-pill hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-emerald-500/40 text-xs transition cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+          >
             <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-bold text-emerald-400 text-xs font-mono">
+            <span className="font-bold text-emerald-300 text-xs font-mono">
               ₹{currentUser.balance.toFixed(0)}
             </span>
-          </div>
+          </button>
 
           {/* User Account / Profile Button */}
           <button
             type="button"
             onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 active:scale-95 border border-slate-700/80 text-xs md:text-sm font-semibold text-slate-200 transition cursor-pointer min-h-[38px]"
+            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-xs md:text-sm font-semibold text-slate-200 transition cursor-pointer min-h-[38px]"
           >
-            <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 overflow-hidden flex items-center justify-center text-xs text-white font-bold shrink-0">
+            <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 overflow-hidden flex items-center justify-center text-xs text-slate-950 font-bold shrink-0 border border-white/30">
               {currentUser.avatar_url ? (
                 <img
                   src={currentUser.avatar_url}
@@ -288,7 +301,7 @@ const AppContent: React.FC = () => {
               }
             }}
             title="Reset Everything to Defaults"
-            className="p-2 md:p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+            className="p-2 md:p-2.5 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </button>
@@ -296,27 +309,27 @@ const AppContent: React.FC = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden relative flex flex-col bg-slate-950">
+      <main className="flex-1 overflow-hidden relative flex flex-col z-10">
         {activeTab === 'dashboard' ? (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <UserDashboard />
           </div>
         ) : activeTab === 'my_bots' ? (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <MyBotsDashboard />
           </div>
-        ) : activeTab === 'bot' ? (
-          <div className="w-full h-full flex flex-col overflow-hidden pb-14 sm:pb-0">
+        ) : activeTab === 'bot' || activeTab === 'telegram' ? (
+          <div className="w-full h-full flex flex-col overflow-hidden pb-20 sm:pb-0">
             <div
               className={`w-full h-full flex flex-col mx-auto transition-all duration-300 ${
                 isMobileFrame
-                  ? 'max-w-md h-full md:my-3 md:rounded-3xl md:border md:border-slate-800 md:shadow-2xl md:ring-8 md:ring-slate-900/60 overflow-hidden'
+                  ? 'max-w-md h-full md:my-3 md:rounded-3xl md:border md:border-white/10 md:shadow-2xl md:ring-8 md:ring-slate-950/80 overflow-hidden'
                   : 'w-full h-full'
               }`}
             >
               {/* Phone Speaker Notch if Mobile Frame on Desktop */}
               {isMobileFrame && (
-                <div className="hidden md:flex justify-center items-center py-1 bg-slate-900 border-b border-slate-800">
+                <div className="hidden md:flex justify-center items-center py-1 bg-slate-950/80 border-b border-white/5">
                   <div className="w-16 h-1 bg-slate-700 rounded-full"></div>
                 </div>
               )}
@@ -331,110 +344,110 @@ const AppContent: React.FC = () => {
             </div>
           </div>
         ) : activeTab === 'gateways' ? (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <PaymentGatewayManager />
           </div>
         ) : activeTab === 'reseller_api' ? (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <ResellerApiManager />
           </div>
         ) : activeTab === 'admin' && isMasterAdmin ? (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <AdminDashboard />
           </div>
         ) : (
-          <div className="w-full h-full overflow-y-auto pb-24 sm:pb-8">
+          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
             <UserDashboard />
           </div>
         )}
       </main>
 
-      {/* Bottom Mobile Navigation Dock (Native App Bar) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 px-2 pt-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl">
+      {/* Bottom Mobile Navigation Dock (Liquid Glass Mobile Dock) */}
+      <nav className="sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-2 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10">
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'dashboard'
-              ? 'text-cyan-400 bg-cyan-950/40'
+              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <LayoutDashboard className={`w-4 h-4 transition ${activeTab === 'dashboard' ? 'scale-110 text-cyan-400' : ''}`} />
-          <span className="mt-0.5 tracking-tight">Dashboard</span>
+          <LayoutDashboard className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'dashboard' ? 'scale-115 text-cyan-300' : ''}`} />
+          <span className="mt-1 tracking-tight">Home</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('my_bots')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'my_bots'
-              ? 'text-cyan-400 bg-cyan-950/40'
+              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div className="relative">
-            <Bot className={`w-4 h-4 transition ${activeTab === 'my_bots' ? 'scale-110 text-cyan-400' : ''}`} />
+            <Bot className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'my_bots' ? 'scale-115 text-cyan-300' : ''}`} />
             {myBots.length > 0 && (
-              <span className="absolute -top-1 -right-2 bg-cyan-500 text-slate-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-2 bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow">
                 {myBots.length}
               </span>
             )}
           </div>
-          <span className="mt-0.5 tracking-tight">My Bots</span>
+          <span className="mt-1 tracking-tight">My Bots</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('bot')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
-            activeTab === 'bot'
-              ? 'text-cyan-400 bg-cyan-950/40'
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+            activeTab === 'bot' || activeTab === 'telegram'
+              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-teal-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Smartphone className={`w-4 h-4 transition ${activeTab === 'bot' ? 'scale-110 text-cyan-400' : ''}`} />
-          <span className="mt-0.5 tracking-tight">Bot Chat</span>
+          <Smartphone className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'bot' || activeTab === 'telegram' ? 'scale-115 text-cyan-300' : ''}`} />
+          <span className="mt-1 tracking-tight">Bot Chat</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('gateways')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'gateways'
-              ? 'text-emerald-400 bg-emerald-950/40'
+              ? 'text-white bg-gradient-to-b from-emerald-400/25 to-teal-600/20 border border-emerald-400/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <CreditCard className={`w-4 h-4 transition ${activeTab === 'gateways' ? 'scale-110 text-emerald-400' : ''}`} />
-          <span className="mt-0.5 tracking-tight">Gateways</span>
+          <CreditCard className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'gateways' ? 'scale-115 text-emerald-300' : ''}`} />
+          <span className="mt-1 tracking-tight">Gateway</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('reseller_api')}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'reseller_api'
-              ? 'text-purple-400 bg-purple-950/40'
+              ? 'text-white bg-gradient-to-b from-purple-400/25 to-indigo-600/20 border border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Zap className={`w-4 h-4 transition ${activeTab === 'reseller_api' ? 'scale-110 text-purple-400' : ''}`} />
-          <span className="mt-0.5 tracking-tight">Reseller</span>
+          <Zap className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'reseller_api' ? 'scale-115 text-purple-300' : ''}`} />
+          <span className="mt-1 tracking-tight">API</span>
         </button>
 
         {isMasterAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab('admin')}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer min-h-[44px] ${
+            className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
               activeTab === 'admin'
-                ? 'text-indigo-400 bg-indigo-950/40'
+                ? 'text-white bg-gradient-to-b from-indigo-400/25 to-rose-600/20 border border-indigo-400/40 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Shield className={`w-4 h-4 transition ${activeTab === 'admin' ? 'scale-110 text-indigo-400' : ''}`} />
-            <span className="mt-0.5 tracking-tight">Admin</span>
+            <Shield className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' ? 'scale-115 text-indigo-300' : ''}`} />
+            <span className="mt-1 tracking-tight">Admin</span>
           </button>
         )}
       </nav>

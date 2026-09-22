@@ -82,6 +82,7 @@ export const AdminDashboard: React.FC = () => {
     closeTicket,
     updateSettings,
     updateEmojiSlot,
+    updateActiveBotGateway,
     resetDatabaseToDefaults,
     botStatus,
     testTelegramBotToken,
@@ -393,28 +394,28 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
-      {/* Admin Top Navigation */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div className="flex flex-col h-full text-slate-100 overflow-hidden p-3 md:p-6 space-y-4 max-w-7xl mx-auto w-full">
+      {/* Admin Top Navigation with Liquid Glass */}
+      <div className="liquid-glass-card rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xl">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border border-white/20">
             <Shield className="w-5 h-5 text-cyan-200" />
           </div>
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               Kalam FF Panel Admin Control
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+              <span className="text-[10px] liquid-glass-pill text-emerald-300 border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
                 Authorized
               </span>
             </h2>
-            <p className="text-xs text-slate-400">Master Grid Configuration & Vault Terminal</p>
+            <p className="text-xs text-slate-300">Master Grid Configuration & Vault Terminal</p>
           </div>
         </div>
 
         {/* Active Bot Switcher & Quick Toggles */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Active Bot Selector */}
-          <div className="flex items-center gap-2 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-cyan-500/30 shadow-inner">
+          <div className="flex items-center gap-2 liquid-glass-pill px-3 py-1.5 rounded-2xl border border-cyan-500/40 shadow-inner">
             <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Active Bot</span>
@@ -447,7 +448,7 @@ export const AdminDashboard: React.FC = () => {
                 });
                 setShowCreateBotModal(true);
               }}
-              className="bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition shadow cursor-pointer ml-1"
+              className="liquid-glass-btn-cyan text-white text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition shadow cursor-pointer ml-1 active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" /> Clone / New Bot
             </button>
@@ -457,10 +458,10 @@ export const AdminDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateSettings({ bot_status: settings.bot_status === 'ON' ? 'OFF' : 'ON' })}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
               settings.bot_status === 'ON'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${settings.bot_status === 'ON' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
@@ -471,10 +472,10 @@ export const AdminDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateSettings({ vip_status: settings.vip_status === 'ON' ? 'OFF' : 'ON' })}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
               settings.vip_status === 'ON'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
-                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                : 'liquid-glass-pill text-slate-400 hover:text-white'
             }`}
           >
             VIP System: {settings.vip_status}
@@ -482,8 +483,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Admin Tab Bar */}
-      <div className="bg-slate-900/60 border-b border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+      {/* Admin Tab Bar with Liquid Glass */}
+      <div className="liquid-glass-pill rounded-2xl p-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
         {[
           { id: 'overview', label: 'Overview', icon: Zap },
           { id: 'bots', label: `🤖 Bot Fleet & Cloner (${bots.length})`, icon: Bot, badge: true },
@@ -505,10 +506,10 @@ export const AdminDashboard: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => setAdminTab(tab.id as any)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition whitespace-nowrap cursor-pointer active:scale-95 ${
                 isActive
-                  ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  ? 'liquid-glass-btn-cyan text-white shadow-lg'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
               <IconC className="w-4 h-4 shrink-0" />
@@ -522,7 +523,7 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+      <div className="flex-1 overflow-y-auto pb-28 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
         {/* ================= BOT FLEET & CLONER TAB ================= */}
         {adminTab === 'bots' && (
           <div className="space-y-6 max-w-6xl mx-auto">
@@ -597,7 +598,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('telegram')}
+                      onClick={() => setActiveTab('bot')}
                       className="px-3.5 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
@@ -2725,6 +2726,60 @@ export const AdminDashboard: React.FC = () => {
                     Paste this into your FamGateway Merchant Webhook Settings
                   </p>
                 </div>
+
+                <div>
+                  <label className="text-slate-400 mb-1 block font-semibold flex items-center justify-between">
+                    <span>Minimum Bot Deposit (₹)</span>
+                    <span className="text-[10px] text-emerald-400 font-mono">Min Allowed</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-500 text-xs font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={settings.min_deposit_inr !== undefined ? settings.min_deposit_inr : 10}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        updateSettings({ min_deposit_inr: val > 0 ? val : 1 });
+                        if (activeBot) {
+                          updateActiveBotGateway({ min_deposit_inr: val > 0 ? val : 1 });
+                        }
+                      }}
+                      placeholder="10"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-emerald-300 outline-none font-mono text-xs font-bold focus:border-emerald-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Lowest amount a Telegram user can add to their wallet
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 mb-1 block font-semibold flex items-center justify-between">
+                    <span>Maximum Bot Deposit (₹)</span>
+                    <span className="text-[10px] text-cyan-400 font-mono">Max Allowed</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-500 text-xs font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="10"
+                      value={settings.max_deposit_inr !== undefined ? settings.max_deposit_inr : 50000}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        updateSettings({ max_deposit_inr: val > 0 ? val : 50000 });
+                        if (activeBot) {
+                          updateActiveBotGateway({ max_deposit_inr: val > 0 ? val : 50000 });
+                        }
+                      }}
+                      placeholder="50000"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-cyan-300 outline-none font-mono text-xs font-bold focus:border-emerald-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Highest amount a Telegram user can add in one deposit
+                  </p>
+                </div>
               </div>
 
               {/* Action Buttons: Test API Key & Create Test Order */}
@@ -3146,41 +3201,100 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Support Links */}
+            {/* Support Links & Channels */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
-                Support Contacts & Tutorials
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  Support Contacts, Channels & APK Downloads
+                </h3>
+                <span className="text-[11px] text-emerald-400/90 font-medium">
+                  Synced directly to Telegram Bot buttons & messages
+                </span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <label className="text-slate-400 mb-1 block">Telegram Support URL</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                {/* APK Download Channel */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-cyan-500/30 sm:col-span-2 md:col-span-1">
+                  <label className="text-cyan-300 font-bold mb-1 flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-cyan-400" />
+                    APK Download Channel Link
+                  </label>
                   <input
                     type="text"
-                    value={settings.support_telegram || ''}
-                    onChange={(e) => updateSettings({ support_telegram: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none"
+                    value={settings.apk_channel_link || ''}
+                    onChange={(e) => updateSettings({ apk_channel_link: e.target.value })}
+                    placeholder="https://t.me/KyunodaProAPKs"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Direct link to your APK channel (e.g., Kyunoda Pro / Panel APKs).
+                  </p>
                 </div>
 
-                <div>
-                  <label className="text-slate-400 mb-1 block">WhatsApp Support URL</label>
+                {/* Official Community Channel */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="text-slate-300 font-bold mb-1 flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5 text-blue-400" />
+                    Official News & Updates Channel
+                  </label>
                   <input
                     type="text"
-                    value={settings.support_whatsapp || ''}
-                    onChange={(e) => updateSettings({ support_whatsapp: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none"
+                    value={settings.official_channel_link || ''}
+                    onChange={(e) => updateSettings({ official_channel_link: e.target.value })}
+                    placeholder="https://t.me/KalamFFPanelChannel"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-blue-200 outline-none focus:border-blue-400 font-mono text-xs"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Announcement & updates channel for users.
+                  </p>
                 </div>
 
-                <div>
-                  <label className="text-slate-400 mb-1 block">Tutorial Video Link</label>
+                {/* Tutorial Video Link */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="text-slate-300 font-bold mb-1 flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                    Tutorial Video / Setup Guide
+                  </label>
                   <input
                     type="text"
                     value={settings.how_to_video || ''}
                     onChange={(e) => updateSettings({ how_to_video: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none"
+                    placeholder="https://youtube.com/watch?v=..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-amber-200 outline-none focus:border-amber-400 font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    YouTube or Telegram guide link shown upon key delivery.
+                  </p>
+                </div>
+
+                {/* Telegram Support URL */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="text-slate-300 font-bold mb-1 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                    Telegram Support Contact
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.support_telegram || ''}
+                    onChange={(e) => updateSettings({ support_telegram: e.target.value })}
+                    placeholder="https://t.me/KalamPanelSupport"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-emerald-200 outline-none focus:border-emerald-400 font-mono text-xs"
+                  />
+                </div>
+
+                {/* WhatsApp Support URL */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="text-slate-300 font-bold mb-1 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                    WhatsApp Support URL
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.support_whatsapp || ''}
+                    onChange={(e) => updateSettings({ support_whatsapp: e.target.value })}
+                    placeholder="https://wa.me/919876543210"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-emerald-200 outline-none focus:border-emerald-400 font-mono text-xs"
                   />
                 </div>
               </div>
@@ -3687,13 +3801,13 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-slate-400 mb-1 block">APK / Download Link</label>
+                  <label className="text-slate-400 mb-1 block">APK Download Link or Telegram Channel URL</label>
                   <input
                     type="text"
                     value={newProdForm.apk_link}
                     onChange={(e) => setNewProdForm({ ...newProdForm, apk_link: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+                    placeholder="https://t.me/KyunodaProAPKs or direct download"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
                   />
                 </div>
               </div>
@@ -3997,13 +4111,13 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-slate-400 mb-1 block">APK / Download Link</label>
+                  <label className="text-slate-400 mb-1 block">APK Download Link or Telegram Channel URL</label>
                   <input
                     type="text"
                     value={editProdForm.apk_link}
                     onChange={(e) => setEditProdForm({ ...editProdForm, apk_link: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+                    placeholder="https://t.me/KyunodaProAPKs or direct download"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
                   />
                 </div>
               </div>

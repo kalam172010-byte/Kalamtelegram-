@@ -300,6 +300,22 @@ class TelegramEngine {
     }
   }
 
+  public getMinDeposit(): number {
+    const settings = dbStore.getData().settings;
+    const bots = dbStore.getBots();
+    const activeBot = bots.length > 0 ? bots[0] : null;
+    const min = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 10;
+    return Number(min) > 0 ? Number(min) : 10;
+  }
+
+  public getMaxDeposit(): number {
+    const settings = dbStore.getData().settings;
+    const bots = dbStore.getBots();
+    const activeBot = bots.length > 0 ? bots[0] : null;
+    const max = activeBot?.payment_gateway?.max_deposit_inr ?? settings.max_deposit_inr ?? 50000;
+    return Number(max) > 0 ? Number(max) : 50000;
+  }
+
   public async sendMessage(chatId: number, text: string, replyMarkup?: any): Promise<any> {
     const payload: any = {
       chat_id: chatId,
@@ -587,6 +603,9 @@ class TelegramEngine {
     }
 
     const deviceNote = androidId ? `\n📱 <b>Bound HWID:</b> <code>${androidId}</code>` : '';
+    const apkDownloadUrl = product.apk_link || settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
+    const channelUrl = settings.official_channel_link || 'https://t.me/KalamFFPanelChannel';
+    const tutorialUrl = settings.how_to_video || 'https://youtube.com';
 
     const deliveryMessage = `🎉 <b>PURCHASE SUCCESSFUL! (#${orderId})</b>\n\n` +
       `📦 <b>Product:</b> ${product.panel_name} - ${product.name}\n` +
@@ -595,16 +614,25 @@ class TelegramEngine {
       `💳 <b>Remaining Balance:</b> ₹${user.balance.toFixed(2)}${deviceNote}\n\n` +
       `🔑 <b>YOUR LICENSE KEY:</b>\n` +
       `<code>${deliveredKey}</code>\n\n` +
-      `⬇️ <b>DOWNLOAD APK / LOADER:</b>\n` +
-      `<a href="${product.apk_link}">${product.apk_link}</a>\n\n` +
+      `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
+      `<a href="${apkDownloadUrl}">${apkDownloadUrl}</a>\n\n` +
       `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
-      `<a href="${settings.how_to_video}">${settings.how_to_video}</a>\n\n` +
+      `<a href="${tutorialUrl}">${tutorialUrl}</a>\n\n` +
       `<i>Click on the key above to copy it directly to your clipboard. Enjoy playing!</i>`;
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '👤 View in My Profile', callback_data: 'profile' }],
-        [{ text: '🛒 Continue Shopping', callback_data: 'shop_categories' }]
+        [
+          { text: '⬇️ Download APK Channel', url: apkDownloadUrl },
+          { text: '📢 Official Channel', url: channelUrl }
+        ],
+        [
+          { text: '🎥 Setup Video Guide', url: tutorialUrl }
+        ],
+        [
+          { text: '👤 View in My Profile', callback_data: 'profile' },
+          { text: '🛒 Continue Shopping', callback_data: 'shop_categories' }
+        ]
       ]
     };
 
@@ -897,10 +925,12 @@ class TelegramEngine {
       // Clean up string (e.g. ₹150, 150rs, 150.00 -> 150)
       const cleanNum = text.replace(/[^0-9.]/g, '');
       const amount = parseFloat(cleanNum);
-      if (isNaN(amount) || amount < 10 || amount > 100000) {
+      const minDeposit = this.getMinDeposit();
+      const maxDeposit = this.getMaxDeposit();
+      if (isNaN(amount) || amount < minDeposit || amount > maxDeposit) {
         await this.sendMessage(
           chatId,
-          `❌ <b>Invalid Deposit Amount</b>\n\nPlease enter a valid numerical deposit between <b>₹10</b> and <b>₹1,00,000</b> (e.g., <code>150</code>, <code>500</code>).\n\n<i>Type /cancel to return to main menu.</i>`,
+          `❌ <b>Invalid Deposit Amount</b>\n\nPlease enter a valid numerical deposit between <b>₹${minDeposit}</b> and <b>₹${maxDeposit.toLocaleString()}</b> (e.g., <code>${minDeposit}</code>, <code>${Math.min(500, maxDeposit)}</code>).\n\n<i>Type /cancel to return to main menu.</i>`,
           this.getMainMenuKeyboard(user)
         );
         return;
@@ -1679,8 +1709,13 @@ class TelegramEngine {
     }
 
     if (data === 'support_menu') {
-      const text = `🎧 <b>KALAM FF PANEL - 24/7 SUPPORT DESK</b>\n\n` +
+      const apkUrl = settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
+      const channelUrl = settings.official_channel_link || 'https://t.me/KalamFFPanelChannel';
+
+      const text = `🎧 <b>KALAM FF PANEL - 24/7 SUPPORT & CHANNELS</b>\n\n` +
         `Need assistance with key activation, installation, or payments?\n\n` +
+        `📲 <b>APK Download Channel:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
+        `📢 <b>Official Channel:</b> <a href="${channelUrl}">${channelUrl}</a>\n` +
         `💬 <b>Direct Telegram Support:</b> <a href="${settings.support_telegram}">${settings.support_telegram}</a>\n` +
         `📱 <b>WhatsApp Support:</b> <a href="${settings.support_whatsapp}">${settings.support_whatsapp}</a>\n` +
         `🎥 <b>Video Tutorial:</b> <a href="${settings.how_to_video}">${settings.how_to_video}</a>\n\n` +
@@ -1688,6 +1723,14 @@ class TelegramEngine {
 
       const keyboard = {
         inline_keyboard: [
+          [
+            { text: '📲 APK Channel', url: apkUrl },
+            { text: '📢 Official Channel', url: channelUrl }
+          ],
+          [
+            { text: '💬 Telegram Support', url: settings.support_telegram || 'https://t.me' },
+            { text: '📱 WhatsApp Support', url: settings.support_whatsapp || 'https://wa.me' }
+          ],
           [{ text: '📩 Open Support Ticket', callback_data: 'ticket_create' }],
           [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
         ]
@@ -1712,16 +1755,24 @@ class TelegramEngine {
     }
 
     if (data === 'how_to_use') {
+      const apkUrl = settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
+      const tutorialUrl = settings.how_to_video || 'https://youtube.com';
+
       const text = `📖 <b>HOW TO INSTALL & USE KALAM FF PANEL</b>\n\n` +
         `1️⃣ <b>Purchase:</b> Buy your preferred panel from 🛒 <b>Product Store</b>.\n` +
-        `2️⃣ <b>Download APK:</b> Click the download link provided with your key.\n` +
+        `2️⃣ <b>Download APK:</b> Click the APK Channel link below.\n` +
         `3️⃣ <b>Install:</b> Allow unknown sources and install the APK.\n` +
         `4️⃣ <b>Login:</b> Open the app, paste your delivered License Key, and click Login.\n` +
         `5️⃣ <b>Launch Free Fire:</b> Enable desired features (Aimbot, ESP, Location) and launch the game.\n\n` +
-        `🎥 <b>Watch Full Video Guide:</b>\n<a href="${settings.how_to_video}">${settings.how_to_video}</a>`;
+        `📲 <b>APK Channel:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
+        `🎥 <b>Watch Full Video Guide:</b> <a href="${tutorialUrl}">${tutorialUrl}</a>`;
 
       const keyboard = {
         inline_keyboard: [
+          [
+            { text: '⬇️ Open APK Channel', url: apkUrl },
+            { text: '🎥 Video Tutorial', url: tutorialUrl }
+          ],
           [{ text: '🛒 Open Store', callback_data: 'shop_categories' }],
           [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
         ]
@@ -1967,9 +2018,14 @@ class TelegramEngine {
   }
 
   private async sendAddBalanceMenu(chatId: number, user: User, messageId?: number) {
-    const text = `💳 <b>ADD WALLET BALANCE (FAMPAY UPI)</b>\n\n` +
-      `Instant, automated wallet deposits via FamPay, PhonePe, GooglePay & Paytm.\n\n` +
-      `💵 <b>Current Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n\n` +
+    const minDeposit = this.getMinDeposit();
+    const maxDeposit = this.getMaxDeposit();
+
+    const text = `💳 <b>ADD WALLET BALANCE (FAMGATEWAY.IN)</b>\n\n` +
+      `⚡ <b>Instant Automated UPI Deposits powered by FamGateway.in</b>\n` +
+      `Supported: PhonePe, Google Pay, Paytm, FamPay & BHIM UPI.\n\n` +
+      `💵 <b>Current Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n` +
+      `📊 <b>Deposit Limits:</b> <b>Min ₹${minDeposit}</b> • <b>Max ₹${maxDeposit.toLocaleString()}</b>\n\n` +
       `Select a quick deposit amount or enter a custom amount:`;
 
     const keyboard = {
@@ -1999,6 +2055,47 @@ class TelegramEngine {
   }
 
   private async sendPaymentInstructions(chatId: number, user: User, amount: number, messageId?: number) {
+    const minDeposit = this.getMinDeposit();
+    const maxDeposit = this.getMaxDeposit();
+
+    if (amount < minDeposit) {
+      const errText = `⚠️ <b>MINIMUM DEPOSIT LIMIT: ₹${minDeposit}</b>\n\n` +
+        `The minimum allowed deposit amount configured by the store owner is <b>₹${minDeposit}</b>.\n` +
+        `You requested: <b>₹${amount}</b>\n\n` +
+        `<i>Please choose an amount of ₹${minDeposit} or more.</i>`;
+      const kb = {
+        inline_keyboard: [
+          [{ text: '💳 Add Balance', callback_data: 'add_balance' }],
+          [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+        ]
+      };
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, errText, kb);
+      } else {
+        await this.sendMessage(chatId, errText, kb);
+      }
+      return;
+    }
+
+    if (amount > maxDeposit) {
+      const errText = `⚠️ <b>MAXIMUM DEPOSIT LIMIT: ₹${maxDeposit.toLocaleString()}</b>\n\n` +
+        `The maximum allowed deposit amount per transaction is <b>₹${maxDeposit.toLocaleString()}</b>.\n` +
+        `You requested: <b>₹${amount.toLocaleString()}</b>\n\n` +
+        `<i>Please choose an amount up to ₹${maxDeposit.toLocaleString()}.</i>`;
+      const kb = {
+        inline_keyboard: [
+          [{ text: '💳 Add Balance', callback_data: 'add_balance' }],
+          [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+        ]
+      };
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, errText, kb);
+      } else {
+        await this.sendMessage(chatId, errText, kb);
+      }
+      return;
+    }
+
     const settings = dbStore.getData().settings;
     const redirectUrl = settings.famgateway_redirect_url || `https://t.me/${settings.bot_username || 'KalamFFPanelBot'}`;
 
@@ -2032,17 +2129,18 @@ class TelegramEngine {
 
     const publicQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=10&data=${encodeURIComponent(orderRes.payment_url || upiUri)}`;
 
-    const text = `⚡ <b>AUTOMATIC UPI PAYMENT & QR CODE</b> ⚡\n\n` +
+    const text = `⚡ <b>FAMGATEWAY.IN AUTOMATED UPI PAYMENT</b> ⚡\n\n` +
       `💰 <b>Amount to Pay:</b> <b>₹${amount.toFixed(2)}</b>\n` +
       `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
       `🏦 <b>UPI ID (Tap to Copy):</b> <code>${upiId}</code>\n` +
       `👤 <b>Payee Name:</b> <b>${payeeName}</b>\n` +
-      `⏳ <b>Validity:</b> 15 Minutes (Auto-Confirming)\n\n` +
-      `📱 <b>HOW TO SCAN & PAY:</b>\n` +
+      `🌐 <b>Gateway:</b> <b>FamGateway.in</b>\n` +
+      `⏳ <b>Validity:</b> 15 Minutes (Auto-Verifying)\n\n` +
+      `📱 <b>HOW TO PAY VIA FAMGATEWAY.IN:</b>\n` +
       `1️⃣ Open <b>PhonePe, Google Pay, Paytm, FamPay, or BHIM</b>.\n` +
-      `2️⃣ Scan the QR Code image above OR enter UPI ID <code>${upiId}</code>.\n` +
+      `2️⃣ Scan the QR Code image above OR pay to UPI ID <code>${upiId}</code>.\n` +
       `3️⃣ Pay exact amount: <b>₹${amount.toFixed(2)}</b>.\n` +
-      `4️⃣ <b>Your wallet balance is credited AUTOMATICALLY</b> in seconds!\n\n` +
+      `4️⃣ <b>FamGateway will AUTOMATICALLY credit your wallet</b> in seconds!\n\n` +
       `<i>👉 After paying, tap "🔄 Check & Auto-Confirm Payment" or "📝 Submit 12-Digit UTR" below.</i>`;
 
     const keyboardButtons: any[] = [];
@@ -2050,7 +2148,7 @@ class TelegramEngine {
     // Payment link button ONLY if it's a valid web URL (Telegram Bot API rejects upi:// in inline URL buttons)
     if (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://'))) {
       keyboardButtons.push([
-        { text: '🌐 Open Web Payment Gateway', url: orderRes.payment_url }
+        { text: '🌐 Open FamGateway.in Checkout', url: orderRes.payment_url }
       ]);
     }
 
@@ -2076,48 +2174,40 @@ class TelegramEngine {
 
     const keyboard = { inline_keyboard: keyboardButtons };
 
-    // 3. Attempt Delivery: Try sending actual generated QR Photo Buffer first
+    // 3. Delete previous prompt message first to prevent duplicate messages
+    if (messageId) {
+      await this.deleteMessage(chatId, messageId).catch(() => {});
+    }
+
+    // 4. Attempt Delivery: Try sending actual generated QR Photo Buffer first
     if (qrBuffer) {
       try {
         await this.sendPhotoBuffer(chatId, qrBuffer, text, keyboard);
-        if (messageId) {
-          await this.deleteMessage(chatId, messageId).catch(() => {});
-        }
         return;
       } catch (bufErr: any) {
         console.warn('sendPhotoBuffer failed, trying ultra-fast QuickChart QR CDN:', bufErr.message);
       }
     }
 
-    // 4. Fallback 1: QuickChart QR CDN (Highly reliable with Telegram servers)
+    // 5. Fallback 1: QuickChart QR CDN (Highly reliable with Telegram servers)
     const quickChartUrl = `https://quickchart.io/qr?text=${encodeURIComponent(orderRes.payment_url || upiUri)}&size=500&margin=2`;
     try {
       await this.sendPhoto(chatId, quickChartUrl, text, keyboard);
-      if (messageId) {
-        await this.deleteMessage(chatId, messageId).catch(() => {});
-      }
       return;
     } catch (qcErr: any) {
       console.warn('QuickChart sendPhoto failed, trying QRServer CDN:', qcErr.message);
     }
 
-    // 5. Fallback 2: QRServer CDN
+    // 6. Fallback 2: QRServer CDN
     try {
       await this.sendPhoto(chatId, publicQrUrl, text, keyboard);
-      if (messageId) {
-        await this.deleteMessage(chatId, messageId).catch(() => {});
-      }
       return;
     } catch (urlErr: any) {
       console.warn('sendPhoto via QRServer failed, falling back to text:', urlErr.message);
     }
 
-    // 6. Fallback 3: Text message
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, keyboard);
-    } else {
-      await this.sendMessage(chatId, text, keyboard);
-    }
+    // 7. Fallback 3: Text message
+    await this.sendMessage(chatId, text, keyboard);
   }
 
   private async sendResellerMenu(chatId: number, user: User, messageId?: number) {

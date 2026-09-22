@@ -123,6 +123,8 @@ class FamGatewayService {
 
     try {
       const payload: any = {
+        api_key: apiKey,
+        apiKey: apiKey,
         amount: Number(safeAmount.toFixed(2)),
         redirect_url: redirectUrl,
         order_id: customOrderId
@@ -130,6 +132,7 @@ class FamGatewayService {
 
       if (params.customerMobile) {
         payload.customer_mobile = params.customerMobile;
+        payload.mobile = params.customerMobile;
       }
 
       const response = await fetch('https://famgateway.in/api/create-order.php', {
@@ -152,8 +155,8 @@ class FamGatewayService {
         resData = { raw: responseText };
       }
 
-      if (!response.ok && !resData.order_id && !resData.payment_url) {
-        const errorMsg = resData.message || resData.error || `HTTP ${response.status} from FamGateway`;
+      if (!response.ok && !resData.order_id && !resData.payment_url && !resData.data?.order_id) {
+        const errorMsg = resData.message || resData.error || resData.data?.message || `HTTP ${response.status} from FamGateway`;
         apiLogger.log({
           service: 'FAMGATEWAY',
           endpoint: '/api/create-order.php',
@@ -176,11 +179,12 @@ class FamGatewayService {
         throw new Error(errorMsg);
       }
 
-      const orderId = resData.order_id || resData.id || customOrderId;
-      const paymentUrl = resData.payment_url || resData.payment_link || resData.checkout_url || resData.url || '';
-      const upiIntent = resData.upi_intent || resData.upi_url || paymentUrl || `upi://pay?pa=${settings.fampay_upi_id || 'kalampanel@fam'}&pn=KalamPanel&am=${params.amount.toFixed(2)}&tn=${orderId}&cu=INR`;
+      // Extract actual real-time Order ID returned by FamGateway
+      const orderId = resData.order_id || resData.data?.order_id || resData.order?.order_id || resData.id || resData.data?.id || resData.transaction_id || resData.data?.transaction_id || resData.txn_id || customOrderId;
+      const paymentUrl = resData.payment_url || resData.data?.payment_url || resData.payment_link || resData.data?.payment_link || resData.checkout_url || resData.data?.checkout_url || resData.url || resData.data?.url || '';
+      const upiIntent = resData.upi_intent || resData.data?.upi_intent || resData.upi_url || resData.data?.upi_url || paymentUrl || `upi://pay?pa=${settings.fampay_upi_id || 'kalampanel@fam'}&pn=KalamPanel&am=${safeAmount.toFixed(2)}&tn=${orderId}&cu=INR`;
       
-      let qrUrl = resData.qr_image || resData.qr_url || resData.qr_code || '';
+      let qrUrl = resData.qr_image || resData.data?.qr_image || resData.qr_url || resData.data?.qr_url || resData.qr_code || resData.data?.qr_code || '';
       if (!qrUrl || qrUrl.length < 10) {
         try {
           qrUrl = await QRCode.toDataURL(upiIntent || paymentUrl, { width: 360, margin: 2, errorCorrectionLevel: 'M' });
@@ -189,20 +193,20 @@ class FamGatewayService {
         }
       }
 
-      // Save Transaction
+      // Save Transaction with exact FamGateway Order ID
       const newTxn: Transaction = {
         order_id: String(orderId),
         user_id: params.userId,
-        amount_inr: params.amount,
+        amount_inr: safeAmount,
         status: 'pending',
         timestamp: Date.now(),
         qr_url: qrUrl,
-        upi_id: resData.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
+        upi_id: resData.upi_id || resData.data?.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
         expires_at: Date.now() + 20 * 60 * 1000
       };
 
       dbStore.getData().transactions.unshift(newTxn);
-      dbStore.logActivity(params.userId, 'FAMGATEWAY_ORDER_CREATED', `Order #${orderId} for ₹${params.amount}`);
+      dbStore.logActivity(params.userId, 'FAMGATEWAY_ORDER_CREATED', `Order #${orderId} for ₹${safeAmount}`);
       dbStore.saveData();
 
       apiLogger.log({
@@ -212,7 +216,7 @@ class FamGatewayService {
         status: 'SUCCESS',
         http_code: response.status || 200,
         duration_ms: durationMs,
-        message: `Order #${orderId} created for User UID ${params.userId} (₹${params.amount})`
+        message: `Order #${orderId} created for User UID ${params.userId} (₹${safeAmount})`
       });
 
       return {
@@ -221,7 +225,7 @@ class FamGatewayService {
         payment_url: paymentUrl || upiIntent,
         qr_url: qrUrl,
         upi_intent: upiIntent,
-        amount: params.amount,
+        amount: safeAmount,
         raw: resData
       };
     } catch (err: any) {

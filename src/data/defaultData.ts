@@ -66,13 +66,13 @@ Unlock premium benefits and permanent discounts!
 💳 <b>VIP Price:</b> ₹299.00 (Lifetime)
 👤 <b>Your Status:</b> {vip_status}`,
 
-  add_balance_menu: `{add_balance} <b>ADD BALANCE</b> {info_icon}
+  add_balance_menu: `{add_balance} <b>FAMGATEWAY.IN ADD BALANCE</b> {info_icon}
 
-{info_icon} Select your preferred payment method. {check_icon}
+{info_icon} Instant, automated UPI wallet recharge powered by FamGateway.in. {check_icon}
 
-┣ {upi} UPI — Fast Indian payments {checkbox_icon}
+┣ {upi} UPI (PhonePe, GPay, Paytm, FamPay & BHIM) {checkbox_icon}
 
-{shield_icon} Payments are verified securely. {check_icon}`
+{shield_icon} Payments are verified & credited automatically in real-time. {check_icon}`
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -102,12 +102,16 @@ export const DEFAULT_SETTINGS: Settings = {
   reseller_min_balance: 500.0,
   support_telegram: 'https://t.me/KalamPanelSupport',
   support_whatsapp: 'https://wa.me/919876543210',
+  apk_channel_link: 'https://t.me/KalamFFPanelAPKs',
+  official_channel_link: 'https://t.me/KalamFFPanelChannel',
   ui_start_menu: UI_TEXTS.start_menu,
   ui_vip_menu: UI_TEXTS.vip_menu,
   ui_add_balance_menu: UI_TEXTS.add_balance_menu,
   usdt_to_inr: 90.0,
   vip_discount_percentage: 15.0,
   vip_price_inr: 299.0,
+  min_deposit_inr: 10.0,
+  max_deposit_inr: 50000.0,
 };
 
 export const INITIAL_USERS: User[] = [
@@ -148,15 +152,17 @@ export const INITIAL_COUPONS: Coupon[] = [
 
 export const DEFAULT_GATEWAY_CONFIG: PaymentGatewayConfig = {
   upi_id: 'kalampanel@fam',
-  merchant_name: 'Kalam FF Store Pay',
-  qr_image_url: 'https://fampay.anujbots.xyz/qr.php',
-  gateway_provider: 'fampay',
-  api_key: 'FP_LIVE_99481a8c3d11ef420b991',
-  secret_key: 'FP_SEC_7718921a990',
-  verify_endpoint: 'https://fampay.anujbots.xyz/verify.php',
+  merchant_name: 'Kalam FF Store (FamGateway)',
+  qr_image_url: 'https://famgateway.in/api/qr.php',
+  gateway_provider: 'famgateway',
+  api_key: '',
+  secret_key: '',
+  verify_endpoint: 'https://famgateway.in/api/checkout-status.php',
   usdt_trc20_address: 'TXu8KalamUSDT9912083TronNetwork',
   usdt_to_inr_rate: 90.0,
-  auto_approve: true
+  auto_approve: true,
+  min_deposit_inr: 10.0,
+  max_deposit_inr: 50000.0
 };
 
 export const DEFAULT_RESELLER_CONFIG: ResellerApiConfig = {

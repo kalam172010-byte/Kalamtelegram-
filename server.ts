@@ -388,7 +388,7 @@ async function startServer() {
   });
 
   // 17. FamGateway Webhook Handler (Instant Server-to-Server Payment Notification)
-  app.post(['/api/famgateway-webhook', '/api/payment-webhook'], async (req, res) => {
+  app.post(['/api/famgateway-webhook', '/api/famgateway/webhook', '/api/payment-webhook', '/api/fampay/webhook'], async (req, res) => {
     try {
       const body = req.body || {};
       const orderId = body.order_id || body.id || body.orderId;
