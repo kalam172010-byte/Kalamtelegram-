@@ -53,6 +53,7 @@ export const UserDashboard: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
+  const [copiedChatId, setCopiedChatId] = useState(false);
 
   // Check if current user is Master Admin
   const isMasterAdmin =
@@ -65,14 +66,17 @@ export const UserDashboard: React.FC = () => {
   const totalBotRevenue = myBots.reduce((sum, b) => sum + (b.stats?.total_revenue || 0), 0);
   const totalBotOrders = myBots.reduce((sum, b) => sum + (b.stats?.total_orders || 0), 0);
 
-  const handleCopy = (text: string, type: 'token' | 'uid') => {
+  const handleCopy = (text: string, type: 'token' | 'uid' | 'chat') => {
     navigator.clipboard.writeText(text);
     if (type === 'token') {
       setCopiedToken(true);
       setTimeout(() => setCopiedToken(false), 2000);
-    } else {
+    } else if (type === 'uid') {
       setCopiedUid(true);
       setTimeout(() => setCopiedUid(false), 2000);
+    } else {
+      setCopiedChatId(true);
+      setTimeout(() => setCopiedChatId(false), 2000);
     }
   };
 
@@ -141,16 +145,31 @@ export const UserDashboard: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-400">
-                <span className="flex items-center gap-1">
-                  <span className="text-slate-500 font-mono">UID:</span>
-                  <span className="font-mono text-slate-300 font-semibold">{currentUser.user_id}</span>
+                {/* Telegram UID */}
+                <span className="flex items-center gap-1 bg-slate-950/70 px-2 py-0.5 rounded-lg border border-cyan-500/25">
+                  <span className="text-cyan-400 font-mono font-bold text-[10px]">UID:</span>
+                  <span className="font-mono text-cyan-200 font-semibold">{currentUser.user_id}</span>
                   <button
                     type="button"
                     onClick={() => handleCopy(String(currentUser.user_id), 'uid')}
-                    className="text-slate-500 hover:text-cyan-400 p-0.5 transition"
-                    title="Copy UID"
+                    className="text-slate-400 hover:text-cyan-300 p-0.5 transition cursor-pointer"
+                    title="Copy Telegram User ID"
                   >
                     {copiedUid ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  </button>
+                </span>
+
+                {/* Telegram Chat ID */}
+                <span className="flex items-center gap-1 bg-slate-950/70 px-2 py-0.5 rounded-lg border border-indigo-500/25">
+                  <span className="text-indigo-400 font-mono font-bold text-[10px]">CHAT ID:</span>
+                  <span className="font-mono text-indigo-200 font-semibold">{currentUser.chat_id || currentUser.user_id}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(String(currentUser.chat_id || currentUser.user_id), 'chat')}
+                    className="text-slate-400 hover:text-indigo-300 p-0.5 transition cursor-pointer"
+                    title="Copy Telegram Chat ID"
+                  >
+                    {copiedChatId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   </button>
                 </span>
 

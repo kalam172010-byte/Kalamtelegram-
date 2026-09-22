@@ -113,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const INITIAL_USERS: User[] = [
   {
     user_id: 12846461,
+    chat_id: 12846461,
     phone: '+91 98765 43210',
     email: 'kalam172010@gmail.com',
     password: 'password123',
@@ -135,6 +136,7 @@ export const INITIAL_USERS: User[] = [
   },
   {
     user_id: 58941209,
+    chat_id: 58941209,
     phone: '+91 91234 56789',
     email: 'rahul.gamer@gmail.com',
     password: 'password123',
@@ -155,6 +157,7 @@ export const INITIAL_USERS: User[] = [
   },
   {
     user_id: 77489012,
+    chat_id: 77489012,
     phone: '+91 99887 76655',
     email: 'viper.reseller@gmail.com',
     password: 'password123',
@@ -176,6 +179,7 @@ export const INITIAL_USERS: User[] = [
   },
   {
     user_id: 88192031,
+    chat_id: 88192031,
     phone: '+91 98111 22334',
     email: 'aarav.vip@gmail.com',
     password: 'password123',

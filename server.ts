@@ -1,10 +1,12 @@
 import express from 'express';
 import path from 'path';
+import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import { dbStore } from './server/storage';
 import { telegramEngine } from './server/telegramEngine';
 import { famGateway } from './server/famGateway';
 import { bantiResellerService } from './server/bantiResellerApi';
+import { apiLogger } from './server/apiLogger';
 
 async function startServer() {
   const app = express();
@@ -28,14 +30,68 @@ async function startServer() {
     res.json(data);
   });
 
-  // 3. Update Settings (Bot Token, Admin ID, FamPay, etc.)
+  // 2.1 Bot Management Endpoints
+  app.get('/api/bots', (req, res) => {
+    res.json({ success: true, bots: dbStore.getBots() });
+  });
+
+  app.post('/api/bots', async (req, res) => {
+    try {
+      const { action, bot, botId, updates } = req.body;
+      if (action === 'save' || action === 'create') {
+        if (bot) {
+          dbStore.saveBot(bot);
+        }
+      } else if (action === 'update') {
+        if (botId && updates) {
+          dbStore.updateBot(botId, updates);
+        }
+      } else if (action === 'delete') {
+        if (botId) {
+          dbStore.deleteBot(botId);
+        }
+      }
+      res.json({ success: true, bots: dbStore.getBots() });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 3. Update Settings (Bot Token, Admin ID, FamPay, FamGateway, Reseller API, etc.)
   app.post('/api/settings', async (req, res) => {
     try {
       const updates = req.body;
-      const oldSettings = { ...dbStore.getData().settings };
       const newSettings = dbStore.updateSettings(updates);
 
       dbStore.logActivity(12846461, 'SETTINGS_UPDATE', 'System settings updated by admin');
+
+      // Also sync active bot if bot_token or gateways are updated
+      const bots = dbStore.getBots();
+      if (bots.length > 0) {
+        const firstBot = bots[0];
+        const botUpdates: any = {};
+        if (updates.bot_token) botUpdates.bot_token = updates.bot_token;
+        if (updates.bot_username) botUpdates.username = updates.bot_username;
+        if (updates.fampay_upi_id || updates.famgateway_api_key || updates.merchant_name) {
+          botUpdates.payment_gateway = {
+            ...firstBot.payment_gateway,
+            ...(updates.fampay_upi_id ? { upi_id: updates.fampay_upi_id } : {}),
+            ...(updates.famgateway_api_key ? { api_key: updates.famgateway_api_key } : {}),
+            ...(updates.merchant_name ? { merchant_name: updates.merchant_name } : {})
+          };
+        }
+        if (updates.bantibhaiya_api_key || updates.bantibhaiya_master_key || updates.bantibhaiya_api_url) {
+          botUpdates.reseller_api = {
+            ...firstBot.reseller_api,
+            ...(updates.bantibhaiya_api_key ? { api_key: updates.bantibhaiya_api_key } : {}),
+            ...(updates.bantibhaiya_master_key ? { master_key: updates.bantibhaiya_master_key } : {}),
+            ...(updates.bantibhaiya_api_url ? { api_url: updates.bantibhaiya_api_url } : {})
+          };
+        }
+        if (Object.keys(botUpdates).length > 0) {
+          dbStore.updateBot(firstBot.id, botUpdates);
+        }
+      }
 
       // If bot token, admin id, or status is provided, restart or start engine
       if (
@@ -47,7 +103,7 @@ async function startServer() {
         await telegramEngine.restart();
       }
 
-      res.json({ success: true, settings: newSettings, status: telegramEngine.getStatus() });
+      res.json({ success: true, settings: newSettings, bots: dbStore.getBots(), status: telegramEngine.getStatus() });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -361,6 +417,104 @@ async function startServer() {
     }
   });
 
+  // 18b. Direct QR Image Rendering Endpoint
+  app.get('/api/qr', async (req, res) => {
+    try {
+      const data = String(req.query.data || '');
+      if (!data) {
+        return res.status(400).send('Missing QR data parameter');
+      }
+      const buffer = await QRCode.toBuffer(data, {
+        width: 500,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.send(buffer);
+    } catch (err: any) {
+      res.status(500).send('Failed to generate QR: ' + err.message);
+    }
+  });
+
+  // 18c. Direct Web Checkout & UPI Scanner Page
+  app.get('/pay/:orderId', async (req, res) => {
+    try {
+      const orderId = req.params.orderId;
+      const data = dbStore.getData();
+      const txn = data.transactions.find(t => t.order_id === orderId);
+
+      const amount = txn ? txn.amount_inr : 100;
+      const upiId = famGateway.getUpiId();
+      const payeeName = famGateway.getPayeeName();
+      const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pay ₹${amount.toFixed(2)} - ${payeeName}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 font-sans">
+  <div class="max-w-md w-full bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl space-y-6">
+    <div class="text-center space-y-1">
+      <div class="inline-flex p-2.5 bg-cyan-500/20 text-cyan-400 rounded-2xl mb-2">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <h1 class="text-xl font-bold text-white tracking-wide">${payeeName}</h1>
+      <p class="text-xs text-slate-400">Order ID: <code class="text-cyan-300">${orderId}</code></p>
+    </div>
+
+    <div class="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 flex justify-between items-center">
+      <span class="text-sm text-slate-400">Amount to Pay</span>
+      <span class="text-2xl font-black text-emerald-400">₹${amount.toFixed(2)}</span>
+    </div>
+
+    <div class="bg-white p-4 rounded-2xl shadow-xl flex justify-center items-center">
+      <img src="/api/qr?data=${encodeURIComponent(upiUri)}" alt="Scan QR Code" class="w-64 h-64 object-contain rounded-lg" />
+    </div>
+
+    <div class="space-y-3 text-center">
+      <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700 flex items-center justify-between">
+        <div class="text-left text-xs font-mono truncate mr-2">
+          <span class="text-slate-400 block text-[10px]">UPI ID:</span>
+          <span class="text-cyan-300 font-bold select-all">${upiId}</span>
+        </div>
+        <button onclick="navigator.clipboard.writeText('${upiId}'); alert('UPI ID copied: ${upiId}');" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold shrink-0 transition">
+          Copy UPI
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <a href="${upiUri}" class="p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow transition">
+          <span>PhonePe / GPay</span>
+        </a>
+        <a href="${upiUri}" class="p-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow transition">
+          <span>Paytm / FamPay</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-800 pt-4 text-center">
+      <p class="text-xs text-slate-400">⚡ After paying, your Telegram balance credits automatically in seconds!</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err: any) {
+      res.status(500).send('Error loading payment page: ' + err.message);
+    }
+  });
+
   // 19. BantiBhaiya Provider: Test Connection & Master Key
   app.post('/api/provider/test-connection', async (req, res) => {
     try {
@@ -442,6 +596,199 @@ async function startServer() {
         recipientCount: recipients.length,
         telegramStats,
         message: `Broadcast delivered to ${recipients.length} user(s) successfully.`
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 22. System Health & Diagnostic Inspection API
+  app.get('/api/system/health', async (req, res) => {
+    try {
+      const data = dbStore.getData();
+      const settings = data.settings;
+      const tgStatus = telegramEngine.getStatus();
+      const gatewayApiKey = famGateway.getApiKey();
+      const upiId = famGateway.getUpiId();
+      const payeeName = famGateway.getPayeeName();
+      const healthSummary = apiLogger.getHealthSummary();
+      const logs = apiLogger.getLogs(60);
+      const failedTransactions = apiLogger.getFailedTransactions();
+
+      // Find any transactions that have been pending for more than 15 minutes or are marked failed
+      const now = Date.now();
+      const problematicTxns = data.transactions
+        .filter(t => t.status === 'failed' || t.status === 'expired' || (t.status === 'pending' && now - t.timestamp > 15 * 60 * 1000))
+        .map(t => {
+          let reason = 'Payment pending without completion';
+          if (t.status === 'expired') reason = 'Payment session expired';
+          if (t.status === 'failed') reason = 'Transaction failed or rejected';
+          if (!gatewayApiKey) reason = 'FamGateway API Key not set (UPI Direct Mode - requires manual verification)';
+
+          return {
+            order_id: t.order_id,
+            user_id: t.user_id,
+            amount_inr: t.amount_inr,
+            status: t.status,
+            reason,
+            timestamp: t.timestamp
+          };
+        });
+
+      // Merge recorded failed transactions with problematic ones
+      const combinedFailed = [...failedTransactions];
+      for (const p of problematicTxns) {
+        if (!combinedFailed.some(f => f.order_id === p.order_id)) {
+          combinedFailed.push(p);
+        }
+      }
+
+      res.json({
+        success: true,
+        summary: {
+          ...healthSummary,
+          failedTransactionsCount: combinedFailed.length
+        },
+        telegram: {
+          isRunning: tgStatus.isRunning,
+          isConnected: tgStatus.isConnected,
+          botName: tgStatus.botInfo?.first_name || settings.bot_name || 'Kalam Bot',
+          username: tgStatus.botInfo?.username || settings.bot_username || 'KalamFFPanelBot',
+          tokenConfigured: Boolean(settings.bot_token && !settings.bot_token.includes('exampleToken')),
+          lastError: tgStatus.lastError
+        },
+        famgateway: {
+          configured: Boolean(gatewayApiKey),
+          upiId,
+          payeeName,
+          apiKeyMasked: gatewayApiKey ? `${gatewayApiKey.slice(0, 4)}...${gatewayApiKey.slice(-4)}` : 'Not Set (Direct UPI Fallback Active)'
+        },
+        resellerApi: {
+          configured: Boolean(settings.bantibhaiya_api_key),
+          apiUrl: settings.bantibhaiya_api_url || 'https://bantibhaiya.org/api/',
+          hasMasterKey: Boolean(settings.bantibhaiya_master_key)
+        },
+        logs,
+        failedTransactions: combinedFailed
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 23. Filtered API Logs Query
+  app.get('/api/system/logs', (req, res) => {
+    try {
+      const service = req.query.service ? String(req.query.service) : 'ALL';
+      const status = req.query.status ? String(req.query.status) : 'ALL';
+      const limit = req.query.limit ? Number(req.query.limit) : 100;
+      const logs = apiLogger.getLogs(limit, service, status);
+      res.json({ success: true, logs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 24. Clear Diagnostic API Logs
+  app.post('/api/system/logs/clear', (req, res) => {
+    try {
+      apiLogger.clearLogs();
+      res.json({ success: true, logs: apiLogger.getLogs(20) });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 25. Retry Order Status Verification on Gateway
+  app.post('/api/system/retry-transaction', async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: 'Order ID is required' });
+      }
+
+      const statusRes = await famGateway.checkOrderStatus(orderId);
+      let autoCredited = false;
+
+      if (statusRes.isPaid) {
+        await famGateway.processSuccessfulPayment(orderId, statusRes.amount);
+        autoCredited = true;
+      }
+
+      const data = dbStore.getData();
+      res.json({
+        success: true,
+        statusResult: statusRes,
+        autoCredited,
+        transactions: data.transactions,
+        users: data.users
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 26. Force Manual Approval of Failed/Pending Transaction
+  app.post('/api/system/approve-transaction', async (req, res) => {
+    try {
+      const { orderId, amount, utr } = req.body;
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: 'Order ID is required' });
+      }
+
+      const result = await famGateway.processSuccessfulPayment(
+        orderId,
+        amount ? Number(amount) : undefined,
+        utr || 'ADMIN_FORCE_APPROVE'
+      );
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      apiLogger.log({
+        service: 'DATABASE',
+        endpoint: '/api/system/approve-transaction',
+        method: 'POST',
+        status: 'SUCCESS',
+        http_code: 200,
+        message: `Admin manually approved transaction #${orderId}`
+      });
+
+      const data = dbStore.getData();
+      res.json({
+        success: true,
+        user: result.user,
+        transactions: data.transactions,
+        users: data.users
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 27. Run Instant Health Diagnostics Ping
+  app.post('/api/system/test-health', async (req, res) => {
+    try {
+      const tgResult = await telegramEngine.testConnection();
+      const gwResult = await famGateway.testApiKey();
+      const settings = dbStore.getData().settings;
+      let resellerResult: any = { success: false, message: 'Provider API not configured' };
+
+      if (settings.bantibhaiya_api_key) {
+        resellerResult = await bantiResellerService.testConnection(
+          settings.bantibhaiya_api_key,
+          settings.bantibhaiya_master_key,
+          settings.bantibhaiya_api_url
+        );
+      }
+
+      res.json({
+        success: true,
+        telegram: tgResult,
+        famgateway: gwResult,
+        resellerApi: resellerResult,
+        timestamp: new Date().toISOString()
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });

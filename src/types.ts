@@ -49,6 +49,7 @@ export interface BotInstance {
 
 export interface User {
   user_id: number;
+  chat_id?: number;
   phone?: string;
   email?: string;
   password?: string;
@@ -87,6 +88,8 @@ export interface Product {
   provider_product_id?: string; // Exact Product PID on provider
   provider_duration?: string; // Duration string e.g. '1 Hours', '3 Hours', '1 Day', '7 Days', '30 Days'
   requires_android_id?: boolean; // Required ONLY for Device-Bound / V1 Products
+  is_maintenance?: boolean | number; // Individual maintenance mode (0 or 1, false or true)
+  maintenance_note?: string; // Optional maintenance reason / update note
 }
 
 export interface ProductKey {
@@ -154,6 +157,60 @@ export interface ActivityLog {
   action: string;
   details: string;
   timestamp: string;
+}
+
+export interface ApiLog {
+  id: string;
+  timestamp: string;
+  service: 'TELEGRAM' | 'FAMGATEWAY' | 'RESELLER_API' | 'WEBHOOK' | 'DATABASE' | string;
+  endpoint: string;
+  method: 'GET' | 'POST' | 'POLL' | 'WEBHOOK' | string;
+  status: 'SUCCESS' | 'WARNING' | 'ERROR';
+  http_code?: number;
+  duration_ms?: number;
+  message: string;
+  error?: string;
+  payload?: any;
+}
+
+export interface FailedTransaction {
+  order_id: string;
+  user_id: number;
+  amount_inr: number;
+  reason: string;
+  error_details?: string;
+  timestamp: number;
+  status: 'failed' | 'expired' | 'pending' | 'paid' | string;
+}
+
+export interface SystemHealthData {
+  summary: {
+    telegramPing: { timestamp: number; latencyMs: number; ok: boolean; error?: string };
+    gatewayPing: { timestamp: number; latencyMs: number; ok: boolean; statusText?: string; error?: string };
+    totalLogs: number;
+    errorLogsCount: number;
+    warningLogsCount: number;
+    failedTransactionsCount: number;
+  };
+  telegram: {
+    isRunning: boolean;
+    botName?: string;
+    username?: string;
+    tokenConfigured: boolean;
+  };
+  famgateway: {
+    configured: boolean;
+    upiId: string;
+    payeeName: string;
+    apiKeyMasked?: string;
+  };
+  resellerApi: {
+    configured: boolean;
+    apiUrl?: string;
+    hasMasterKey: boolean;
+  };
+  logs: ApiLog[];
+  failedTransactions: FailedTransaction[];
 }
 
 export interface Settings {

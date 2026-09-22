@@ -27,14 +27,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const {
     currentUser,
     allUsers,
-    setCurrentUserId,
     logout,
     resetPassword,
     setIsAuthModalOpen,
     setAuthMode
   } = useBot();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'switch'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
   const [newPassword, setNewPassword] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,8 +97,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-white">{currentUser.first_name}</h2>
             </div>
-            <p className="text-xs text-slate-400 font-mono">
-              {currentUser.email || `@${currentUser.username}`} • UID: {currentUser.user_id}
+            <p className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+              <span>{currentUser.email || `@${currentUser.username}`}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-cyan-400 font-bold">UID: {currentUser.user_id}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-indigo-400 font-bold">CHAT: {currentUser.chat_id || currentUser.user_id}</span>
             </p>
           </div>
         </div>
@@ -132,20 +135,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
           >
             <Lock className="w-3.5 h-3.5" />
             <span>Security & Auth</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('switch');
-              setStatusMsg(null);
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'switch' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Switch Account</span>
           </button>
         </div>
 
@@ -187,6 +176,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             </div>
 
             <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Telegram User ID:</span>
+                <span className="font-mono font-bold text-cyan-400">{currentUser.user_id}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Telegram Chat ID:</span>
+                <span className="font-mono font-bold text-indigo-400">{currentUser.chat_id || currentUser.user_id}</span>
+              </div>
               <div className="flex items-center justify-between text-slate-400">
                 <span>Email Address:</span>
                 <span className="font-semibold text-slate-200">{currentUser.email || 'None Linked'}</span>
@@ -236,44 +233,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               </button>
             </div>
           </form>
-        )}
-
-        {/* Tab 3: Switch Account */}
-        {activeTab === 'switch' && (
-          <div className="space-y-2.5 text-xs max-h-60 overflow-y-auto">
-            {allUsers.map((u) => (
-              <button
-                key={u.user_id}
-                type="button"
-                onClick={() => {
-                  setCurrentUserId(u.user_id);
-                  setStatusMsg({ type: 'success', text: `Switched session to ${u.first_name}!` });
-                }}
-                className={`w-full p-3 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
-                  currentUser.user_id === u.user_id
-                    ? 'bg-indigo-950/60 border-indigo-500/50 text-indigo-200'
-                    : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                <div className="truncate">
-                  <div className="font-bold text-white flex items-center gap-2">
-                    <span>{u.first_name}</span>
-                    {currentUser.user_id === u.user_id && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-300 font-bold">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono">{u.email || `@${u.username}`}</div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <div className="font-bold text-emerald-400 font-mono">₹{u.balance.toFixed(2)}</div>
-                  <div className="text-[10px] text-slate-500">Verified</div>
-                </div>
-              </button>
-            ))}
-          </div>
         )}
 
         {/* Bottom Actions Bar: Logout & Switch to Auth Portal */}

@@ -38,9 +38,12 @@ import {
   Link as LinkIcon,
   Pin,
   Radio,
-  Bot
+  Bot,
+  Wrench,
+  Activity
 } from 'lucide-react';
 import { Product } from '../../types';
+import { SystemHealthWidget } from './SystemHealthWidget';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -86,7 +89,7 @@ export const AdminDashboard: React.FC = () => {
   } = useBot();
 
   const [adminTab, setAdminTab] = useState<
-    'overview' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code'
+    'overview' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code'
   >('overview');
 
   // Broadcast Message State
@@ -154,6 +157,8 @@ export const AdminDashboard: React.FC = () => {
     apk_link: '',
     keys: '',
     is_active: 1,
+    is_maintenance: 0,
+    maintenance_note: '',
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
     provider_product_id: 'PID_FF_NONROOT_V1',
     provider_duration: '7 Days',
@@ -170,6 +175,8 @@ export const AdminDashboard: React.FC = () => {
     device_limit: '1 Device HWID',
     apk_link: '',
     is_active: 1,
+    is_maintenance: 0,
+    maintenance_note: '',
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
     provider_product_id: 'PID_FF_NONROOT_V1',
     provider_duration: '7 Days',
@@ -224,7 +231,8 @@ export const AdminDashboard: React.FC = () => {
   const filteredUsers = allUsers.filter(u =>
     u.first_name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-    String(u.user_id).includes(userSearch)
+    String(u.user_id).includes(userSearch) ||
+    String(u.chat_id || u.user_id).includes(userSearch)
   );
 
   const filteredProducts = selectedCategory === 'ALL'
@@ -247,6 +255,8 @@ export const AdminDashboard: React.FC = () => {
         device_limit: newProdForm.device_limit,
         apk_link: newProdForm.apk_link,
         is_active: 1,
+        is_maintenance: newProdForm.is_maintenance ? 1 : 0,
+        maintenance_note: newProdForm.maintenance_note || '',
         delivery_mode: newProdForm.delivery_mode,
         provider_product_id: newProdForm.provider_product_id,
         provider_duration: newProdForm.provider_duration || newProdForm.validity || newProdForm.name,
@@ -267,6 +277,8 @@ export const AdminDashboard: React.FC = () => {
       apk_link: '',
       keys: '',
       is_active: 1,
+      is_maintenance: 0,
+      maintenance_note: '',
       delivery_mode: 'api_provider',
       provider_product_id: 'PID_FF_NONROOT_V1',
       provider_duration: '7 Days',
@@ -286,6 +298,8 @@ export const AdminDashboard: React.FC = () => {
       device_limit: prod.device_limit || '1 Device HWID',
       apk_link: prod.apk_link || '',
       is_active: prod.is_active,
+      is_maintenance: prod.is_maintenance ? 1 : 0,
+      maintenance_note: prod.maintenance_note || '',
       delivery_mode: prod.delivery_mode || 'api_provider',
       provider_product_id: prod.provider_product_id || 'PID_FF_NONROOT_V1',
       provider_duration: prod.provider_duration || prod.validity || prod.name,
@@ -307,6 +321,8 @@ export const AdminDashboard: React.FC = () => {
       device_limit: editProdForm.device_limit,
       apk_link: editProdForm.apk_link,
       is_active: editProdForm.is_active,
+      is_maintenance: editProdForm.is_maintenance ? 1 : 0,
+      maintenance_note: editProdForm.maintenance_note || '',
       delivery_mode: editProdForm.delivery_mode,
       provider_product_id: editProdForm.provider_product_id,
       provider_duration: editProdForm.provider_duration || editProdForm.validity || editProdForm.name,
@@ -392,6 +408,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="bg-slate-900/60 border-b border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
         {[
           { id: 'overview', label: 'Overview', icon: Zap },
+          { id: 'health', label: '⚡ System Health & Logs', icon: Activity },
           { id: 'products', label: `Products & Vault (${products.length})`, icon: Package },
           { id: 'users', label: `Users (${allUsers.length})`, icon: Users },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
@@ -477,6 +494,9 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* System Health & Outgoing API Diagnostics Widget */}
+            <SystemHealthWidget onRefreshParent={() => {}} />
 
             {/* Quick Actions & Recent Feed */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -611,20 +631,36 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-3.5">User Price</th>
                       <th className="p-3.5">Reseller Price</th>
                       <th className="p-3.5">Stock</th>
-                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Visibility</th>
+                      <th className="p-3.5">Maintenance</th>
                       <th className="p-3.5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {filteredProducts.map(prod => {
                       const prodKeys = productKeys.filter(k => k.product_id === prod.id && !k.is_used);
+                      const isMaint = Boolean(prod.is_maintenance);
                       return (
                         <tr key={prod.id} className="hover:bg-slate-800/40 transition">
                           <td className="p-3.5">
                             <div className="font-mono text-cyan-400 font-bold">#{prod.id}</div>
                             <div className="text-[11px] text-slate-400">{prod.category}</div>
                           </td>
-                          <td className="p-3.5 font-bold text-white">{prod.panel_name}</td>
+                          <td className="p-3.5 font-bold text-white">
+                            <div className="flex items-center gap-1.5">
+                              {isMaint && (
+                                <span className="p-1 rounded bg-amber-500/20 text-amber-300" title="Under Maintenance">
+                                  <Wrench className="w-3.5 h-3.5 inline animate-pulse" />
+                                </span>
+                              )}
+                              <span>{prod.panel_name}</span>
+                            </div>
+                            {isMaint && prod.maintenance_note && (
+                              <div className="text-[10px] text-amber-400/90 italic font-normal line-clamp-1">
+                                Notice: {prod.maintenance_note}
+                              </div>
+                            )}
+                          </td>
                           <td className="p-3.5">
                             <span className="font-semibold text-slate-200">{prod.name}</span>
                             <div className="text-[10px] text-slate-500">{prod.device_limit}</div>
@@ -642,12 +678,27 @@ export const AdminDashboard: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => updateProduct(prod.id, { is_active: prod.is_active ? 0 : 1 })}
-                              className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded cursor-pointer ${
-                                prod.is_active ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 bg-slate-800'
+                              className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded cursor-pointer transition ${
+                                prod.is_active ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-slate-400 bg-slate-800 hover:bg-slate-700'
                               }`}
                             >
                               {prod.is_active ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                               <span>{prod.is_active ? 'Active' : 'Hidden'}</span>
+                            </button>
+                          </td>
+                          <td className="p-3.5">
+                            <button
+                              type="button"
+                              onClick={() => updateProduct(prod.id, { is_maintenance: isMaint ? 0 : 1 })}
+                              className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded cursor-pointer transition ${
+                                isMaint
+                                  ? 'text-amber-300 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30'
+                                  : 'text-slate-400 bg-slate-800/80 hover:text-slate-200 hover:bg-slate-850'
+                              }`}
+                              title={isMaint ? 'Click to Set Live / Active' : 'Click to Put Under Maintenance'}
+                            >
+                              <Wrench className={`w-3.5 h-3.5 ${isMaint ? 'text-amber-400' : 'text-slate-500'}`} />
+                              <span>{isMaint ? 'Maintenance' : 'Live'}</span>
                             </button>
                           </td>
                           <td className="p-3.5 text-right space-x-2">
@@ -923,8 +974,8 @@ export const AdminDashboard: React.FC = () => {
                 <table className="w-full text-left text-xs md:text-sm">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
                     <tr>
-                      <th className="p-3.5">User ID</th>
-                      <th className="p-3.5">Name / Username</th>
+                      <th className="p-3.5">Telegram IDs</th>
+                      <th className="p-3.5">User / Account</th>
                       <th className="p-3.5">Wallet Balance</th>
                       <th className="p-3.5">Level</th>
                       <th className="p-3.5">Orders / Spent</th>
@@ -933,72 +984,127 @@ export const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
-                    {filteredUsers.map(user => (
-                      <tr key={user.user_id} className="hover:bg-slate-800/40 transition">
-                        <td className="p-3.5 font-mono text-cyan-400 font-bold">{user.user_id}</td>
-                        <td className="p-3.5">
-                          <div className="font-bold text-white">{user.first_name}</div>
-                          <div className="text-[11px] text-slate-400">@{user.username || 'none'}</div>
-                        </td>
-                        <td className="p-3.5 font-bold text-emerald-400 text-sm">₹{user.balance.toFixed(2)}</td>
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {user.is_vip ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                🌟 VIP
+                    {filteredUsers.map(user => {
+                      const chatId = user.chat_id || user.user_id;
+                      return (
+                        <tr key={user.user_id} className="hover:bg-slate-800/40 transition">
+                          <td className="p-3.5">
+                            <div className="space-y-1">
+                              {/* Telegram User ID */}
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                  UID
+                                </span>
+                                <span className="font-bold text-cyan-300">{user.user_id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(String(user.user_id), `uid_${user.user_id}`)}
+                                  className="text-slate-500 hover:text-cyan-400 p-0.5 transition cursor-pointer"
+                                  title="Copy Telegram User ID"
+                                >
+                                  {copiedItem === `uid_${user.user_id}` ? (
+                                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Telegram Chat ID */}
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                                  CHAT ID
+                                </span>
+                                <span className="text-slate-300 text-[11px]">{chatId}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(String(chatId), `chat_${user.user_id}`)}
+                                  className="text-slate-500 hover:text-indigo-400 p-0.5 transition cursor-pointer"
+                                  title="Copy Telegram Chat ID"
+                                >
+                                  {copiedItem === `chat_${user.user_id}` ? (
+                                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <span>{user.first_name}</span>
+                              {user.auth_provider === 'google' && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                  Google
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              @{user.username || 'none'}
+                              {user.email ? <span className="text-slate-500 ml-1">({user.email})</span> : null}
+                            </div>
+                          </td>
+                          <td className="p-3.5 font-bold text-emerald-400 text-sm font-mono">₹{user.balance.toFixed(2)}</td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {user.is_vip ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  🌟 VIP
+                                </span>
+                              ) : null}
+                              {user.is_reseller ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                  👑 Reseller
+                                </span>
+                              ) : null}
+                              {!user.is_vip && !user.is_reseller && (
+                                <span className="text-slate-400 text-xs">Regular</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <div className="font-semibold text-slate-200">{user.orders_count} orders</div>
+                            <div className="text-[11px] text-slate-400 font-mono">Spent: ₹{user.spent.toFixed(2)}</div>
+                          </td>
+                          <td className="p-3.5">
+                            {user.is_banned ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                🚫 BANNED
                               </span>
-                            ) : null}
-                            {user.is_reseller ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                👑 Reseller
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                🟢 ACTIVE
                               </span>
-                            ) : null}
-                            {!user.is_vip && !user.is_reseller && (
-                              <span className="text-slate-400 text-xs">Regular</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-3.5">
-                          <div className="font-semibold text-slate-200">{user.orders_count} orders</div>
-                          <div className="text-[11px] text-slate-400">Spent: ₹{user.spent.toFixed(2)}</div>
-                        </td>
-                        <td className="p-3.5">
-                          {user.is_banned ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              🚫 BANNED
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              🟢 ACTIVE
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDirectPayUserId(String(user.user_id));
-                                setBalanceAdjustAmt('100');
-                                setSelectedUserForModal(user.user_id);
-                              }}
-                              className="px-2.5 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                              title="Add / Credit Balance directly to this user"
-                            >
-                              <DollarSign className="w-3.5 h-3.5" />
-                              <span>+ Add Money</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedUserForModal(user.user_id)}
-                              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
-                            >
-                              Inspect & Modify
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDirectPayUserId(String(user.user_id));
+                                  setBalanceAdjustAmt('100');
+                                  setSelectedUserForModal(user.user_id);
+                                }}
+                                className="px-2.5 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                title="Add / Credit Balance directly to this user"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                                <span>+ Add Money</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUserForModal(user.user_id)}
+                                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                              >
+                                Inspect & Modify
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2737,25 +2843,72 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* ================= SYSTEM HEALTH & LOGS DEDICATED TAB ================= */}
+        {adminTab === 'health' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <SystemHealthWidget onRefreshParent={() => {}} />
+          </div>
+        )}
       </div>
 
       {/* ================= USER INSPECT & MODIFY MODAL ================= */}
       {selectedUserForModal && (() => {
         const u = allUsers.find(user => user.user_id === selectedUserForModal);
         if (!u) return null;
+        const userChatId = u.chat_id || u.user_id;
 
         return (
           <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div>
-                  <h3 className="text-base font-bold text-white">{u.first_name}</h3>
-                  <p className="text-xs text-cyan-400 font-mono">UID: {u.user_id} (@{u.username})</p>
+              <div className="flex items-start justify-between border-b border-slate-800 pb-3 gap-3">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white truncate">{u.first_name}</h3>
+                    <span className="text-[11px] text-slate-400 font-mono">@{u.username || 'none'}</span>
+                  </div>
+                  
+                  {/* Telegram IDs Pill Bar */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-cyan-500/30 text-[11px] font-mono">
+                      <span className="text-cyan-400 font-bold">UID:</span>
+                      <span className="text-slate-200 font-semibold">{u.user_id}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(String(u.user_id), 'modal_uid')}
+                        className="text-slate-500 hover:text-cyan-400 p-0.5 transition cursor-pointer"
+                        title="Copy Telegram UID"
+                      >
+                        {copiedItem === 'modal_uid' ? (
+                          <CheckCircle className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-indigo-500/30 text-[11px] font-mono">
+                      <span className="text-indigo-400 font-bold">CHAT ID:</span>
+                      <span className="text-slate-200 font-semibold">{userChatId}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(String(userChatId), 'modal_chat')}
+                        className="text-slate-500 hover:text-indigo-400 p-0.5 transition cursor-pointer"
+                        title="Copy Telegram Chat ID"
+                      >
+                        {copiedItem === 'modal_chat' ? (
+                          <CheckCircle className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedUserForModal(null)}
-                  className="text-slate-400 hover:text-white p-1"
+                  className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800/60 hover:bg-slate-800 transition cursor-pointer"
                 >
                   ✕
                 </button>
@@ -3165,6 +3318,37 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
+              {/* Maintenance Mode Configuration */}
+              <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                    <Wrench className="w-3.5 h-3.5" />
+                    Individual Maintenance Mode
+                  </span>
+                  <label className="flex items-center gap-2 cursor-pointer text-[11px] text-amber-200">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(newProdForm.is_maintenance)}
+                      onChange={(e) => setNewProdForm({ ...newProdForm, is_maintenance: e.target.checked ? 1 : 0 })}
+                      className="rounded accent-amber-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>Set Under Maintenance</span>
+                  </label>
+                </div>
+                {Boolean(newProdForm.is_maintenance) && (
+                  <div>
+                    <label className="text-slate-400 mb-1 block text-[11px]">Maintenance Notice / Custom Note</label>
+                    <input
+                      type="text"
+                      value={newProdForm.maintenance_note}
+                      onChange={(e) => setNewProdForm({ ...newProdForm, maintenance_note: e.target.value })}
+                      placeholder="e.g. Updating to latest patch. Will be back in 30 mins!"
+                      className="w-full bg-slate-950 border border-amber-500/40 rounded-xl p-2 text-amber-300 text-xs outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="text-slate-400 mb-1 block font-semibold">
                   Vault Keys (Optional / Fallback Keys, 1 per line)
@@ -3440,6 +3624,37 @@ export const AdminDashboard: React.FC = () => {
                         Requires Device Android ID (V1 Device Bound)?
                       </label>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Maintenance Mode Configuration */}
+              <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                    <Wrench className="w-3.5 h-3.5" />
+                    Individual Maintenance Mode
+                  </span>
+                  <label className="flex items-center gap-2 cursor-pointer text-[11px] text-amber-200">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editProdForm.is_maintenance)}
+                      onChange={(e) => setEditProdForm({ ...editProdForm, is_maintenance: e.target.checked ? 1 : 0 })}
+                      className="rounded accent-amber-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>Set Under Maintenance</span>
+                  </label>
+                </div>
+                {Boolean(editProdForm.is_maintenance) && (
+                  <div>
+                    <label className="text-slate-400 mb-1 block text-[11px]">Maintenance Notice / Custom Note</label>
+                    <input
+                      type="text"
+                      value={editProdForm.maintenance_note}
+                      onChange={(e) => setEditProdForm({ ...editProdForm, maintenance_note: e.target.value })}
+                      placeholder="e.g. Updating to latest patch. Will be back in 30 mins!"
+                      className="w-full bg-slate-950 border border-amber-500/40 rounded-xl p-2 text-amber-300 text-xs outline-none"
+                    />
                   </div>
                 )}
               </div>

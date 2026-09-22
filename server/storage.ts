@@ -10,7 +10,8 @@ import {
   RedeemedCoupon,
   Transaction,
   ActivityLog,
-  Settings
+  Settings,
+  BotInstance
 } from '../src/types';
 import {
   DEFAULT_EMOJIS,
@@ -18,7 +19,8 @@ import {
   INITIAL_COUPONS,
   INITIAL_PRODUCTS,
   INITIAL_PRODUCT_KEYS,
-  INITIAL_USERS
+  INITIAL_USERS,
+  INITIAL_BOTS
 } from '../src/data/defaultData';
 
 export interface DatabaseSchema {
@@ -34,6 +36,7 @@ export interface DatabaseSchema {
   settings: Settings;
   emojis: Record<string, string>;
   fsmStates: Record<number, { state: string; data?: any }>;
+  bots: BotInstance[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -71,11 +74,12 @@ export class DatabaseStore {
           settings: {
             ...DEFAULT_SETTINGS,
             ...(parsed.settings || {}),
-            bot_token: process.env.TELEGRAM_BOT_TOKEN || parsed.settings?.bot_token || DEFAULT_SETTINGS.bot_token,
-            admin_id: process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : (parsed.settings?.admin_id || DEFAULT_SETTINGS.admin_id)
+            bot_token: parsed.settings?.bot_token || process.env.TELEGRAM_BOT_TOKEN || DEFAULT_SETTINGS.bot_token,
+            admin_id: parsed.settings?.admin_id || (process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id)
           },
           emojis: parsed.emojis || DEFAULT_EMOJIS,
-          fsmStates: parsed.fsmStates || {}
+          fsmStates: parsed.fsmStates || {},
+          bots: parsed.bots || INITIAL_BOTS
         };
       }
     } catch (err) {
@@ -98,7 +102,8 @@ export class DatabaseStore {
         admin_id: process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id
       },
       emojis: DEFAULT_EMOJIS,
-      fsmStates: {}
+      fsmStates: {},
+      bots: INITIAL_BOTS
     };
 
     this.saveData(initial);
@@ -330,6 +335,48 @@ export class DatabaseStore {
     return this.data.fsmStates[userId];
   }
 
+  public getBots(): BotInstance[] {
+    if (!Array.isArray(this.data.bots)) {
+      this.data.bots = INITIAL_BOTS;
+    }
+    return this.data.bots;
+  }
+
+  public saveBot(bot: BotInstance): BotInstance {
+    if (!Array.isArray(this.data.bots)) {
+      this.data.bots = INITIAL_BOTS;
+    }
+    const idx = this.data.bots.findIndex(b => b.id === bot.id);
+    if (idx >= 0) {
+      this.data.bots[idx] = { ...this.data.bots[idx], ...bot };
+    } else {
+      this.data.bots.unshift(bot);
+    }
+    this.saveData();
+    return bot;
+  }
+
+  public updateBot(botId: string, updates: Partial<BotInstance>): BotInstance | null {
+    if (!Array.isArray(this.data.bots)) {
+      this.data.bots = INITIAL_BOTS;
+    }
+    const idx = this.data.bots.findIndex(b => b.id === botId);
+    if (idx === -1) return null;
+    this.data.bots[idx] = { ...this.data.bots[idx], ...updates };
+    this.saveData();
+    return this.data.bots[idx];
+  }
+
+  public deleteBot(botId: string): boolean {
+    if (!Array.isArray(this.data.bots)) {
+      this.data.bots = INITIAL_BOTS;
+      return false;
+    }
+    this.data.bots = this.data.bots.filter(b => b.id !== botId);
+    this.saveData();
+    return true;
+  }
+
   public resetToDefaults() {
     this.data = {
       users: INITIAL_USERS,
@@ -347,7 +394,8 @@ export class DatabaseStore {
         admin_id: process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id
       },
       emojis: DEFAULT_EMOJIS,
-      fsmStates: {}
+      fsmStates: {},
+      bots: INITIAL_BOTS
     };
     this.saveData();
   }

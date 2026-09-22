@@ -2,6 +2,7 @@ import { dbStore } from './storage';
 import { telegramEngine } from './telegramEngine';
 import { Transaction, User } from '../src/types';
 import QRCode from 'qrcode';
+import { apiLogger } from './apiLogger';
 
 export interface FamGatewayOrderResult {
   success: boolean;
@@ -32,9 +33,25 @@ class FamGatewayService {
     this.startBackgroundPolling();
   }
 
-  private getApiKey(): string {
+  public getApiKey(): string {
     const settings = dbStore.getData().settings;
-    return (settings.famgateway_api_key || settings.fampay_api_key || process.env.FAMGATEWAY_API_KEY || '').trim();
+    const bots = dbStore.getBots();
+    const activeBot = bots.length > 0 ? bots[0] : null;
+    return (activeBot?.payment_gateway?.api_key || settings.famgateway_api_key || settings.fampay_api_key || process.env.FAMGATEWAY_API_KEY || '').trim();
+  }
+
+  public getUpiId(): string {
+    const settings = dbStore.getData().settings;
+    const bots = dbStore.getBots();
+    const activeBot = bots.length > 0 ? bots[0] : null;
+    return (activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam').trim();
+  }
+
+  public getPayeeName(): string {
+    const settings = dbStore.getData().settings;
+    const bots = dbStore.getBots();
+    const activeBot = bots.length > 0 ? bots[0] : null;
+    return (activeBot?.payment_gateway?.merchant_name || (settings as any).merchant_name || settings.bot_name || 'Kalam FF Panel').trim();
   }
 
   /**
@@ -50,13 +67,14 @@ class FamGatewayService {
     const rawAmt = Number(params.amount);
     const safeAmount = (!params.amount || isNaN(rawAmt) || rawAmt <= 0) ? 100 : rawAmt;
     const apiKey = this.getApiKey();
+    const upiId = this.getUpiId();
+    const payeeName = this.getPayeeName();
     const settings = dbStore.getData().settings;
 
     if (!apiKey) {
       // Fallback if no API key is provided yet
       const fallbackOrderId = 'ORD_LOCAL_' + Math.floor(100000 + Math.random() * 900000);
-      const upiId = settings.fampay_upi_id || 'kalampanel@fam';
-      const upiUri = `upi://pay?pa=${upiId}&pn=KalamPanel&am=${safeAmount.toFixed(2)}&tn=${fallbackOrderId}&cu=INR`;
+      const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${safeAmount.toFixed(2)}&tn=${fallbackOrderId}&cu=INR`;
       let qrUrl = '';
       try {
         qrUrl = await QRCode.toDataURL(upiUri, { width: 360, margin: 2, errorCorrectionLevel: 'M' });
@@ -77,6 +95,17 @@ class FamGatewayService {
       dbStore.getData().transactions.unshift(newTxn);
       dbStore.saveData();
 
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php (Fallback)',
+        method: 'POST',
+        status: 'WARNING',
+        http_code: 200,
+        duration_ms: 12,
+        message: `Order #${fallbackOrderId} created via UPI Direct Mode (FamGateway API Key not set)`,
+        error: 'FamGateway API Key empty - using Direct UPI'
+      });
+
       return {
         success: true,
         order_id: fallbackOrderId,
@@ -90,6 +119,7 @@ class FamGatewayService {
 
     const customOrderId = 'ORD_' + Date.now() + '_' + Math.floor(100 + Math.random() * 900);
     const redirectUrl = params.redirectUrl || settings.famgateway_redirect_url || 'https://t.me/KalamFFPanelBot';
+    const startTime = Date.now();
 
     try {
       const payload: any = {
@@ -112,6 +142,7 @@ class FamGatewayService {
         body: JSON.stringify(payload)
       });
 
+      const durationMs = Date.now() - startTime;
       const responseText = await response.text();
       let resData: any = {};
       try {
@@ -122,7 +153,27 @@ class FamGatewayService {
       }
 
       if (!response.ok && !resData.order_id && !resData.payment_url) {
-        throw new Error(resData.message || resData.error || `HTTP ${response.status} from FamGateway`);
+        const errorMsg = resData.message || resData.error || `HTTP ${response.status} from FamGateway`;
+        apiLogger.log({
+          service: 'FAMGATEWAY',
+          endpoint: '/api/create-order.php',
+          method: 'POST',
+          status: 'ERROR',
+          http_code: response.status,
+          duration_ms: durationMs,
+          message: `Failed creating order #${customOrderId} for ₹${safeAmount}`,
+          error: errorMsg
+        });
+        apiLogger.recordFailedTxn({
+          order_id: customOrderId,
+          user_id: params.userId,
+          amount_inr: safeAmount,
+          reason: `Gateway API Error: ${errorMsg}`,
+          error_details: responseText,
+          timestamp: Date.now(),
+          status: 'failed'
+        });
+        throw new Error(errorMsg);
       }
 
       const orderId = resData.order_id || resData.id || customOrderId;
@@ -153,6 +204,16 @@ class FamGatewayService {
       dbStore.getData().transactions.unshift(newTxn);
       dbStore.logActivity(params.userId, 'FAMGATEWAY_ORDER_CREATED', `Order #${orderId} for ₹${params.amount}`);
       dbStore.saveData();
+
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php',
+        method: 'POST',
+        status: 'SUCCESS',
+        http_code: response.status || 200,
+        duration_ms: durationMs,
+        message: `Order #${orderId} created for User UID ${params.userId} (₹${params.amount})`
+      });
 
       return {
         success: true,
@@ -190,6 +251,17 @@ class FamGatewayService {
       dbStore.getData().transactions.unshift(newTxn);
       dbStore.saveData();
 
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php (Fallback Catch)',
+        method: 'POST',
+        status: 'WARNING',
+        http_code: 500,
+        duration_ms: Date.now() - startTime,
+        message: `Fallback order #${fallbackOrderId} generated for ₹${params.amount}`,
+        error: err.message
+      });
+
       return {
         success: true,
         order_id: fallbackOrderId,
@@ -207,8 +279,19 @@ class FamGatewayService {
    */
   public async checkOrderStatus(orderId: string): Promise<FamGatewayStatusResult> {
     const apiKey = this.getApiKey();
+    const startTime = Date.now();
 
     if (!apiKey) {
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/checkout-status.php',
+        method: 'POST',
+        status: 'WARNING',
+        http_code: 400,
+        duration_ms: 1,
+        message: `Status check for #${orderId} skipped: API key not configured`,
+        error: 'API key not configured'
+      });
       return {
         success: false,
         isPaid: false,
@@ -229,6 +312,7 @@ class FamGatewayService {
         body: JSON.stringify({ order_id: orderId })
       });
 
+      const durationMs = Date.now() - startTime;
       const responseText = await response.text();
       let data: any = {};
       try {
@@ -240,6 +324,31 @@ class FamGatewayService {
       const rawStatus = String(data.status || data.order_status || data.payment_status || '').toUpperCase();
       const isPaid = rawStatus === 'SUCCESS' || rawStatus === 'PAID' || rawStatus === 'COMPLETED' || data.is_paid === true || data.paid === true;
 
+      apiLogger.updateGatewayPing(response.ok, durationMs, isPaid ? 'Paid' : rawStatus || 'Pending');
+
+      if (!response.ok) {
+        apiLogger.log({
+          service: 'FAMGATEWAY',
+          endpoint: '/api/checkout-status.php',
+          method: 'POST',
+          status: 'ERROR',
+          http_code: response.status,
+          duration_ms: durationMs,
+          message: `Status check error for #${orderId}`,
+          error: data.message || `HTTP ${response.status}`
+        });
+      } else {
+        apiLogger.log({
+          service: 'FAMGATEWAY',
+          endpoint: '/api/checkout-status.php',
+          method: 'POST',
+          status: isPaid ? 'SUCCESS' : (rawStatus === 'EXPIRED' || rawStatus === 'FAILED' ? 'WARNING' : 'SUCCESS'),
+          http_code: response.status,
+          duration_ms: durationMs,
+          message: `Order #${orderId} status check: ${isPaid ? 'PAID ✅' : rawStatus || 'PENDING'}`
+        });
+      }
+
       return {
         success: true,
         isPaid: isPaid,
@@ -249,6 +358,18 @@ class FamGatewayService {
         raw: data
       };
     } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      apiLogger.updateGatewayPing(false, durationMs, 'Error', err.message);
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/checkout-status.php',
+        method: 'POST',
+        status: 'ERROR',
+        http_code: 500,
+        duration_ms: durationMs,
+        message: `Network error verifying #${orderId}`,
+        error: err.message
+      });
       console.error(`Error checking FamGateway status for ${orderId}:`, err.message);
       return {
         success: false,
@@ -279,12 +400,13 @@ class FamGatewayService {
       return { success: true, user };
     }
 
-    // Mark as paid
+    // Mark as paid and resolve any failed flag
     txn.status = 'paid';
     if (utr) {
       txn.utr = utr;
     }
     const creditAmount = customAmount || txn.amount_inr;
+    apiLogger.resolveFailedTxn(orderId);
 
     const user = data.users.find(u => u.user_id === txn.user_id);
     if (!user) {
@@ -299,6 +421,16 @@ class FamGatewayService {
       `Auto-credited +₹${creditAmount.toFixed(2)} (Order #${orderId}${utr ? `, UTR: ${utr}` : ''})`
     );
     dbStore.saveData();
+
+    apiLogger.log({
+      service: 'FAMGATEWAY',
+      endpoint: '/payment/auto-credit',
+      method: 'POST',
+      status: 'SUCCESS',
+      http_code: 200,
+      duration_ms: 5,
+      message: `Successfully verified and credited ₹${creditAmount.toFixed(2)} to User UID ${user.user_id} (@${user.username || 'user'})`
+    });
 
     // 1. Notify the user immediately on Telegram
     try {
@@ -321,6 +453,15 @@ class FamGatewayService {
       );
     } catch (tgErr: any) {
       console.warn('Could not send Telegram confirmation to user:', tgErr.message);
+      apiLogger.log({
+        service: 'TELEGRAM',
+        endpoint: 'sendMessage (Payment Receipt)',
+        method: 'POST',
+        status: 'WARNING',
+        duration_ms: 10,
+        message: `Could not send payment receipt to UID ${user.user_id}`,
+        error: tgErr.message
+      });
     }
 
     // 2. Alert Master Admin on Telegram
@@ -351,7 +492,18 @@ class FamGatewayService {
    */
   public async testApiKey(apiKeyOverride?: string): Promise<{ success: boolean; message: string; raw?: any }> {
     const key = apiKeyOverride || this.getApiKey();
+    const startTime = Date.now();
     if (!key) {
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php (Test Ping)',
+        method: 'POST',
+        status: 'WARNING',
+        http_code: 400,
+        duration_ms: 1,
+        message: 'Payment Gateway ping test: API Key is empty',
+        error: 'API key is empty'
+      });
       return { success: false, message: 'API Key is empty. Please enter your FamGateway API Key.' };
     }
 
@@ -370,6 +522,7 @@ class FamGatewayService {
         })
       });
 
+      const durationMs = Date.now() - startTime;
       const text = await response.text();
       let parsed: any = {};
       try {
@@ -379,8 +532,30 @@ class FamGatewayService {
       }
 
       if (response.status === 401 || response.status === 403 || parsed.error === 'Unauthorized') {
+        apiLogger.updateGatewayPing(false, durationMs, 'Unauthorized', 'Invalid FamGateway API Key (401)');
+        apiLogger.log({
+          service: 'FAMGATEWAY',
+          endpoint: '/api/create-order.php (Test Ping)',
+          method: 'POST',
+          status: 'ERROR',
+          http_code: response.status,
+          duration_ms: durationMs,
+          message: 'FamGateway API Key Test Failed: Unauthorized (401/403)',
+          error: 'Invalid API Key'
+        });
         return { success: false, message: 'Invalid FamGateway API Key (Unauthorized).' };
       }
+
+      apiLogger.updateGatewayPing(true, durationMs, 'Active (OK)');
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php (Test Ping)',
+        method: 'POST',
+        status: 'SUCCESS',
+        http_code: response.status || 200,
+        duration_ms: durationMs,
+        message: '✅ FamGateway API Key connectivity verified and active!'
+      });
 
       return {
         success: true,
@@ -388,6 +563,18 @@ class FamGatewayService {
         raw: parsed
       };
     } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      apiLogger.updateGatewayPing(false, durationMs, 'Network Error', err.message);
+      apiLogger.log({
+        service: 'FAMGATEWAY',
+        endpoint: '/api/create-order.php (Test Ping)',
+        method: 'POST',
+        status: 'ERROR',
+        http_code: 500,
+        duration_ms: durationMs,
+        message: 'FamGateway connection test failed',
+        error: err.message
+      });
       return {
         success: false,
         message: `Connection error: ${err.message}`
@@ -423,10 +610,27 @@ class FamGatewayService {
           } else if (statusRes.status === 'EXPIRED') {
             txn.status = 'expired';
             dbStore.saveData();
+            apiLogger.recordFailedTxn({
+              order_id: txn.order_id,
+              user_id: txn.user_id,
+              amount_inr: txn.amount_inr,
+              reason: 'Payment window expired without completion',
+              timestamp: txn.timestamp,
+              status: 'expired'
+            });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error in FamGateway background poller:', err);
+        apiLogger.log({
+          service: 'FAMGATEWAY',
+          endpoint: 'backgroundPolling',
+          method: 'POLL',
+          status: 'ERROR',
+          duration_ms: 10,
+          message: 'Error in background payment polling loop',
+          error: err.message
+        });
       } finally {
         this.isChecking = false;
       }

@@ -3,6 +3,7 @@ import { Product, User, Order, Ticket } from '../src/types';
 import { famGateway } from './famGateway';
 import { bantiResellerService } from './bantiResellerApi';
 import QRCode from 'qrcode';
+import { apiLogger } from './apiLogger';
 
 export interface BotStatus {
   isRunning: boolean;
@@ -49,34 +50,80 @@ class TelegramEngine {
       throw new Error('Valid Telegram Bot Token is required');
     }
 
+    const startTime = Date.now();
     const url = `https://api.telegram.org/bot${token}/${method}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    const result = await response.json();
-    if (!result.ok) {
-      throw new Error(result.description || `Telegram API error on ${method}`);
+      const durationMs = Date.now() - startTime;
+      const result = await response.json();
+      if (!result.ok) {
+        const errorDesc = result.description || `Telegram API error on ${method}`;
+        apiLogger.log({
+          service: 'TELEGRAM',
+          endpoint: method,
+          method: 'POST',
+          status: 'ERROR',
+          http_code: response.status,
+          duration_ms: durationMs,
+          message: `Telegram API ${method} failed`,
+          error: errorDesc
+        });
+        throw new Error(errorDesc);
+      }
+
+      if (method !== 'getUpdates') {
+        apiLogger.log({
+          service: 'TELEGRAM',
+          endpoint: method,
+          method: 'POST',
+          status: 'SUCCESS',
+          http_code: 200,
+          duration_ms: durationMs,
+          message: `Telegram API call: ${method} (${durationMs}ms)`
+        });
+      }
+
+      return result.result;
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
+      const durationMs = Date.now() - startTime;
+      apiLogger.log({
+        service: 'TELEGRAM',
+        endpoint: method,
+        method: 'POST',
+        status: 'ERROR',
+        duration_ms: durationMs,
+        message: `Telegram request failed: ${method}`,
+        error: err.message
+      });
+      throw err;
     }
-    return result.result;
   }
 
   /**
    * Test current bot token
    */
   public async testConnection(): Promise<any> {
+    const startTime = Date.now();
     try {
       const me = await this.callApi('getMe');
+      const durationMs = Date.now() - startTime;
       this.botInfo = me;
       this.isConnected = true;
       this.lastError = null;
+      apiLogger.updateTelegramPing(true, durationMs);
       dbStore.logActivity(12846461, 'TG_CONNECT_SUCCESS', `Connected to Telegram Bot: @${me.username} (${me.first_name})`);
       return { success: true, bot: me };
     } catch (err: any) {
+      const durationMs = Date.now() - startTime;
       this.isConnected = false;
       this.lastError = err.message;
+      apiLogger.updateTelegramPing(false, durationMs, err.message);
       return { success: false, error: err.message };
     }
   }
@@ -179,8 +226,18 @@ class TelegramEngine {
           signal: this.pollingAbortController?.signal
         });
 
+        if (response.status === 409) {
+          // Conflict: e.g. previous webhook or getUpdates still active on Telegram's side
+          try {
+            await this.callApi('deleteWebhook', { drop_pending_updates: false });
+          } catch {}
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const errBody = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errBody || response.statusText}`);
         }
 
         const data = await response.json();
@@ -191,6 +248,9 @@ class TelegramEngine {
             this.updatesProcessed++;
             await this.handleUpdate(update);
           }
+        } else if (!data.ok) {
+          this.lastError = data.description || 'Telegram API returned false status';
+          await new Promise(r => setTimeout(r, 2500));
         }
       } catch (err: any) {
         if (err.name === 'AbortError') {
@@ -227,6 +287,14 @@ class TelegramEngine {
     return await this.callApi('sendMessage', payload);
   }
 
+  public async deleteMessage(chatId: number, messageId: number): Promise<any> {
+    try {
+      return await this.callApi('deleteMessage', { chat_id: chatId, message_id: messageId });
+    } catch (e) {
+      // ignore
+    }
+  }
+
   public async sendPhoto(chatId: number, photoUrl: string, caption?: string, replyMarkup?: any): Promise<any> {
     const payload: any = {
       chat_id: chatId,
@@ -234,7 +302,7 @@ class TelegramEngine {
       parse_mode: 'HTML'
     };
     if (caption) {
-      payload.caption = caption;
+      payload.caption = caption.length > 1024 ? caption.substring(0, 1020) + '...' : caption;
     }
     if (replyMarkup) {
       payload.reply_markup = replyMarkup;
@@ -248,12 +316,17 @@ class TelegramEngine {
       throw new Error('Telegram Bot Token is not configured');
     }
 
+    const uint8 = new Uint8Array(buffer);
+    const file = typeof File !== 'undefined'
+      ? new File([uint8], 'payment_qr.png', { type: 'image/png' })
+      : new Blob([uint8], { type: 'image/png' });
+
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
-    formData.append('photo', new Blob([new Uint8Array(buffer)], { type: 'image/png' }), 'payment_qr.png');
+    formData.append('photo', file, 'payment_qr.png');
     formData.append('parse_mode', 'HTML');
     if (caption) {
-      formData.append('caption', caption);
+      formData.append('caption', caption.length > 1024 ? caption.substring(0, 1020) + '...' : caption);
     }
     if (replyMarkup) {
       formData.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
@@ -308,6 +381,9 @@ class TelegramEngine {
   }
 
   private getProductStockTag(product: Product): string {
+    if (product.is_maintenance) {
+      return '[🛠️ Maintenance]';
+    }
     if (product.delivery_mode === 'api_provider') {
       return '[⚡ Auto Key]';
     }
@@ -326,6 +402,26 @@ class TelegramEngine {
     messageId?: number,
     androidId?: string
   ) {
+    if (product.is_maintenance) {
+      const text = `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n\n` +
+        `<b>${product.panel_name} (${product.name})</b> is temporarily under maintenance/updating.\n\n` +
+        `📌 <b>Status / Notice:</b> <i>${product.maintenance_note || 'Maintenance in progress. Updating to latest patch.'}</i>\n\n` +
+        `⚠️ Orders for this product are temporarily paused. All other products in our store are fully working and available!`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🛒 Explore Other Products', callback_data: 'shop_categories' }],
+          [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+        ]
+      };
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, text, keyboard);
+      } else {
+        await this.sendMessage(chatId, text, keyboard);
+      }
+      return;
+    }
+
     const settings = dbStore.getData().settings;
 
     if (user.balance < userPrice) {
@@ -762,7 +858,21 @@ class TelegramEngine {
       return;
     }
 
-    if (lowerText.startsWith('/balance') || lowerText.startsWith('/wallet') || lowerText.startsWith('/deposit')) {
+    if (lowerText.startsWith('/pay') || lowerText.startsWith('/deposit') || lowerText.startsWith('/addbalance')) {
+      const parts = text.split(/\s+/);
+      if (parts.length >= 2) {
+        const cleanNum = parts[1].replace(/[^0-9.]/g, '');
+        const amount = parseFloat(cleanNum);
+        if (!isNaN(amount) && amount >= 10 && amount <= 100000) {
+          await this.sendPaymentInstructions(chatId, user, amount);
+          return;
+        }
+      }
+      await this.sendAddBalanceMenu(chatId, user);
+      return;
+    }
+
+    if (lowerText.startsWith('/balance') || lowerText.startsWith('/wallet')) {
       await this.sendAddBalanceMenu(chatId, user);
       return;
     }
@@ -928,8 +1038,13 @@ class TelegramEngine {
       };
 
       const hasStock = isApi || availableKeys.length > 0;
+      const isUnderMaintenance = Boolean(product.is_maintenance);
 
-      if (hasStock) {
+      if (isUnderMaintenance) {
+        keyboard.inline_keyboard.push([
+          { text: `🛠️ Under Maintenance`, callback_data: `maint_${product.id}` }
+        ]);
+      } else if (hasStock) {
         keyboard.inline_keyboard.push([
           { text: `⚡ Buy Now (₹${userPrice})`, callback_data: `buy_${product.id}` }
         ]);
@@ -944,7 +1059,21 @@ class TelegramEngine {
         { text: '🔙 Back to Shop', callback_data: 'shop_categories' }
       ]);
 
-      await this.editMessageText(chatId, messageId, text, keyboard);
+      const maintenanceBanner = isUnderMaintenance
+        ? `\n\n🛠 <b>MAINTENANCE NOTICE:</b>\n<i>${product.maintenance_note || 'This panel is temporarily under maintenance/update. Orders for this specific product are paused.'}</i>`
+        : '';
+
+      const updatedText = text + maintenanceBanner;
+
+      await this.editMessageText(chatId, messageId, updatedText, keyboard);
+      return;
+    }
+
+    if (data.startsWith('maint_')) {
+      const prodId = Number(data.replace('maint_', ''));
+      const product = dbStore.getProduct(prodId);
+      const note = product?.maintenance_note || 'This product is updating. Please try another product!';
+      await this.answerCallback(cb.id, `🛠️ Product Under Maintenance: ${note}`, true);
       return;
     }
 
@@ -958,6 +1087,23 @@ class TelegramEngine {
         const keyboard = {
           inline_keyboard: [
             [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
+      }
+
+      if (product.is_maintenance) {
+        await this.answerCallback(cb.id, `🛠️ This product is currently under maintenance!`, true);
+        const text = `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n\n` +
+          `<b>${product.panel_name} (${product.name})</b> is temporarily paused for updates.\n\n` +
+          `📌 <b>Notice:</b> <i>${product.maintenance_note || 'Maintenance in progress. Please check back shortly.'}</i>\n\n` +
+          `✅ <i>All other catalog products are fully working and available for instant order!</i>`;
+
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Explore Other Products', callback_data: 'shop_categories' }],
             [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
           ]
         };
@@ -1014,19 +1160,19 @@ class TelegramEngine {
       return;
     }
 
-    if (data === 'profile') {
+    if (data === 'profile' || data === 'menu_profile' || data === 'user_balance') {
       await this.sendProfileMessage(chatId, user, messageId);
       return;
     }
 
-    if (data === 'add_balance') {
+    if (data === 'add_balance' || data === 'menu_add_balance' || data === 'gateway_inr' || data === 'deposit') {
       await this.sendAddBalanceMenu(chatId, user, messageId);
       return;
     }
 
-    if (data.startsWith('check_order_')) {
-      const orderId = data.replace('check_order_', '');
-      await this.answerCallback(cb.id, '🔄 Checking payment status with FamGateway...', false);
+    if (data.startsWith('check_order_') || data.startsWith('verify_')) {
+      const orderId = data.replace('check_order_', '').replace('verify_', '');
+      await this.answerCallback(cb.id, '🔄 Checking payment status...', false);
 
       const statusRes = await famGateway.checkOrderStatus(orderId);
       if (statusRes.isPaid) {
@@ -1039,7 +1185,7 @@ class TelegramEngine {
           chatId,
           `⏳ <b>Payment Status: Pending</b>\n\n` +
           `Order ID: <code>${orderId}</code>\n\n` +
-          `If you have already paid in your UPI app (GPay / PhonePe / Paytm / FamPay):\n` +
+          `If you have already paid in your UPI app (GPay / PhonePe / Paytm / FamPay / BHIM):\n` +
           `👉 Click <b>"📝 Submit 12-Digit UTR"</b> below and send your UTR Reference Number for <b>instant automated credit</b>!`,
           {
             inline_keyboard: [
@@ -1077,8 +1223,8 @@ class TelegramEngine {
       return;
     }
 
-    if (data.startsWith('pay_')) {
-      const amountStr = data.replace('pay_', '');
+    if (data.startsWith('pay_') || data.startsWith('dep_')) {
+      const amountStr = data.replace('pay_', '').replace('dep_', '');
       if (amountStr === 'custom') {
         dbStore.setFsmState(user.user_id, 'wait_for_custom_balance');
         await this.editMessageText(
@@ -1385,8 +1531,8 @@ class TelegramEngine {
     });
 
     const orderId = orderRes.order_id || `ORD_${user.user_id}_${Math.floor(Date.now() / 1000)}`;
-    const upiId = settings.fampay_upi_id || 'kalampanel@fam';
-    const payeeName = settings.bot_name || 'Kalam FF Panel';
+    const upiId = famGateway.getUpiId();
+    const payeeName = famGateway.getPayeeName();
     const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
 
     // 2. Generate PNG QR Code Buffer (Native Buffer upload to Telegram)
@@ -1410,25 +1556,24 @@ class TelegramEngine {
     const text = `⚡ <b>AUTOMATIC UPI PAYMENT & QR CODE</b> ⚡\n\n` +
       `💰 <b>Amount to Pay:</b> <b>₹${amount.toFixed(2)}</b>\n` +
       `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
-      `🏦 <b>UPI ID:</b> <code>${upiId}</code>\n` +
+      `🏦 <b>UPI ID (Tap to Copy):</b> <code>${upiId}</code>\n` +
+      `👤 <b>Payee Name:</b> <b>${payeeName}</b>\n` +
       `⏳ <b>Validity:</b> 15 Minutes (Auto-Confirming)\n\n` +
-      `📱 <b>SCAN & PAY INSTRUCTIONS:</b>\n` +
-      `1️⃣ Open <b>Google Pay, PhonePe, Paytm, FamPay, or BHIM</b>.\n` +
-      `2️⃣ Scan the QR Code image above OR tap <b>"💳 Pay via UPI App"</b>.\n` +
-      `3️⃣ Pay exact amount <b>₹${amount.toFixed(2)}</b>.\n` +
-      `4️⃣ <b>Your balance will be credited AUTOMATICALLY</b> in seconds!\n\n` +
-      `<i>👉 After paying, tap "🔄 Check Payment Status" or "📝 Submit 12-Digit UTR" below.</i>`;
+      `📱 <b>HOW TO SCAN & PAY:</b>\n` +
+      `1️⃣ Open <b>PhonePe, Google Pay, Paytm, FamPay, or BHIM</b>.\n` +
+      `2️⃣ Scan the QR Code image above OR enter UPI ID <code>${upiId}</code>.\n` +
+      `3️⃣ Pay exact amount: <b>₹${amount.toFixed(2)}</b>.\n` +
+      `4️⃣ <b>Your wallet balance is credited AUTOMATICALLY</b> in seconds!\n\n` +
+      `<i>👉 After paying, tap "🔄 Check & Auto-Confirm Payment" or "📝 Submit 12-Digit UTR" below.</i>`;
 
     const keyboardButtons: any[] = [];
 
-    // Payment link button for mobile 1-tap checkout
-    const directPayUrl = (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://')))
-      ? orderRes.payment_url
-      : upiUri;
-
-    keyboardButtons.push([
-      { text: '💳 Pay via UPI App (GPay/PhonePe/Paytm)', url: directPayUrl }
-    ]);
+    // Payment link button ONLY if it's a valid web URL (Telegram Bot API rejects upi:// in inline URL buttons)
+    if (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://'))) {
+      keyboardButtons.push([
+        { text: '🌐 Open Web Payment Gateway', url: orderRes.payment_url }
+      ]);
+    }
 
     keyboardButtons.push([
       { text: '🔄 Check & Auto-Confirm Payment', callback_data: `check_order_${orderId}` }
@@ -1438,10 +1583,17 @@ class TelegramEngine {
       { text: '📝 Submit 12-Digit UTR Number', callback_data: `submit_utr_${orderId}` }
     ]);
 
-    keyboardButtons.push([
-      { text: '💬 24/7 Support', url: settings.support_telegram },
-      { text: '🔙 Back to Menu', callback_data: 'main_menu' }
-    ]);
+    const bottomRow: any[] = [
+      { text: '💳 Choose Other Amount', callback_data: 'add_balance' }
+    ];
+
+    if (settings.support_telegram && (settings.support_telegram.startsWith('http://') || settings.support_telegram.startsWith('https://') || settings.support_telegram.startsWith('tg://'))) {
+      bottomRow.push({ text: '💬 Support', url: settings.support_telegram });
+    } else {
+      bottomRow.push({ text: '🔙 Main Menu', callback_data: 'main_menu' });
+    }
+
+    keyboardButtons.push(bottomRow);
 
     const keyboard = { inline_keyboard: keyboardButtons };
 
@@ -1449,21 +1601,39 @@ class TelegramEngine {
     if (qrBuffer) {
       try {
         await this.sendPhotoBuffer(chatId, qrBuffer, text, keyboard);
+        if (messageId) {
+          await this.deleteMessage(chatId, messageId).catch(() => {});
+        }
         return;
       } catch (bufErr: any) {
-        console.warn('sendPhotoBuffer failed, falling back to public QR URL:', bufErr.message);
+        console.warn('sendPhotoBuffer failed, trying ultra-fast QuickChart QR CDN:', bufErr.message);
       }
     }
 
-    // 4. Fallback: Try public QR URL
+    // 4. Fallback 1: QuickChart QR CDN (Highly reliable with Telegram servers)
+    const quickChartUrl = `https://quickchart.io/qr?text=${encodeURIComponent(orderRes.payment_url || upiUri)}&size=500&margin=2`;
     try {
-      await this.sendPhoto(chatId, publicQrUrl, text, keyboard);
+      await this.sendPhoto(chatId, quickChartUrl, text, keyboard);
+      if (messageId) {
+        await this.deleteMessage(chatId, messageId).catch(() => {});
+      }
       return;
-    } catch (urlErr: any) {
-      console.warn('sendPhoto via URL failed, falling back to text:', urlErr.message);
+    } catch (qcErr: any) {
+      console.warn('QuickChart sendPhoto failed, trying QRServer CDN:', qcErr.message);
     }
 
-    // 5. Fallback: Text message
+    // 5. Fallback 2: QRServer CDN
+    try {
+      await this.sendPhoto(chatId, publicQrUrl, text, keyboard);
+      if (messageId) {
+        await this.deleteMessage(chatId, messageId).catch(() => {});
+      }
+      return;
+    } catch (urlErr: any) {
+      console.warn('sendPhoto via QRServer failed, falling back to text:', urlErr.message);
+    }
+
+    // 6. Fallback 3: Text message
     if (messageId) {
       await this.editMessageText(chatId, messageId, text, keyboard);
     } else {

@@ -302,8 +302,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return isOwnerId || isOwnerEmail;
   });
 
-  // Active bot is selected from user's own bots
-  const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || null;
+  // Active bot is selected from user's own bots or fallback to system store bots
+  const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || bots.find(b => b.id === activeBotId) || bots[0] || INITIAL_BOTS[0];
 
   // Sync state to local storage
   useEffect(() => { localStorage.setItem('kalam_bot_users', JSON.stringify(users)); }, [users]);
@@ -495,12 +495,27 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Sync to Firestore Cloud Database
     setDoc(doc(db, 'bots', newBot.id), newBot, { merge: true }).catch(() => {});
+
+    // Sync to Backend Server
+    fetch('/api/bots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        bot: newBot
+      })
+    }).catch(() => {});
+
     logActivity(currentUserId, 'BOT_CREATED', `Created new bot @${newBot.username}`);
     return newBot;
   }, [currentUserId, currentUser, products, productKeys, settings, logActivity]);
 
   const updateBot = useCallback((botId: string, updates: Partial<BotInstance>) => {
-    setBots(prev => prev.map(b => b.id === botId ? { ...b, ...updates } : b));
+    setBots(prev => {
+      const nextBots = prev.map(b => b.id === botId ? { ...b, ...updates } : b);
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(nextBots));
+      return nextBots;
+    });
     if (botId === activeBotId && updates.bot_token) {
       setSettings(prev => ({
         ...prev,
@@ -520,6 +535,17 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     // Sync to Firestore Cloud Database
     setDoc(doc(db, 'bots', botId), updates, { merge: true }).catch(() => {});
+
+    // Sync to Backend Server
+    fetch('/api/bots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update',
+        botId,
+        updates
+      })
+    }).catch(() => {});
   }, [activeBotId, settings.bot_username]);
 
   const deleteBot = useCallback((botId: string) => {
@@ -528,10 +554,22 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (activeBotId === botId && remaining.length > 0) {
         setActiveBotId(remaining[0].id);
       }
-      return remaining.length > 0 ? remaining : INITIAL_BOTS;
+      const finalBots = remaining.length > 0 ? remaining : INITIAL_BOTS;
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(finalBots));
+      return finalBots;
     });
     // Delete from Firestore Cloud Database
     deleteDoc(doc(db, 'bots', botId)).catch(() => {});
+
+    // Delete from Backend Server
+    fetch('/api/bots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete',
+        botId
+      })
+    }).catch(() => {});
   }, [activeBotId]);
 
   const switchActiveBot = useCallback((botId: string) => {
@@ -583,47 +621,114 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [bots]);
 
   const updateActiveBotGateway = useCallback((gatewayUpdates: Partial<PaymentGatewayConfig>) => {
-    setBots(prev => prev.map(b => {
-      if (b.id === activeBotId) {
-        return {
-          ...b,
-          payment_gateway: {
-            ...b.payment_gateway,
-            ...gatewayUpdates
-          }
-        };
-      }
-      return b;
-    }));
-    if (gatewayUpdates.upi_id) {
-      setSettings(prev => ({ ...prev, fampay_upi_id: gatewayUpdates.upi_id! }));
+    setBots(prev => {
+      const updated = prev.map(b => {
+        if (b.id === activeBotId) {
+          return {
+            ...b,
+            payment_gateway: {
+              ...b.payment_gateway,
+              ...gatewayUpdates
+            }
+          };
+        }
+        return b;
+      });
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
+    const newSettingFields: Partial<Settings> = {};
+    if (gatewayUpdates.upi_id) newSettingFields.fampay_upi_id = gatewayUpdates.upi_id;
+    if (gatewayUpdates.api_key) newSettingFields.famgateway_api_key = gatewayUpdates.api_key;
+    if (gatewayUpdates.merchant_name) (newSettingFields as any).merchant_name = gatewayUpdates.merchant_name;
+
+    setSettings(prev => {
+      const nextSettings = { ...prev, ...newSettingFields };
+      localStorage.setItem('kalam_bot_settings', JSON.stringify(nextSettings));
+      return nextSettings;
+    });
+
+    // 1. Sync to Cloud Firestore in background
+    if (activeBotId) {
+      setDoc(doc(db, 'bots', activeBotId), {
+        payment_gateway: gatewayUpdates
+      }, { merge: true }).catch(err => console.warn('Firestore bot gateway update notice:', err));
     }
-    if (gatewayUpdates.api_key) {
-      setSettings(prev => ({ ...prev, famgateway_api_key: gatewayUpdates.api_key! }));
+    setDoc(doc(db, 'settings', 'global'), newSettingFields, { merge: true }).catch(err => console.warn('Firestore global settings update notice:', err));
+
+    // 2. Sync to Backend Server
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettingFields)
+    }).catch(err => console.warn('Server settings sync notice:', err));
+
+    if (activeBotId) {
+      fetch('/api/bots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          botId: activeBotId,
+          updates: { payment_gateway: gatewayUpdates }
+        })
+      }).catch(err => console.warn('Server bot gateway sync notice:', err));
     }
   }, [activeBotId]);
 
   const updateActiveBotResellerApi = useCallback((resellerUpdates: Partial<ResellerApiConfig>) => {
-    setBots(prev => prev.map(b => {
-      if (b.id === activeBotId) {
-        return {
-          ...b,
-          reseller_api: {
-            ...b.reseller_api,
-            ...resellerUpdates
-          }
-        };
-      }
-      return b;
-    }));
-    if (resellerUpdates.api_key) {
-      setSettings(prev => ({ ...prev, bantibhaiya_api_key: resellerUpdates.api_key! }));
+    setBots(prev => {
+      const updated = prev.map(b => {
+        if (b.id === activeBotId) {
+          return {
+            ...b,
+            reseller_api: {
+              ...b.reseller_api,
+              ...resellerUpdates
+            }
+          };
+        }
+        return b;
+      });
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
+    const newSettingFields: Partial<Settings> = {};
+    if (resellerUpdates.api_key) newSettingFields.bantibhaiya_api_key = resellerUpdates.api_key;
+    if (resellerUpdates.master_key) newSettingFields.bantibhaiya_master_key = resellerUpdates.master_key;
+    if (resellerUpdates.api_url) newSettingFields.bantibhaiya_api_url = resellerUpdates.api_url;
+
+    setSettings(prev => {
+      const nextSettings = { ...prev, ...newSettingFields };
+      localStorage.setItem('kalam_bot_settings', JSON.stringify(nextSettings));
+      return nextSettings;
+    });
+
+    if (activeBotId) {
+      setDoc(doc(db, 'bots', activeBotId), {
+        reseller_api: resellerUpdates
+      }, { merge: true }).catch(() => {});
     }
-    if (resellerUpdates.master_key) {
-      setSettings(prev => ({ ...prev, bantibhaiya_master_key: resellerUpdates.master_key! }));
-    }
-    if (resellerUpdates.api_url) {
-      setSettings(prev => ({ ...prev, bantibhaiya_api_url: resellerUpdates.api_url! }));
+    setDoc(doc(db, 'settings', 'global'), newSettingFields, { merge: true }).catch(() => {});
+
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettingFields)
+    }).catch(() => {});
+
+    if (activeBotId) {
+      fetch('/api/bots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          botId: activeBotId,
+          updates: { reseller_api: resellerUpdates }
+        })
+      }).catch(() => {});
     }
   }, [activeBotId]);
 
@@ -2746,6 +2851,44 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       localStorage.setItem('kalam_bot_settings', JSON.stringify(updated));
       return updated;
     });
+
+    // Also sync active bot if relevant fields changed
+    if (activeBotId) {
+      setBots(prev => {
+        const updated = prev.map(b => {
+          if (b.id === activeBotId) {
+            return {
+              ...b,
+              ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
+              ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
+              payment_gateway: {
+                ...b.payment_gateway,
+                ...(newSettings.fampay_upi_id ? { upi_id: newSettings.fampay_upi_id } : {}),
+                ...(newSettings.famgateway_api_key ? { api_key: newSettings.famgateway_api_key } : {})
+              },
+              reseller_api: {
+                ...b.reseller_api,
+                ...(newSettings.bantibhaiya_api_key ? { api_key: newSettings.bantibhaiya_api_key } : {}),
+                ...(newSettings.bantibhaiya_master_key ? { master_key: newSettings.bantibhaiya_master_key } : {}),
+                ...(newSettings.bantibhaiya_api_url ? { api_url: newSettings.bantibhaiya_api_url } : {})
+              }
+            };
+          }
+          return b;
+        });
+        localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+        return updated;
+      });
+
+      setDoc(doc(db, 'bots', activeBotId), {
+        ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
+        ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
+        payment_gateway: {
+          ...(newSettings.fampay_upi_id ? { upi_id: newSettings.fampay_upi_id } : {}),
+          ...(newSettings.famgateway_api_key ? { api_key: newSettings.famgateway_api_key } : {})
+        }
+      }, { merge: true }).catch(() => {});
+    }
 
     // Sync to Cloud Firestore
     setDoc(doc(db, 'settings', 'global'), newSettings, { merge: true }).catch(() => {});
