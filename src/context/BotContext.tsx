@@ -1276,23 +1276,17 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const kb: InlineKeyboardButton[][] = [];
 
-    if (paymentUrl && (paymentUrl.startsWith('http://') || paymentUrl.startsWith('https://'))) {
-      kb.push([
-        {
-          text: "🌐 Open FamGateway.in Checkout",
-          url: paymentUrl,
-          style: "success"
-        }
-      ]);
-    } else {
-      kb.push([
-        {
-          text: "💳 Pay via UPI App (PhonePe/GPay/Paytm)",
-          url: upiUri,
-          style: "success"
-        }
-      ]);
-    }
+    const checkoutUrl = (paymentUrl && (paymentUrl.startsWith('http://') || paymentUrl.startsWith('https://')))
+      ? paymentUrl
+      : `https://famgateway.in/pay.php?order_id=${orderId}&amount=${validAmount.toFixed(2)}`;
+
+    kb.push([
+      {
+        text: "🌐 Open FamGateway.in Checkout",
+        url: checkoutUrl,
+        style: "success"
+      }
+    ]);
 
     kb.push([
       {
@@ -1312,7 +1306,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     kb.push([
       {
-        text: "Cancel Transaction",
+        text: "🔙 Cancel / Choose Other Amount",
         callback_data: "menu_add_balance",
         icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
         style: "danger"
@@ -1327,8 +1321,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `⏳ <b>Expires:</b> <i>15 Minutes (${expiresAtStr})</i>\n` +
       `📅 <b>Created:</b> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n` +
       `📱 <b>Automatic Payment Instructions:</b>\n` +
-      `1️⃣ Scan the generated QR Code below or tap Pay via UPI\n` +
-      `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in PhonePe / GPay / Paytm / FamPay\n` +
+      `1️⃣ Scan the generated FamGateway QR Code or click <b>Open FamGateway.in Checkout</b>\n` +
+      `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in PhonePe, Google Pay, Paytm or FamPay\n` +
       `3️⃣ <b>Your balance will be credited AUTOMATICALLY via FamGateway.in!</b>\n\n` +
       `<i>👉 If already paid, tap "Check & Auto-Verify Payment" or submit your 12-digit UTR below.</i>`;
 

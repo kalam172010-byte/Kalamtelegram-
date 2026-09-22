@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BotProvider, useBot } from './context/BotContext';
+import { motion, AnimatePresence } from 'motion/react';
 import { TelegramHeader } from './components/TelegramClient/TelegramHeader';
 import { TelegramBotView } from './components/TelegramClient/TelegramBotView';
 import { AdminDashboard } from './components/AdminHub/AdminDashboard';
@@ -308,58 +309,109 @@ const AppContent: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Content Area with Smooth Motion Transitions */}
       <main className="flex-1 overflow-hidden relative flex flex-col z-10">
-        {activeTab === 'dashboard' ? (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <UserDashboard />
-          </div>
-        ) : activeTab === 'my_bots' ? (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <MyBotsDashboard />
-          </div>
-        ) : activeTab === 'bot' || activeTab === 'telegram' ? (
-          <div className="w-full h-full flex flex-col overflow-hidden pb-20 sm:pb-0">
-            <div
-              className={`w-full h-full flex flex-col mx-auto transition-all duration-300 ${
-                isMobileFrame
-                  ? 'max-w-md h-full md:my-3 md:rounded-3xl md:border md:border-white/10 md:shadow-2xl md:ring-8 md:ring-slate-950/80 overflow-hidden'
-                  : 'w-full h-full'
-              }`}
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' ? (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
             >
-              {/* Phone Speaker Notch if Mobile Frame on Desktop */}
-              {isMobileFrame && (
-                <div className="hidden md:flex justify-center items-center py-1 bg-slate-950/80 border-b border-white/5">
-                  <div className="w-16 h-1 bg-slate-700 rounded-full"></div>
-                </div>
-              )}
+              <UserDashboard />
+            </motion.div>
+          ) : activeTab === 'my_bots' ? (
+            <motion.div
+              key="my_bots"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+            >
+              <MyBotsDashboard />
+            </motion.div>
+          ) : activeTab === 'bot' || activeTab === 'telegram' ? (
+            <motion.div
+              key="telegram"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full flex flex-col overflow-hidden pb-20 sm:pb-0"
+            >
+              <div
+                className={`w-full h-full flex flex-col mx-auto transition-all duration-300 ${
+                  isMobileFrame
+                    ? 'max-w-md h-full md:my-3 md:rounded-3xl md:border md:border-white/10 md:shadow-2xl md:ring-8 md:ring-slate-950/80 overflow-hidden'
+                    : 'w-full h-full'
+                }`}
+              >
+                {/* Phone Speaker Notch if Mobile Frame on Desktop */}
+                {isMobileFrame && (
+                  <div className="hidden md:flex justify-center items-center py-1 bg-slate-950/80 border-b border-white/5">
+                    <div className="w-16 h-1 bg-slate-700 rounded-full"></div>
+                  </div>
+                )}
 
-              <TelegramHeader
-                isMobileFrame={isMobileFrame}
-                setIsMobileFrame={setIsMobileFrame}
-              />
-              <div className="flex-1 overflow-hidden relative">
-                <TelegramBotView />
+                <TelegramHeader
+                  isMobileFrame={isMobileFrame}
+                  setIsMobileFrame={setIsMobileFrame}
+                />
+                <div className="flex-1 overflow-hidden relative">
+                  <TelegramBotView />
+                </div>
               </div>
-            </div>
-          </div>
-        ) : activeTab === 'gateways' ? (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <PaymentGatewayManager />
-          </div>
-        ) : activeTab === 'reseller_api' ? (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <ResellerApiManager />
-          </div>
-        ) : activeTab === 'admin' && isMasterAdmin ? (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <AdminDashboard />
-          </div>
-        ) : (
-          <div className="w-full h-full overflow-y-auto pb-28 sm:pb-8">
-            <UserDashboard />
-          </div>
-        )}
+            </motion.div>
+          ) : activeTab === 'gateways' ? (
+            <motion.div
+              key="gateways"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+            >
+              <PaymentGatewayManager />
+            </motion.div>
+          ) : activeTab === 'reseller_api' ? (
+            <motion.div
+              key="reseller_api"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+            >
+              <ResellerApiManager />
+            </motion.div>
+          ) : activeTab === 'admin' && isMasterAdmin ? (
+            <motion.div
+              key="admin"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+            >
+              <AdminDashboard />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="default"
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+            >
+              <UserDashboard />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Bottom Mobile Navigation Dock (Liquid Glass Mobile Dock) */}

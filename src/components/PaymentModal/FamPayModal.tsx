@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useBot } from '../../context/BotContext';
-import { QrCode, Copy, Check, Clock, ShieldCheck, CheckCircle2, Download, ExternalLink, RefreshCw } from 'lucide-react';
+import { QrCode, Copy, Check, Clock, ShieldCheck, CheckCircle2, Download, ExternalLink, RefreshCw, Zap, Sparkles } from 'lucide-react';
 import { generateQrDataUrl, buildUpiUri } from '../../utils/qrGenerator';
 
 interface Props {
@@ -25,12 +25,14 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
   const txn = transactions.find(t => t.order_id === orderInfo.order_id);
   const isPaid = txn?.status === 'paid';
 
+  const famGatewayPayUrl = `https://famgateway.in/pay.php?order_id=${orderInfo.order_id}&amount=${(Number(orderInfo.amount) || 0).toFixed(2)}`;
+
   const upiUri = buildUpiUri({
     upiId: orderInfo.upi_id || 'kalampanel@fam',
-    payeeName: 'Kalam FF Panel',
+    payeeName: 'FamGateway Kalam Panel',
     amount: orderInfo.amount,
     orderId: orderInfo.order_id,
-    note: `Order ${orderInfo.order_id}`
+    note: `FamGateway Order ${orderInfo.order_id}`
   });
 
   // Always generate guaranteed local QR Data URL
@@ -92,7 +94,7 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
     if (!localQrUrl) return;
     const a = document.createElement('a');
     a.href = localQrUrl;
-    a.download = `UPI_QR_${orderInfo.order_id}.png`;
+    a.download = `FamGateway_QR_${orderInfo.order_id}.png`;
     a.click();
   };
 
@@ -106,15 +108,24 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-4 md:p-6 max-w-sm mx-auto shadow-2xl text-center space-y-4">
+    <div className="bg-slate-900/95 border border-cyan-500/30 rounded-3xl p-5 md:p-6 max-w-sm mx-auto shadow-2xl text-center space-y-4 backdrop-blur-xl relative overflow-hidden">
+      {/* Subtle Glow Effect */}
+      <div className="absolute -top-24 -left-24 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+
       {/* Title Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-10">
         <div className="flex items-center gap-2.5 text-left">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md">
-            FP
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-400 via-teal-400 to-blue-500 text-slate-950 flex items-center justify-center font-black text-base shadow-lg shadow-cyan-500/30">
+            ⚡
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">FamPay & UPI QR Code</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-black text-white tracking-wide">FamGateway.in</h3>
+              <span className="text-[9px] bg-cyan-500/20 text-cyan-300 font-bold px-1.5 py-0.5 rounded border border-cyan-500/30">
+                Official
+              </span>
+            </div>
             <p className="text-[11px] font-mono text-slate-400">Order: {orderInfo.order_id}</p>
           </div>
         </div>
@@ -129,11 +140,11 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
       </div>
 
       {/* QR Code Card */}
-      <div className="relative p-3.5 bg-white rounded-2xl mx-auto w-52 h-52 flex flex-col items-center justify-center shadow-xl ring-4 ring-cyan-500/20 transition-all">
+      <div className="relative p-3.5 bg-white rounded-2xl mx-auto w-52 h-52 flex flex-col items-center justify-center shadow-2xl ring-4 ring-cyan-500/20 transition-all z-10">
         {localQrUrl ? (
           <img
             src={localQrUrl}
-            alt="Scan UPI QR Code to Pay"
+            alt="Scan FamGateway QR Code to Pay"
             className="w-full h-full object-contain select-none"
             referrerPolicy="no-referrer"
             onError={async () => {
@@ -148,7 +159,7 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
         ) : (
           <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
             <QrCode className="w-20 h-20 text-slate-800 animate-pulse" />
-            <span className="text-[10px] text-slate-600 font-semibold">Generating QR Code...</span>
+            <span className="text-[10px] text-slate-600 font-semibold">Generating FamGateway QR...</span>
           </div>
         )}
 
@@ -161,39 +172,51 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
         )}
       </div>
 
-      {/* Quick Action Buttons for QR */}
-      <div className="flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={handleDownloadQr}
-          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Save QR
-        </button>
-
+      {/* Primary Action Button: FamGateway Checkout */}
+      <div className="flex flex-col gap-2 relative z-10">
         <a
-          href={upiUri}
-          className="px-3 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer border border-cyan-500/30"
+          href={famGatewayPayUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition active:scale-[0.98] cursor-pointer"
         >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Open UPI App
+          <ExternalLink className="w-4 h-4" />
+          <span>Open FamGateway.in Checkout</span>
         </a>
+
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadQr}
+            className="flex-1 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-white/5"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Save QR
+          </button>
+
+          <a
+            href={upiUri}
+            className="flex-1 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-cyan-500/20"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            UPI App
+          </a>
+        </div>
       </div>
 
       {/* Amount & UPI Details */}
-      <div className="bg-slate-950/90 rounded-xl p-3 border border-slate-800 text-left space-y-2">
+      <div className="bg-slate-950/80 rounded-2xl p-3 border border-white/10 text-left space-y-2 relative z-10">
         <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-400">Total Amount Due:</span>
+          <span className="text-slate-400">Total Amount:</span>
           <span className="text-base font-black text-emerald-400">₹{(Number(orderInfo?.amount) || 0).toFixed(2)}</span>
         </div>
 
         <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-800">
-          <span className="text-slate-400">Payee UPI ID:</span>
+          <span className="text-slate-400">UPI ID:</span>
           <button
             type="button"
             onClick={handleCopyUPI}
-            className="flex items-center gap-1.5 font-mono text-cyan-300 hover:text-cyan-200 bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded-md cursor-pointer text-xs"
+            className="flex items-center gap-1.5 font-mono text-cyan-300 hover:text-cyan-200 bg-slate-900 border border-cyan-500/30 px-2 py-0.5 rounded-md cursor-pointer text-xs"
             title="Click to copy UPI ID"
           >
             <span>{orderInfo.upi_id}</span>
@@ -203,31 +226,30 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
       </div>
 
       {/* Supported UPI Apps Row */}
-      <div className="pt-1">
+      <div className="pt-1 relative z-10">
         <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1 mb-2 font-medium">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Instant Auto-Detection via NPCI & FamPay</span>
+          <span>FamGateway Automated Auto-Credit Engine</span>
         </p>
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-mono">
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">FamPay</span>
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">PhonePe</span>
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">Paytm</span>
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">GPay</span>
-          <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50">BHIM</span>
         </div>
       </div>
 
       {/* Check Status & Simulate Buttons */}
-      <div className="space-y-2 pt-1">
+      <div className="space-y-2 pt-1 relative z-10">
         {!isPaid && (
           <button
             type="button"
             disabled={isChecking}
             onClick={handleCheckStatus}
-            className="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all shadow-md active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-white font-bold text-xs transition-all shadow-md active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            <span>{isChecking ? 'Verifying with Bank...' : 'Check Payment Status'}</span>
+            <span>{isChecking ? 'Verifying with FamGateway...' : '🔄 Auto-Verify Payment'}</span>
           </button>
         )}
 
@@ -245,3 +267,4 @@ export const FamPayModal: React.FC<Props> = ({ orderInfo, onClose }) => {
     </div>
   );
 };
+

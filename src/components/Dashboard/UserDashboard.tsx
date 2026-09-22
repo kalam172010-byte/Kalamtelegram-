@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBot } from '../../context/BotContext';
+import { motion } from 'motion/react';
 import {
   Bot,
   Shield,
@@ -88,9 +89,18 @@ export const UserDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-full w-full text-slate-100 p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className="min-h-full w-full text-slate-100 p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto"
+    >
       {/* 1. Personalized Header / Welcome Hero with Liquid Glass */}
-      <div className="liquid-glass-card rounded-3xl p-5 md:p-7 shadow-2xl relative overflow-hidden">
+      <motion.div
+        whileHover={{ scale: 1.003 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        className="liquid-glass-card rounded-3xl p-5 md:p-7 shadow-2xl relative overflow-hidden"
+      >
         {/* Subtle Background Glows */}
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -219,7 +229,7 @@ export const UserDashboard: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* 2. Overview Metrics & KPI Cards (Mobile Optimized 2x2 Liquid Glass Grid) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -830,6 +840,6 @@ export const UserDashboard: React.FC = () => {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
       />
-    </div>
+    </motion.div>
   );
 };

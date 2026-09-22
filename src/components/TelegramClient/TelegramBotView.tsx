@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useBot } from '../../context/BotContext';
+import { motion } from 'motion/react';
 import { InlineKeyboardRenderer } from './InlineKeyboardRenderer';
 import { formatTelegramHTML } from '../../utils/telegramFormatter';
 import { FamPayModal } from '../PaymentModal/FamPayModal';
@@ -251,8 +252,11 @@ export const TelegramBotView: React.FC = () => {
           }
 
           return (
-            <div
+            <motion.div
               key={msg.id}
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
               className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'}`}
             >
               <div
@@ -364,7 +368,7 @@ export const TelegramBotView: React.FC = () => {
                   {!isBot && <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />}
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
 

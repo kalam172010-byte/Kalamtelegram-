@@ -9,6 +9,11 @@
     touch-action: manipulation;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background-color: #030712;
+    scroll-behavior: smooth;
+  }
+
+  * {
+    scroll-behavior: smooth;
   }
 
   /* Custom mobile safe area padding */
@@ -21,14 +26,14 @@
   }
 }
 
-/* Liquid Glass Elements */
+/* Liquid Glass Elements with Enhanced Neon & Glow */
 .liquid-glass {
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .liquid-glass-interactive {
@@ -42,20 +47,27 @@
 }
 
 .liquid-glass-interactive:hover {
-  background: rgba(30, 41, 59, 0.75);
-  border-color: rgba(56, 189, 248, 0.3);
-  border-top-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 20px 40px rgba(6, 182, 212, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(56, 189, 248, 0.4);
+  border-top-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 20px 40px rgba(6, 182, 212, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: translateY(-3px) scale(1.008);
 }
 
 .liquid-glass-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.75) 100%);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.8) 100%);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+
+.liquid-glass-card:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  border-top-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(6, 182, 212, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.25);
 }
 
 .liquid-glass-pill {
@@ -64,28 +76,79 @@
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .liquid-glass-input {
-  background: rgba(10, 15, 29, 0.7);
+  background: rgba(10, 15, 29, 0.75);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.liquid-glass-input:focus {
+  border-color: rgba(6, 182, 212, 0.6);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 16px rgba(6, 182, 212, 0.25);
 }
 
 .liquid-glass-btn-cyan {
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.85) 0%, rgba(37, 99, 235, 0.85) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 10px 28px rgba(6, 182, 212, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .liquid-glass-btn-cyan:hover {
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%);
-  box-shadow: 0 12px 30px rgba(6, 182, 212, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 1) 0%, rgba(59, 130, 246, 1) 100%);
+  box-shadow: 0 14px 34px rgba(6, 182, 212, 0.5), 0 0 20px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateY(-2px);
+}
+
+.liquid-glass-btn-cyan:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Shimmer Animation Effect */
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-20deg);
+  animation: shimmer-sweep 3.5s infinite;
+  pointer-events: none;
 }
 
 /* Fluid Animated Background Orbs */
@@ -94,10 +157,10 @@
     transform: translate(0px, 0px) scale(1);
   }
   33% {
-    transform: translate(30px, -40px) scale(1.1);
+    transform: translate(35px, -45px) scale(1.12);
   }
   66% {
-    transform: translate(-20px, 25px) scale(0.95);
+    transform: translate(-25px, 30px) scale(0.92);
   }
 }
 
@@ -106,10 +169,10 @@
     transform: translate(0px, 0px) scale(1);
   }
   33% {
-    transform: translate(-35px, 30px) scale(1.08);
+    transform: translate(-40px, 35px) scale(1.1);
   }
   66% {
-    transform: translate(25px, -35px) scale(0.92);
+    transform: translate(30px, -40px) scale(0.9);
   }
 }
 
@@ -118,7 +181,7 @@
     transform: translate(0px, 0px) scale(1);
   }
   50% {
-    transform: translate(40px, 30px) scale(1.15);
+    transform: translate(45px, 35px) scale(1.18);
   }
 }
 
@@ -143,23 +206,26 @@
   scrollbar-width: none;
 }
 
-/* Telegram / Liquid Glass Custom Scrollbars */
+/* Ultra Smooth Telegram / Liquid Glass Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(3, 7, 18, 0.7);
+  background: rgba(3, 7, 18, 0.6);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(12px);
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.4);
+  background: rgba(6, 182, 212, 0.6);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
 }
+
