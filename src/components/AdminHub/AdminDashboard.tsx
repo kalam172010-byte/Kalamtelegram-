@@ -50,6 +50,13 @@ export const AdminDashboard: React.FC = () => {
     currentUser,
     setCurrentUserId,
     setActiveTab,
+    bots,
+    activeBot,
+    createBot,
+    updateBot,
+    deleteBot,
+    switchActiveBot,
+    duplicateBot,
     products,
     productKeys,
     allUsers,
@@ -89,8 +96,39 @@ export const AdminDashboard: React.FC = () => {
   } = useBot();
 
   const [adminTab, setAdminTab] = useState<
-    'overview' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code'
+    'overview' | 'bots' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code'
   >('overview');
+
+  // Bot Cloner & Fleet state
+  const [showCreateBotModal, setShowCreateBotModal] = useState(false);
+  const [editingBotId, setEditingBotId] = useState<string | null>(null);
+  const [copiedBotTokenId, setCopiedBotTokenId] = useState<string | null>(null);
+  const [createBotSuccessMsg, setCreateBotSuccessMsg] = useState<string | null>(null);
+
+  const [newBotForm, setNewBotForm] = useState({
+    name: 'Kalam VIP Store #2',
+    username: 'kalam_vip2_bot',
+    bot_token: '',
+    admin_id: String(settings.admin_id || 12846461),
+    description: 'Automated Telegram Shop with independent API keys and admin authorization.',
+    fampay_upi_id: 'kalampanel@fam',
+    famgateway_api_key: '',
+    bantibhaiya_api_key: '',
+    bantibhaiya_master_key: '',
+    clone_products: true
+  });
+
+  const [editBotForm, setEditBotForm] = useState({
+    name: '',
+    username: '',
+    bot_token: '',
+    admin_id: '',
+    status: 'ONLINE' as 'ONLINE' | 'OFFLINE' | 'MAINTENANCE',
+    fampay_upi_id: '',
+    famgateway_api_key: '',
+    bantibhaiya_api_key: '',
+    bantibhaiya_master_key: ''
+  });
 
   // Broadcast Message State
   const [broadcastForm, setBroadcastForm] = useState({
@@ -373,8 +411,48 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Global System Quick Toggles */}
-        <div className="flex items-center gap-2">
+        {/* Active Bot Switcher & Quick Toggles */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Active Bot Selector */}
+          <div className="flex items-center gap-2 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-cyan-500/30 shadow-inner">
+            <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Active Bot</span>
+              <select
+                value={activeBot?.id || bots[0]?.id || ''}
+                onChange={(e) => switchActiveBot(e.target.value)}
+                className="bg-transparent text-cyan-300 text-xs font-bold outline-none cursor-pointer pr-1"
+              >
+                {bots.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-slate-900 text-slate-200">
+                    {b.name} (@{b.username}) — Admin ID: {b.admin_id || b.admin_chat_id || settings.admin_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setNewBotForm({
+                  name: `Kalam VIP Store #${bots.length + 1}`,
+                  username: `kalam_store${bots.length + 1}_bot`,
+                  bot_token: '',
+                  admin_id: String(activeBot?.admin_id || settings.admin_id || 12846461),
+                  description: 'Automated Telegram Shop with independent API keys and admin authorization.',
+                  fampay_upi_id: activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
+                  famgateway_api_key: '',
+                  bantibhaiya_api_key: '',
+                  bantibhaiya_master_key: '',
+                  clone_products: true
+                });
+                setShowCreateBotModal(true);
+              }}
+              className="bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition shadow cursor-pointer ml-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Clone / New Bot
+            </button>
+          </div>
+
           {/* Bot Maintenance Toggle */}
           <button
             type="button"
@@ -408,13 +486,14 @@ export const AdminDashboard: React.FC = () => {
       <div className="bg-slate-900/60 border-b border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
         {[
           { id: 'overview', label: 'Overview', icon: Zap },
+          { id: 'bots', label: `🤖 Bot Fleet & Cloner (${bots.length})`, icon: Bot, badge: true },
           { id: 'health', label: '⚡ System Health & Logs', icon: Activity },
           { id: 'products', label: `Products & Vault (${products.length})`, icon: Package },
           { id: 'users', label: `Users (${allUsers.length})`, icon: Users },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
           { id: 'tickets', label: `Tickets (${openTicketsCount})`, icon: TicketIcon, badge: openTicketsCount > 0 },
           { id: 'coupons', label: `Coupons (${coupons.length})`, icon: Tag },
-          { id: 'gateways', label: 'Payment Gateways', icon: CreditCard },
+          { id: 'gateways', label: 'Payment Gateways & APIs', icon: CreditCard },
           { id: 'emojis', label: 'Emojis & Texts', icon: Sparkles },
           { id: 'logs', label: 'Activity Logs', icon: FileText },
           { id: 'code', label: 'Python Source & DB', icon: Code2 }
@@ -444,6 +523,320 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Main Tab Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+        {/* ================= BOT FLEET & CLONER TAB ================= */}
+        {adminTab === 'bots' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Header & Clone Call-to-action */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-4 relative z-10">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-cyan-500/20 text-cyan-300 font-bold px-2.5 py-0.5 rounded-full border border-cyan-500/30">
+                      Multi-Bot Architecture
+                    </span>
+                    <span className="text-xs bg-purple-500/20 text-purple-300 font-bold px-2.5 py-0.5 rounded-full border border-purple-500/30">
+                      Isolated API Keys & Admins
+                    </span>
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black text-white">
+                    Telegram Bot Fleet & Instance Cloner
+                  </h2>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Clone as many independent bots as you need. Every cloned bot instance runs with its own <b>Telegram Bot Token</b>, <b>Admin Chat ID</b> (which allows running <code className="text-amber-300 font-mono">@admin</code> or <code className="text-amber-300 font-mono">/admin</code> within that specific bot), <b>FamGateway UPI Key</b>, and <b>BantiBhaiya Reseller API Key</b>.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBotForm({
+                        name: `Kalam Store Bot #${bots.length + 1}`,
+                        username: `kalam_store${bots.length + 1}_bot`,
+                        bot_token: '',
+                        admin_id: String(activeBot?.admin_id || settings.admin_id || 12846461),
+                        description: 'Automated Telegram Shop with independent API keys and admin authorization.',
+                        fampay_upi_id: activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
+                        famgateway_api_key: '',
+                        bantibhaiya_api_key: '',
+                        bantibhaiya_master_key: '',
+                        clone_products: true
+                      });
+                      setShowCreateBotModal(true);
+                    }}
+                    className="px-5 py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-2xl text-xs md:text-sm font-bold shadow-lg shadow-cyan-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Clone New Bot Instance</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Currently Active Bot Spotlight Banner */}
+            {activeBot && (
+              <div className="bg-slate-900 border-2 border-cyan-500/40 rounded-2xl p-5 shadow-lg space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
+                      🤖
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs uppercase tracking-wider font-bold text-cyan-400">Currently Active Bot</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          LIVE ENGINE
+                        </span>
+                      </div>
+                      <h3 className="text-base font-bold text-white">
+                        {activeBot.name} <span className="text-cyan-300 text-xs font-mono">(@{activeBot.username})</span>
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('telegram')}
+                      className="px-3.5 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Open in Telegram Simulator
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab('gateways')}
+                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      Configure APIs
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[11px] mb-1">Admin Chat ID (@admin root):</span>
+                    <div className="flex items-center justify-between font-mono text-amber-300 font-bold">
+                      <span>{activeBot.admin_id || activeBot.admin_chat_id || settings.admin_id}</span>
+                      <span className="text-[10px] bg-amber-500/10 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
+                        Root Access
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[11px] mb-1">Bot Token Status:</span>
+                    <div className="text-slate-200 font-mono text-[11px] truncate">
+                      {activeBot.bot_token ? `${activeBot.bot_token.substring(0, 10)}...` : 'Using Server Token'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[11px] mb-1">FamGateway UPI:</span>
+                    <div className="text-slate-200 font-mono text-[11px] truncate">
+                      {activeBot.payment_gateway?.upi_id || settings.fampay_upi_id || 'Not set'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block text-[11px] mb-1">Reseller Provider API:</span>
+                    <div className="text-indigo-300 font-mono text-[11px] truncate">
+                      {activeBot.reseller_api?.api_key ? 'Isolated Key Set ✅' : 'Default Key'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* List of All Bots in Fleet */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Bot className="w-5 h-5 text-cyan-400" />
+                  Your Registered Bot Fleet ({bots.length} Bots)
+                </h3>
+                <span className="text-xs text-slate-400">Click &quot;Switch Active&quot; to manage any bot&apos;s isolated products and API keys.</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {bots.map((bot) => {
+                  const isActive = activeBot?.id === bot.id;
+                  const botAdminId = bot.admin_id || bot.admin_chat_id || settings.admin_id;
+
+                  return (
+                    <div
+                      key={bot.id}
+                      className={`bg-slate-900 border rounded-2xl p-5 space-y-4 transition ${
+                        isActive
+                          ? 'border-cyan-500 shadow-md shadow-cyan-500/10 bg-slate-900/90'
+                          : 'border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Top Row: Info & Status */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow">
+                            🤖
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-white text-sm md:text-base">{bot.name}</h4>
+                              {isActive && (
+                                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-cyan-400 font-mono">@{bot.username}</p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
+                            bot.status === 'ONLINE'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          }`}
+                        >
+                          ● {bot.status}
+                        </span>
+                      </div>
+
+                      {/* Bot Parameters & Isolated APIs */}
+                      <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2 text-xs">
+                        {/* Admin Chat ID (Crucial User Requirement) */}
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                          <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+                            <Shield className="w-3.5 h-3.5 text-amber-400" />
+                            Admin Chat ID (@admin auth):
+                          </span>
+                          <span className="font-mono text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            {botAdminId}
+                          </span>
+                        </div>
+
+                        {/* Bot Token Preview */}
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                          <span className="text-slate-400 font-semibold">Bot Token:</span>
+                          <div className="flex items-center gap-1.5 font-mono text-slate-300 text-[11px]">
+                            <span>
+                              {bot.bot_token
+                                ? copiedBotTokenId === bot.id
+                                  ? bot.bot_token
+                                  : `${bot.bot_token.substring(0, 10)}...`
+                                : 'Default Token'}
+                            </span>
+                            {bot.bot_token && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(bot.bot_token);
+                                  setCopiedBotTokenId(bot.id);
+                                  setTimeout(() => setCopiedBotTokenId(null), 2000);
+                                }}
+                                className="text-cyan-400 hover:text-cyan-300"
+                              >
+                                {copiedBotTokenId === bot.id ? '✓' : <Copy className="w-3 h-3" />}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* FamGateway UPI */}
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                          <span className="text-slate-400 font-semibold">FamGateway UPI:</span>
+                          <span className="font-mono text-slate-300 text-[11px]">
+                            {bot.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam'}
+                          </span>
+                        </div>
+
+                        {/* Reseller API */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-semibold">BantiBhaiya API Key:</span>
+                          <span className="font-mono text-indigo-300 text-[11px]">
+                            {bot.reseller_api?.api_key ? '••••' + bot.reseller_api.api_key.slice(-4) : 'Default Provider'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div className="flex items-center gap-2">
+                          {!isActive ? (
+                            <button
+                              type="button"
+                              onClick={() => switchActiveBot(bot.id)}
+                              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                              Switch Active
+                            </button>
+                          ) : (
+                            <span className="px-4 py-2 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Active Live Bot
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => duplicateBot(bot.id)}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                            title="Quick duplicate bot"
+                          >
+                            <Copy className="w-3.5 h-3.5 text-slate-400" />
+                            Clone
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingBotId(bot.id);
+                              setEditBotForm({
+                                name: bot.name,
+                                username: bot.username,
+                                bot_token: bot.bot_token,
+                                admin_id: String(bot.admin_id || bot.admin_chat_id || settings.admin_id),
+                                status: bot.status,
+                                fampay_upi_id: bot.payment_gateway?.upi_id || '',
+                                famgateway_api_key: bot.payment_gateway?.api_key || '',
+                                bantibhaiya_api_key: bot.reseller_api?.api_key || '',
+                                bantibhaiya_master_key: bot.reseller_api?.master_key || ''
+                              });
+                            }}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-xl text-xs font-semibold transition cursor-pointer"
+                            title="Edit Bot APIs & Admin ID"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          {bots.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete bot @${bot.username}?`)) {
+                                  deleteBot(bot.id);
+                                }
+                              }}
+                              className="p-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 rounded-xl text-xs font-semibold transition cursor-pointer"
+                              title="Delete Bot"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ================= OVERVIEW TAB ================= */}
         {adminTab === 'overview' && (
           <div className="space-y-6 max-w-6xl mx-auto">
@@ -868,48 +1261,92 @@ export const AdminDashboard: React.FC = () => {
                       <span>⚡ Send Real-Time Telegram Receipt to User</span>
                     </label>
 
-                    <button
-                      type="button"
-                      disabled={isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0}
-                      onClick={async () => {
-                        const targetUid = Number(directPayUserId);
-                        const amt = Number(directPayAmount);
-                        if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt)) return;
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0}
+                        onClick={async () => {
+                          const targetUid = Number(directPayUserId);
+                          const amt = Number(directPayAmount);
+                          if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt)) return;
 
-                        setIsProcessingPayment(true);
-                        setDirectPayStatus(null);
-                        const finalReason = directPayReason === 'Custom Note' && directPayCustomReason.trim()
-                          ? directPayCustomReason.trim()
-                          : directPayReason;
+                          setIsProcessingPayment(true);
+                          setDirectPayStatus(null);
+                          const finalReason = directPayReason === 'Custom Note' && directPayCustomReason.trim()
+                            ? directPayCustomReason.trim()
+                            : directPayReason;
 
-                        try {
-                          updateUserBalance(targetUid, amt, finalReason, directPayNotify);
-                          const userObj = allUsers.find(u => u.user_id === targetUid);
-                          const updatedBal = (userObj ? userObj.balance : 0) + amt;
+                          try {
+                            updateUserBalance(targetUid, amt, finalReason, directPayNotify);
+                            const userObj = allUsers.find(u => u.user_id === targetUid);
+                            const updatedBal = (userObj ? userObj.balance : 0) + amt;
 
-                          setDirectPayStatus({
-                            type: 'success',
-                            text: `Successfully credited ₹${amt.toFixed(2)} to User #${targetUid}!`,
-                            details: `New Balance: ₹${updatedBal.toFixed(2)} | Note: ${finalReason} | Telegram Alert: ${directPayNotify ? 'Sent' : 'Skipped'}`
-                          });
-                        } catch (err: any) {
-                          setDirectPayStatus({
-                            type: 'error',
-                            text: `Failed to credit balance: ${err.message || 'Unknown error'}`
-                          });
-                        } finally {
-                          setIsProcessingPayment(false);
-                        }
-                      }}
-                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
-                        isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50 hover:shadow-emerald-900/50'
-                      }`}
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      {isProcessingPayment ? 'Processing Credit...' : `Credit ₹${directPayAmount || '0'} to User Wallet`}
-                    </button>
+                            setDirectPayStatus({
+                              type: 'success',
+                              text: `Successfully credited +₹${amt.toFixed(2)} to User #${targetUid}!`,
+                              details: `New Balance: ₹${updatedBal.toFixed(2)} | Note: ${finalReason} | Telegram Alert: ${directPayNotify ? 'Sent' : 'Skipped'}`
+                            });
+                          } catch (err: any) {
+                            setDirectPayStatus({
+                              type: 'error',
+                              text: `Failed to credit balance: ${err.message || 'Unknown error'}`
+                            });
+                          } finally {
+                            setIsProcessingPayment(false);
+                          }
+                        }}
+                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                          isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50 hover:shadow-emerald-900/50'
+                        }`}
+                      >
+                        <Plus className="w-4 h-4" />
+                        {isProcessingPayment ? 'Processing...' : `+ Add ₹${directPayAmount || '0'}`}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0}
+                        onClick={async () => {
+                          const targetUid = Number(directPayUserId);
+                          const amt = Number(directPayAmount);
+                          if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt)) return;
+
+                          setIsProcessingPayment(true);
+                          setDirectPayStatus(null);
+                          const finalReason = directPayReason === 'Custom Note' && directPayCustomReason.trim()
+                            ? directPayCustomReason.trim()
+                            : (directPayReason + ' (Deduction)');
+
+                          try {
+                            updateUserBalance(targetUid, -amt, finalReason, directPayNotify);
+                            const userObj = allUsers.find(u => u.user_id === targetUid);
+                            const updatedBal = Math.max(0, (userObj ? userObj.balance : 0) - amt);
+
+                            setDirectPayStatus({
+                              type: 'success',
+                              text: `Successfully deducted -₹${amt.toFixed(2)} from User #${targetUid}!`,
+                              details: `New Balance: ₹${updatedBal.toFixed(2)} | Note: ${finalReason} | Telegram Alert: ${directPayNotify ? 'Sent' : 'Skipped'}`
+                            });
+                          } catch (err: any) {
+                            setDirectPayStatus({
+                              type: 'error',
+                              text: `Failed to deduct balance: ${err.message || 'Unknown error'}`
+                            });
+                          } finally {
+                            setIsProcessingPayment(false);
+                          }
+                        }}
+                        className={`py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isProcessingPayment || !directPayUserId || !directPayAmount || Number(directPayAmount) <= 0
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-rose-600/80 hover:bg-rose-600 text-white shadow'
+                        }`}
+                      >
+                        - Deduct
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1895,6 +2332,37 @@ export const AdminDashboard: React.FC = () => {
         {/* ================= GATEWAYS & SETTINGS TAB ================= */}
         {adminTab === 'gateways' && (
           <div className="space-y-6 max-w-4xl mx-auto">
+            {/* Active Bot Context Banner */}
+            <div className="bg-slate-900 border border-cyan-500/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center font-bold text-white shadow">
+                  🤖
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-cyan-400">Configuring Active Bot</span>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      LIVE
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-white">
+                    {activeBot?.name || 'Default Bot'} <span className="text-cyan-300 font-mono text-xs">(@{activeBot?.username || settings.bot_username || 'kalam_bot'})</span>
+                  </h4>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAdminTab('bots')}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Bot className="w-3.5 h-3.5 text-cyan-400" />
+                  View All Bots ({bots.length})
+                </button>
+              </div>
+            </div>
+
             {/* Telegram Bot Credentials & Master Config */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-950 border-2 border-cyan-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -1991,7 +2459,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-slate-300 font-bold flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-amber-400" />
-                      Master Admin Numeric ID
+                      Master Admin Numeric ID (Chat ID)
                     </label>
                     <button
                       type="button"
@@ -2009,8 +2477,8 @@ export const AdminDashboard: React.FC = () => {
                     placeholder="12846461"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-bold outline-none font-mono text-xs focus:border-amber-400"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Find numeric ID via <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-amber-400 hover:underline">@userinfobot</a> on Telegram.
+                  <p className="text-[10px] text-amber-300/90 mt-1.5">
+                    ⚡ Type <code>@admin</code> or <code>/admin</code> in Telegram to launch the Admin Terminal directly inside your bot!
                   </p>
                 </div>
 
@@ -3769,6 +4237,373 @@ export const AdminDashboard: React.FC = () => {
                 Got it, Thanks!
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CREATE / CLONE BOT MODAL ================= */}
+      {showCreateBotModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
+                  🤖
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Deploy & Clone New Telegram Bot</h3>
+                  <p className="text-xs text-slate-400">Configure dedicated API keys & independent Admin Chat ID</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateBotModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {createBotSuccessMsg && (
+              <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{createBotSuccessMsg}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newBotForm.bot_token.trim()) {
+                  alert('Please provide a valid Telegram Bot Token from @BotFather.');
+                  return;
+                }
+                const parsedAdminId = Number(newBotForm.admin_id.replace(/[^0-9]/g, '')) || 12846461;
+
+                const created = createBot({
+                  name: newBotForm.name,
+                  username: newBotForm.username,
+                  bot_token: newBotForm.bot_token,
+                  admin_id: parsedAdminId,
+                  admin_chat_id: parsedAdminId,
+                  description: newBotForm.description,
+                  clone_products: newBotForm.clone_products,
+                  payment_gateway: {
+                    upi_id: newBotForm.fampay_upi_id,
+                    api_key: newBotForm.famgateway_api_key
+                  },
+                  reseller_api: {
+                    api_key: newBotForm.bantibhaiya_api_key,
+                    master_key: newBotForm.bantibhaiya_master_key
+                  }
+                });
+
+                setCreateBotSuccessMsg(`✅ Bot @${created.username} created & activated successfully!`);
+                setTimeout(() => {
+                  setCreateBotSuccessMsg(null);
+                  setShowCreateBotModal(false);
+                  setAdminTab('bots');
+                }, 1200);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 block font-bold mb-1">Bot Display Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBotForm.name}
+                    onChange={(e) => setNewBotForm({ ...newBotForm, name: e.target.value })}
+                    placeholder="e.g. Kalam VIP Store #2"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block font-bold mb-1">Telegram Bot Username *</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-500 font-mono">@</span>
+                    <input
+                      type="text"
+                      required
+                      value={newBotForm.username}
+                      onChange={(e) => setNewBotForm({ ...newBotForm, username: e.target.value.replace(/^@/, '') })}
+                      placeholder="kalam_vip2_bot"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-cyan-300 font-mono outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Telegram Bot Token */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-bold">Telegram Bot Token (from @BotFather) *</label>
+                  <a
+                    href="https://t.me/BotFather"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Get Token
+                  </a>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={newBotForm.bot_token}
+                  onChange={(e) => setNewBotForm({ ...newBotForm, bot_token: e.target.value })}
+                  placeholder="e.g. 7928194012:AAH9bK8xP_yourRealTelegramBotToken"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-mono text-[11px] outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              {/* Admin Chat ID Input (Explicit User Requirement) */}
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-amber-300 font-bold flex items-center gap-1.5 text-xs">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                    Admin Telegram Chat ID / User ID *
+                  </label>
+                  <a
+                    href="https://t.me/userinfobot"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Get My ID (@userinfobot)
+                  </a>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={newBotForm.admin_id}
+                  onChange={(e) => setNewBotForm({ ...newBotForm, admin_id: e.target.value })}
+                  placeholder="e.g. 12846461"
+                  className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold text-xs outline-none focus:border-amber-400"
+                />
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  💡 This Telegram User ID will be authorized to access the root <b>@admin</b> and <b>/admin</b> control terminal inside this specific bot instance.
+                </p>
+              </div>
+
+              {/* Dedicated Payment & Reseller APIs */}
+              <div className="border-t border-slate-800 pt-3 space-y-3">
+                <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold block">
+                  Isolated Payment & Reseller Keys for this Bot
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-300 block font-semibold mb-1">FamGateway UPI ID</label>
+                    <input
+                      type="text"
+                      value={newBotForm.fampay_upi_id}
+                      onChange={(e) => setNewBotForm({ ...newBotForm, fampay_upi_id: e.target.value })}
+                      placeholder="kalampanel@fam"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-[11px] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 block font-semibold mb-1">FamGateway API Key</label>
+                    <input
+                      type="text"
+                      value={newBotForm.famgateway_api_key}
+                      onChange={(e) => setNewBotForm({ ...newBotForm, famgateway_api_key: e.target.value })}
+                      placeholder="Leave blank to use default"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-[11px] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 block font-semibold mb-1">BantiBhaiya Reseller API Key</label>
+                    <input
+                      type="text"
+                      value={newBotForm.bantibhaiya_api_key}
+                      onChange={(e) => setNewBotForm({ ...newBotForm, bantibhaiya_api_key: e.target.value })}
+                      placeholder="Leave blank to use default"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-indigo-300 font-mono text-[11px] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 block font-semibold mb-1">BantiBhaiya Master Key</label>
+                    <input
+                      type="text"
+                      value={newBotForm.bantibhaiya_master_key}
+                      onChange={(e) => setNewBotForm({ ...newBotForm, bantibhaiya_master_key: e.target.value })}
+                      placeholder="Optional master auth"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-mono text-[11px] outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="cloneProdsCheck"
+                    checked={newBotForm.clone_products}
+                    onChange={(e) => setNewBotForm({ ...newBotForm, clone_products: e.target.checked })}
+                    className="rounded accent-cyan-500 w-4 h-4 cursor-pointer"
+                  />
+                  <label htmlFor="cloneProdsCheck" className="text-slate-300 cursor-pointer font-semibold">
+                    Clone current product catalog and key vault into new bot instance
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateBotModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/30 cursor-pointer transition"
+                >
+                  🚀 Deploy & Activate Bot
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= EDIT BOT MODAL ================= */}
+      {editingBotId && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                Edit Bot Instance Credentials
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingBotId(null)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const parsedAdminId = Number(editBotForm.admin_id.replace(/[^0-9]/g, '')) || 12846461;
+
+                updateBot(editingBotId, {
+                  name: editBotForm.name,
+                  username: editBotForm.username.replace(/^@/, ''),
+                  bot_token: editBotForm.bot_token,
+                  admin_id: parsedAdminId,
+                  admin_chat_id: parsedAdminId,
+                  status: editBotForm.status,
+                  payment_gateway: {
+                    upi_id: editBotForm.fampay_upi_id,
+                    api_key: editBotForm.famgateway_api_key
+                  } as any,
+                  reseller_api: {
+                    api_key: editBotForm.bantibhaiya_api_key,
+                    master_key: editBotForm.bantibhaiya_master_key
+                  } as any
+                });
+
+                setEditingBotId(null);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="text-slate-300 block font-bold mb-1">Bot Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editBotForm.name}
+                  onChange={(e) => setEditBotForm({ ...editBotForm, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 block font-bold mb-1">Bot Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editBotForm.username}
+                  onChange={(e) => setEditBotForm({ ...editBotForm, username: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-mono outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 block font-bold mb-1">Telegram Bot Token</label>
+                <input
+                  type="text"
+                  required
+                  value={editBotForm.bot_token}
+                  onChange={(e) => setEditBotForm({ ...editBotForm, bot_token: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-mono text-[11px] outline-none"
+                />
+              </div>
+
+              {/* Admin Chat ID in Edit Form */}
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-1">
+                <label className="text-amber-300 font-bold flex items-center gap-1 text-xs">
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
+                  Admin Telegram Chat ID (@admin auth)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editBotForm.admin_id}
+                  onChange={(e) => setEditBotForm({ ...editBotForm, admin_id: e.target.value })}
+                  className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold text-xs outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 block font-semibold mb-1">FamGateway UPI ID</label>
+                  <input
+                    type="text"
+                    value={editBotForm.fampay_upi_id}
+                    onChange={(e) => setEditBotForm({ ...editBotForm, fampay_upi_id: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-[11px] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block font-semibold mb-1">FamGateway API Key</label>
+                  <input
+                    type="text"
+                    value={editBotForm.famgateway_api_key}
+                    onChange={(e) => setEditBotForm({ ...editBotForm, famgateway_api_key: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-[11px] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBotId(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold cursor-pointer transition shadow"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

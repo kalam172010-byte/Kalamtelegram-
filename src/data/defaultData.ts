@@ -121,273 +121,24 @@ export const INITIAL_USERS: User[] = [
     auth_provider: 'google',
     first_name: 'Kalam (Admin)',
     username: 'kalam172010',
-    balance: 15450.0,
+    balance: 0.0,
     account_type: 'VIP',
-    orders_count: 42,
-    spent: 8900.0,
+    orders_count: 0,
+    spent: 0.0,
     joined_date: '2026-01-10 10:00:00',
     is_reseller: 1,
     reseller_since: '2026-01-15',
-    total_saved: 2450.0,
+    total_saved: 0.0,
     is_banned: 0,
     warnings: 0,
     is_vip: 1,
     vip_since: '2026-01-12'
-  },
-  {
-    user_id: 58941209,
-    chat_id: 58941209,
-    phone: '+91 91234 56789',
-    email: 'rahul.gamer@gmail.com',
-    password: 'password123',
-    avatar_url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80',
-    auth_provider: 'email',
-    first_name: 'Rahul Gamer',
-    username: 'rahul_ff99',
-    balance: 850.0,
-    account_type: 'Regular',
-    orders_count: 3,
-    spent: 650.0,
-    joined_date: '2026-02-14 14:22:10',
-    is_reseller: 0,
-    total_saved: 0.0,
-    is_banned: 0,
-    warnings: 0,
-    is_vip: 0
-  },
-  {
-    user_id: 77489012,
-    chat_id: 77489012,
-    phone: '+91 99887 76655',
-    email: 'viper.reseller@gmail.com',
-    password: 'password123',
-    avatar_url: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=200&q=80',
-    auth_provider: 'email',
-    first_name: 'Viper Reseller',
-    username: 'viper_reseller',
-    balance: 2400.0,
-    account_type: 'Reseller',
-    orders_count: 18,
-    spent: 4200.0,
-    joined_date: '2026-01-28 09:15:30',
-    is_reseller: 1,
-    reseller_since: '2026-02-01',
-    total_saved: 980.0,
-    is_banned: 0,
-    warnings: 0,
-    is_vip: 0
-  },
-  {
-    user_id: 88192031,
-    chat_id: 88192031,
-    phone: '+91 98111 22334',
-    email: 'aarav.vip@gmail.com',
-    password: 'password123',
-    avatar_url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80',
-    auth_provider: 'google',
-    first_name: 'Aarav Sharma',
-    username: 'aarav_vip_ff',
-    balance: 3120.0,
-    account_type: 'VIP',
-    orders_count: 24,
-    spent: 5400.0,
-    joined_date: '2026-01-18 16:40:00',
-    is_reseller: 0,
-    total_saved: 810.0,
-    is_banned: 0,
-    warnings: 0,
-    is_vip: 1,
-    vip_since: '2026-01-20'
   }
 ];
 
-export const INITIAL_PRODUCTS: Product[] = [
-  // ANDROID NON ROOT
-  {
-    id: 1,
-    category: 'ANDROID NON ROOT PANEL',
-    panel_name: 'MST PANEL',
-    name: '24 Hours',
-    price_inr: 60.0,
-    reseller_price: 35.0,
-    stock: 8,
-    apk_link: 'https://download.kalampanel.store/mst_v5.2.apk',
-    validity: '24 Hours',
-    device_limit: '1 Device HWID',
-    is_active: 1,
-    delivery_mode: 'api_provider',
-    provider_product_id: 'MST_V2_PID',
-    provider_duration: '1 Day',
-    requires_android_id: false
-  },
-  {
-    id: 2,
-    category: 'ANDROID NON ROOT PANEL',
-    panel_name: 'MST PANEL',
-    name: '7 Days',
-    price_inr: 250.0,
-    reseller_price: 160.0,
-    stock: 5,
-    apk_link: 'https://download.kalampanel.store/mst_v5.2.apk',
-    validity: '7 Days',
-    device_limit: '1 Device HWID',
-    is_active: 1,
-    delivery_mode: 'api_provider',
-    provider_product_id: 'MST_V2_PID',
-    provider_duration: '7 Days',
-    requires_android_id: false
-  },
-  {
-    id: 3,
-    category: 'ANDROID NON ROOT PANEL',
-    panel_name: 'MST PANEL',
-    name: '30 Days',
-    price_inr: 650.0,
-    reseller_price: 420.0,
-    stock: 4,
-    apk_link: 'https://download.kalampanel.store/mst_v5.2.apk',
-    validity: '30 Days',
-    device_limit: '1 Device HWID',
-    is_active: 1,
-    delivery_mode: 'api_provider',
-    provider_product_id: 'MST_V2_PID',
-    provider_duration: '30 Days',
-    requires_android_id: false
-  },
-  {
-    id: 4,
-    category: 'ANDROID NON ROOT PANEL',
-    panel_name: 'DRIP PANEL',
-    name: '7 Days',
-    price_inr: 280.0,
-    reseller_price: 180.0,
-    stock: 6,
-    apk_link: 'https://download.kalampanel.store/drip_mod_safe.apk',
-    validity: '7 Days',
-    device_limit: '1 Device HWID',
-    is_active: 1,
-    delivery_mode: 'hybrid',
-    provider_product_id: 'DRIP_V1_PID',
-    provider_duration: '7 Days',
-    requires_android_id: true
-  },
-  {
-    id: 5,
-    category: 'ANDROID NON ROOT PANEL',
-    panel_name: 'DRIP PANEL',
-    name: '1 Month',
-    price_inr: 700.0,
-    reseller_price: 450.0,
-    stock: 3,
-    apk_link: 'https://download.kalampanel.store/drip_mod_safe.apk',
-    validity: '30 Days',
-    device_limit: '1 Device HWID',
-    is_active: 1,
-    delivery_mode: 'hybrid',
-    provider_product_id: 'DRIP_V1_PID',
-    provider_duration: '30 Days',
-    requires_android_id: true
-  },
+export const INITIAL_PRODUCTS: Product[] = [];
 
-  // ANDROID ROOT PANEL
-  {
-    id: 6,
-    category: 'ANDROID ROOT PANEL',
-    panel_name: 'VIP EXTREME ROOT',
-    name: '7 Days',
-    price_inr: 320.0,
-    reseller_price: 210.0,
-    stock: 7,
-    apk_link: 'https://download.kalampanel.store/root_vip_extreme.zip',
-    validity: '7 Days',
-    device_limit: '1 Root Device',
-    is_active: 1
-  },
-  {
-    id: 7,
-    category: 'ANDROID ROOT PANEL',
-    panel_name: 'VIP EXTREME ROOT',
-    name: '1 Month',
-    price_inr: 850.0,
-    reseller_price: 550.0,
-    stock: 4,
-    apk_link: 'https://download.kalampanel.store/root_vip_extreme.zip',
-    validity: '30 Days',
-    device_limit: '1 Root Device',
-    is_active: 1
-  },
-  {
-    id: 8,
-    category: 'ANDROID ROOT PANEL',
-    panel_name: 'SNIPER X MAGISK',
-    name: '30 Days',
-    price_inr: 900.0,
-    reseller_price: 600.0,
-    stock: 5,
-    apk_link: 'https://download.kalampanel.store/sniper_magisk_module.zip',
-    validity: '30 Days',
-    device_limit: 'Magisk KernelSU',
-    is_active: 1
-  },
-
-  // PC PANEL
-  {
-    id: 9,
-    category: 'PC PANEL',
-    panel_name: 'EMULATOR MASTER PC',
-    name: '7 Days',
-    price_inr: 400.0,
-    reseller_price: 260.0,
-    stock: 4,
-    apk_link: 'https://download.kalampanel.store/pc_emulator_hook.exe',
-    validity: '7 Days',
-    device_limit: '1 PC HWID',
-    is_active: 1
-  },
-  {
-    id: 10,
-    category: 'PC PANEL',
-    panel_name: 'EMULATOR MASTER PC',
-    name: '1 Month',
-    price_inr: 950.0,
-    reseller_price: 650.0,
-    stock: 5,
-    apk_link: 'https://download.kalampanel.store/pc_emulator_hook.exe',
-    validity: '30 Days',
-    device_limit: '1 PC HWID',
-    is_active: 1
-  },
-  {
-    id: 11,
-    category: 'PC PANEL',
-    panel_name: 'BYPASS STREAMER EDITION',
-    name: 'Lifetime',
-    price_inr: 2500.0,
-    reseller_price: 1800.0,
-    stock: 2,
-    apk_link: 'https://download.kalampanel.store/pc_streamer_bypass.exe',
-    validity: 'Lifetime',
-    device_limit: '1 PC HWID Lock',
-    is_active: 1
-  }
-];
-
-export const INITIAL_PRODUCT_KEYS: ProductKey[] = [
-  { id: 1, product_id: 1, key_text: 'MST-24H-7A9B-X102', is_used: 0 },
-  { id: 2, product_id: 1, key_text: 'MST-24H-8B3C-Y881', is_used: 0 },
-  { id: 3, product_id: 1, key_text: 'MST-24H-9C4D-Z992', is_used: 0 },
-  { id: 4, product_id: 2, key_text: 'MST-7D-AK91-PL54', is_used: 0 },
-  { id: 5, product_id: 2, key_text: 'MST-7D-BR22-MM90', is_used: 0 },
-  { id: 6, product_id: 3, key_text: 'MST-30D-PREM-9912-KLM', is_used: 0 },
-  { id: 7, product_id: 4, key_text: 'DRIP-7D-NOIRE-8841-K', is_used: 0 },
-  { id: 8, product_id: 5, key_text: 'DRIP-30D-FIRE-5512-Z', is_used: 0 },
-  { id: 9, product_id: 6, key_text: 'ROOT-EXT-7D-MAG-1029', is_used: 0 },
-  { id: 10, product_id: 7, key_text: 'ROOT-EXT-30D-MAG-8891', is_used: 0 },
-  { id: 11, product_id: 8, key_text: 'SNIPER-30D-KSU-9988', is_used: 0 },
-  { id: 12, product_id: 9, key_text: 'PC-EMU-7D-WIN64-1188', is_used: 0 },
-  { id: 13, product_id: 10, key_text: 'PC-EMU-30D-WIN64-9920', is_used: 0 },
-  { id: 14, product_id: 11, key_text: 'PC-BYPASS-LIFE-KALAM-9999', is_used: 0 }
-];
+export const INITIAL_PRODUCT_KEYS: ProductKey[] = [];
 
 export const INITIAL_COUPONS: Coupon[] = [
   { code: 'KALAM50', amount: 50.0, uses_left: 45, total_uses: 50 },
@@ -432,14 +183,14 @@ export const INITIAL_BOTS: BotInstance[] = [
     theme_color: '#06b6d4',
     payment_gateway: DEFAULT_GATEWAY_CONFIG,
     reseller_api: DEFAULT_RESELLER_CONFIG,
-    products: INITIAL_PRODUCTS,
-    productKeys: INITIAL_PRODUCT_KEYS,
+    products: [],
+    productKeys: [],
     settings: DEFAULT_SETTINGS,
     stats: {
-      total_orders: 142,
-      total_revenue: 28450.0,
-      total_users: 85,
-      total_keys_delivered: 142
+      total_orders: 0,
+      total_revenue: 0.0,
+      total_users: 1,
+      total_keys_delivered: 0
     }
   },
   {
@@ -459,17 +210,17 @@ export const INITIAL_BOTS: BotInstance[] = [
       merchant_name: 'VIP Direct Express'
     },
     reseller_api: DEFAULT_RESELLER_CONFIG,
-    products: INITIAL_PRODUCTS.slice(0, 6),
-    productKeys: INITIAL_PRODUCT_KEYS.slice(0, 8),
+    products: [],
+    productKeys: [],
     settings: {
       ...DEFAULT_SETTINGS,
       bot_username: 'VIPDirectKeysBot'
     },
     stats: {
-      total_orders: 48,
-      total_revenue: 12800.0,
-      total_users: 32,
-      total_keys_delivered: 48
+      total_orders: 0,
+      total_revenue: 0.0,
+      total_users: 1,
+      total_keys_delivered: 0
     }
   }
 ];

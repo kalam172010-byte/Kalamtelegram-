@@ -27,6 +27,8 @@ export interface BotInstance {
   id: string;
   owner_id: number;
   owner_email?: string;
+  admin_id?: number;
+  admin_chat_id?: number;
   name: string;
   username: string;
   bot_token: string;

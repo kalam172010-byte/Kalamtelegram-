@@ -61,16 +61,32 @@ export class DatabaseStore {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+        
+        // Filter out legacy hardcoded demo users
+        const demoUids = [58941209, 77489012, 88192031];
+        const loadedUsers = Array.isArray(parsed.users)
+          ? parsed.users.filter((u: any) => !demoUids.includes(u.user_id))
+          : INITIAL_USERS;
+
+        // Filter out legacy hardcoded demo products
+        const loadedProducts = Array.isArray(parsed.products)
+          ? parsed.products.filter((p: any) => p.panel_name !== 'MST PANEL' && p.panel_name !== 'DRIP PANEL')
+          : INITIAL_PRODUCTS;
+
+        const loadedKeys = Array.isArray(parsed.productKeys)
+          ? parsed.productKeys.filter((k: any) => !k.key_text?.includes('MST-24H') && !k.key_text?.includes('MST-7D'))
+          : INITIAL_PRODUCT_KEYS;
+
         return {
-          users: parsed.users || INITIAL_USERS,
-          products: parsed.products || INITIAL_PRODUCTS,
-          productKeys: parsed.productKeys || INITIAL_PRODUCT_KEYS,
-          orders: parsed.orders || [],
-          tickets: parsed.tickets || [],
+          users: loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS,
+          products: loadedProducts,
+          productKeys: loadedKeys,
+          orders: Array.isArray(parsed.orders) ? parsed.orders.filter((o: any) => !demoUids.includes(o.user_id)) : [],
+          tickets: Array.isArray(parsed.tickets) ? parsed.tickets.filter((t: any) => !demoUids.includes(t.user_id)) : [],
           coupons: parsed.coupons || INITIAL_COUPONS,
           redeemed: parsed.redeemed || [],
           transactions: parsed.transactions || [],
-          logs: parsed.logs || [],
+          logs: Array.isArray(parsed.logs) ? parsed.logs.filter((l: any) => !demoUids.includes(l.user_id)) : [],
           settings: {
             ...DEFAULT_SETTINGS,
             ...(parsed.settings || {}),

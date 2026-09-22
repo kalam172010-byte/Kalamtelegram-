@@ -41,6 +41,32 @@ class TelegramEngine {
     };
   }
 
+  public getWebAppUrl(): string {
+    const settings = dbStore.getData().settings;
+    if (settings.webapp_url && settings.webapp_url.trim().startsWith('http')) {
+      return settings.webapp_url.trim();
+    }
+    if (process.env.APP_URL && process.env.APP_URL.trim().startsWith('http')) {
+      return process.env.APP_URL.trim();
+    }
+    return 'https://ais-dev-4t7cgnx5jf2wmsgau33wmd-128464619421.asia-east1.run.app';
+  }
+
+  public isAdmin(user: User, chatId?: number): boolean {
+    const settings = dbStore.getData().settings;
+    const adminId = Number(settings.admin_id);
+    const uid = Number(user.user_id);
+    const cid = Number(chatId);
+    const uname = (user.username || '').toLowerCase().replace('@', '');
+    const adminContact = (settings.admin_contact || '').toLowerCase().replace('@', '');
+
+    if (adminId && (uid === adminId || cid === adminId)) return true;
+    if (adminContact && uname === adminContact) return true;
+    if (uname === 'kalam172010') return true;
+    if (!adminId && (uname === 'kalam172010' || user.is_reseller === 1)) return true;
+    return false;
+  }
+
   /**
    * Helper to make calls to Telegram Bot API
    */
@@ -618,6 +644,143 @@ class TelegramEngine {
 
     const fsm = dbStore.getFsmState(user.user_id);
 
+    if (fsm && fsm.state === 'admin_wait_add_bal') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) {
+        await this.sendMessage(chatId, '⛔ <b>Access Denied</b>', this.getMainMenuKeyboard(user));
+        return;
+      }
+      const parts = text.split(/\s+/);
+      const targetUid = Number(parts[0]);
+      const amt = Number(parts[1]);
+      const reason = parts.slice(2).join(' ') || 'Admin Telegram Credit';
+
+      if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt) || amt <= 0) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid Format</b>\n\nUsage format: <code>&lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\nExample:\n<code>${chatId} 500 Promo bonus</code>`,
+          { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] }
+        );
+        return;
+      }
+
+      const targetUser = dbStore.getData().users.find(u => u.user_id === targetUid);
+      if (!targetUser) {
+        await this.sendMessage(chatId, `❌ User with ID <code>${targetUid}</code> not found in system database.`, { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] });
+        return;
+      }
+
+      targetUser.balance += amt;
+      dbStore.updateUser(targetUid, { balance: targetUser.balance });
+      dbStore.logActivity(targetUid, 'ADMIN_CREDIT', `+₹${amt} by Admin (${reason})`);
+      dbStore.saveData();
+
+      // Send telegram receipt to target user
+      try {
+        await this.sendMessage(
+          targetUid,
+          `💰 <b>WALLET CREDITED BY ADMIN!</b>\n\n` +
+          `✅ Amount Added: <b>+₹${amt.toFixed(2)}</b>\n` +
+          `💳 New Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+          `📝 Note: <i>${reason}</i>`
+        );
+      } catch (e) {
+        // user may not have started bot yet
+      }
+
+      await this.sendMessage(
+        chatId,
+        `✅ <b>SUCCESSFULLY CREDITED!</b>\n\n` +
+        `👤 User: <b>${targetUser.first_name}</b> (@${targetUser.username || targetUid})\n` +
+        `🆔 User ID: <code>${targetUid}</code>\n` +
+        `💵 Amount Added: <b>+₹${amt.toFixed(2)}</b>\n` +
+        `💳 Updated Wallet Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+        `📝 Reason: <i>${reason}</i>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (fsm && fsm.state === 'admin_wait_ded_bal') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) {
+        await this.sendMessage(chatId, '⛔ <b>Access Denied</b>', this.getMainMenuKeyboard(user));
+        return;
+      }
+      const parts = text.split(/\s+/);
+      const targetUid = Number(parts[0]);
+      const amt = Number(parts[1]);
+      const reason = parts.slice(2).join(' ') || 'Admin Telegram Deduction';
+
+      if (!targetUid || isNaN(targetUid) || !amt || isNaN(amt) || amt <= 0) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid Format</b>\n\nUsage format: <code>&lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\nExample:\n<code>${chatId} 100 Adjustment</code>`,
+          { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] }
+        );
+        return;
+      }
+
+      const targetUser = dbStore.getData().users.find(u => u.user_id === targetUid);
+      if (!targetUser) {
+        await this.sendMessage(chatId, `❌ User with ID <code>${targetUid}</code> not found in system database.`, { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] });
+        return;
+      }
+
+      targetUser.balance = Math.max(0, targetUser.balance - amt);
+      dbStore.updateUser(targetUid, { balance: targetUser.balance });
+      dbStore.logActivity(targetUid, 'ADMIN_DEBIT', `-₹${amt} by Admin (${reason})`);
+      dbStore.saveData();
+
+      try {
+        await this.sendMessage(
+          targetUid,
+          `⚠️ <b>WALLET BALANCE ADJUSTMENT</b>\n\n` +
+          `🔻 Amount Deducted: <b>-₹${amt.toFixed(2)}</b>\n` +
+          `💳 Current Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+          `📝 Note: <i>${reason}</i>`
+        );
+      } catch (e) {
+        // ignore
+      }
+
+      await this.sendMessage(
+        chatId,
+        `✅ <b>SUCCESSFULLY DEDUCTED!</b>\n\n` +
+        `👤 User: <b>${targetUser.first_name}</b> (@${targetUser.username || targetUid})\n` +
+        `🆔 User ID: <code>${targetUid}</code>\n` +
+        `🔻 Amount Deducted: <b>-₹${amt.toFixed(2)}</b>\n` +
+        `💳 Updated Wallet Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+        `📝 Reason: <i>${reason}</i>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (fsm && fsm.state === 'admin_wait_broadcast') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) return;
+
+      const broadcastMsg = text.trim();
+      const allUsers = dbStore.getData().users;
+      await this.sendMessage(chatId, `⏳ Sending broadcast to ${allUsers.length} users...`);
+
+      const result = await this.sendBroadcast({
+        targetAudience: 'ALL_USERS',
+        text: broadcastMsg,
+        recipients: allUsers
+      });
+
+      await this.sendMessage(
+        chatId,
+        `📢 <b>BROADCAST COMPLETED!</b>\n\n` +
+        `✅ Successfully Delivered: <b>${result.sent}</b>\n` +
+        `❌ Failed / Inactive: <b>${result.failed}</b>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
     if (fsm && fsm.state === 'wait_for_redeem') {
       dbStore.setFsmState(user.user_id, 'idle');
       const couponCode = text.toUpperCase();
@@ -897,11 +1060,202 @@ class TelegramEngine {
       return;
     }
 
-    if (lowerText.startsWith('/admin')) {
-      if (user.user_id === settings.admin_id) {
+    // Admin Quick Commands
+    if (this.isAdmin(user, chatId)) {
+      if (lowerText.startsWith('/addbalance') || lowerText.startsWith('/credit')) {
+        const parts = text.split(/\s+/);
+        if (parts.length >= 3) {
+          const targetUid = Number(parts[1]);
+          const amt = Number(parts[2]);
+          const reason = parts.slice(3).join(' ') || 'Admin Telegram Command';
+          if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
+            const targetUser = dbStore.getData().users.find(u => u.user_id === targetUid);
+            if (targetUser) {
+              targetUser.balance += amt;
+              dbStore.updateUser(targetUid, { balance: targetUser.balance });
+              dbStore.logActivity(targetUid, 'ADMIN_CREDIT', `+₹${amt} by Admin (${reason})`);
+              dbStore.saveData();
+              try {
+                await this.sendMessage(
+                  targetUid,
+                  `💰 <b>WALLET CREDITED BY ADMIN!</b>\n\n` +
+                  `✅ Amount Added: <b>+₹${amt.toFixed(2)}</b>\n` +
+                  `💳 New Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+                  `📝 Note: <i>${reason}</i>`
+                );
+              } catch (e) {}
+              await this.sendMessage(
+                chatId,
+                `✅ <b>SUCCESS: +₹${amt.toFixed(2)} CREDITED!</b>\n\n` +
+                `👤 User: <b>${targetUser.first_name}</b> (@${targetUser.username || targetUid})\n` +
+                `🆔 User ID: <code>${targetUid}</code>\n` +
+                `💳 Updated Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+                `📝 Note: <i>${reason}</i>`,
+                { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]] }
+              );
+              return;
+            } else {
+              await this.sendMessage(chatId, `❌ User ID <code>${targetUid}</code> not found.`);
+              return;
+            }
+          }
+        }
+        await this.sendMessage(
+          chatId,
+          `ℹ️ <b>Add Balance Usage:</b>\n<code>/addbalance &lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\nExample:\n<code>/addbalance ${chatId} 500 Promo</code>`
+        );
+        return;
+      }
+
+      if (lowerText.startsWith('/deduct')) {
+        const parts = text.split(/\s+/);
+        if (parts.length >= 3) {
+          const targetUid = Number(parts[1]);
+          const amt = Number(parts[2]);
+          const reason = parts.slice(3).join(' ') || 'Admin Telegram Deduction';
+          if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
+            const targetUser = dbStore.getData().users.find(u => u.user_id === targetUid);
+            if (targetUser) {
+              targetUser.balance = Math.max(0, targetUser.balance - amt);
+              dbStore.updateUser(targetUid, { balance: targetUser.balance });
+              dbStore.logActivity(targetUid, 'ADMIN_DEBIT', `-₹${amt} by Admin (${reason})`);
+              dbStore.saveData();
+              try {
+                await this.sendMessage(
+                  targetUid,
+                  `⚠️ <b>WALLET BALANCE ADJUSTMENT</b>\n\n` +
+                  `🔻 Amount Deducted: <b>-₹${amt.toFixed(2)}</b>\n` +
+                  `💳 Current Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+                  `📝 Note: <i>${reason}</i>`
+                );
+              } catch (e) {}
+              await this.sendMessage(
+                chatId,
+                `✅ <b>SUCCESS: -₹${amt.toFixed(2)} DEDUCTED!</b>\n\n` +
+                `👤 User: <b>${targetUser.first_name}</b> (@${targetUser.username || targetUid})\n` +
+                `🆔 User ID: <code>${targetUid}</code>\n` +
+                `💳 Updated Balance: <b>₹${targetUser.balance.toFixed(2)}</b>\n` +
+                `📝 Note: <i>${reason}</i>`,
+                { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]] }
+              );
+              return;
+            } else {
+              await this.sendMessage(chatId, `❌ User ID <code>${targetUid}</code> not found.`);
+              return;
+            }
+          }
+        }
+        await this.sendMessage(
+          chatId,
+          `ℹ️ <b>Deduct Balance Usage:</b>\n<code>/deduct &lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\nExample:\n<code>/deduct ${chatId} 100 Adjustment</code>`
+        );
+        return;
+      }
+
+      if (lowerText.startsWith('/users')) {
+        const allUsers = dbStore.getData().users;
+        const totalBal = allUsers.reduce((a, b) => a + b.balance, 0);
+        let userListText = `👥 <b>ACTIVE SYSTEM USERS (${allUsers.length})</b>\n💰 Total User Funds: ₹${totalBal.toFixed(2)}\n━━━━━━━━━━━━━━━━━━\n`;
+        allUsers.slice(0, 10).forEach(u => {
+          userListText += `• <b>${u.first_name}</b> (@${u.username || 'none'})\n  🆔 <code>${u.user_id}</code> | 💰 ₹${u.balance.toFixed(2)} | 🛒 ${u.orders_count} orders\n`;
+        });
+        if (allUsers.length > 10) userListText += `\n<i>...and ${allUsers.length - 10} more in Web Admin Hub.</i>`;
+        await this.sendMessage(chatId, userListText, {
+          inline_keyboard: [
+            [{ text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() } }],
+            [{ text: '🔙 Back to Terminal', callback_data: 'admin_panel' }]
+          ]
+        });
+        return;
+      }
+
+      if (lowerText.startsWith('/stock')) {
+        const data = dbStore.getData();
+        const prods = data.products;
+        const unusedKeys = data.productKeys.filter(k => k.is_used === 0);
+        let stockMsg = `📦 <b>CATALOG & VAULT STOCK</b>\n━━━━━━━━━━━━━━━━━━\n`;
+        prods.forEach(p => {
+          const avail = unusedKeys.filter(k => k.product_id === p.id).length;
+          stockMsg += `• <b>${p.panel_name} (${p.name})</b>\n  Price: ₹${p.price_inr} | Stock: <b>${avail} ready</b>\n`;
+        });
+        await this.sendMessage(chatId, stockMsg, {
+          inline_keyboard: [
+            [{ text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() } }],
+            [{ text: '🔙 Back to Terminal', callback_data: 'admin_panel' }]
+          ]
+        });
+        return;
+      }
+
+      if (lowerText.startsWith('/broadcast')) {
+        const parts = text.split(/\s+/);
+        if (parts.length >= 2) {
+          const bMsg = text.substring(text.indexOf(parts[1])).trim();
+          const allUsers = dbStore.getData().users;
+          await this.sendMessage(chatId, `⏳ Sending broadcast to ${allUsers.length} users...`);
+          const result = await this.sendBroadcast({
+            targetAudience: 'ALL_USERS',
+            text: bMsg,
+            recipients: allUsers
+          });
+          await this.sendMessage(
+            chatId,
+            `📢 <b>BROADCAST SENT!</b>\n\n✅ Delivered: <b>${result.sent}</b> | ❌ Failed: <b>${result.failed}</b>`
+          );
+          return;
+        }
+        dbStore.setFsmState(user.user_id, 'admin_wait_broadcast');
+        await this.sendMessage(chatId, '📢 <b>Please send your broadcast announcement message text:</b>\n\n<i>Type /cancel to abort.</i>');
+        return;
+      }
+    }
+
+    if (lowerText.startsWith('/setadmin') || lowerText.startsWith('/claimadmin')) {
+      const parts = text.split(/\s+/);
+      const newAdminId = parts.length >= 2 ? Number(parts[1]) : chatId;
+      if (newAdminId && !isNaN(newAdminId)) {
+        dbStore.updateSettings({ admin_id: newAdminId });
+        await this.sendMessage(
+          chatId,
+          `👑 <b>MASTER ADMIN ID UPDATED!</b>\n\n` +
+          `✅ Registered Admin Chat ID: <code>${newAdminId}</code>\n` +
+          `You now have full master access! Type <code>@admin</code> or <code>/admin</code> to launch the Admin Terminal.`,
+          { inline_keyboard: [[{ text: '⚙️ Launch Admin Terminal', callback_data: 'admin_panel' }]] }
+        );
+        return;
+      }
+    }
+
+    // Admin Panel Triggers: @admin, /admin, admin, /panel, /dashboard, !admin, @admin_bot, /adminhub
+    const isAdminTrigger = (
+      lowerText === '@admin' ||
+      lowerText.startsWith('@admin ') ||
+      lowerText.startsWith('/admin') ||
+      lowerText === 'admin' ||
+      lowerText === '/panel' ||
+      lowerText === '/dashboard' ||
+      lowerText === '!admin' ||
+      lowerText.startsWith('@admin_bot') ||
+      lowerText === '/adminhub'
+    );
+
+    if (isAdminTrigger) {
+      if (this.isAdmin(user, chatId)) {
         await this.sendAdminPanel(chatId, user);
       } else {
-        await this.sendMessage(chatId, '⛔ <b>Access Denied</b>\nYou do not have master administrator privileges.');
+        await this.sendMessage(
+          chatId,
+          `⛔ <b>MASTER ADMIN ACCESS RESTRICTED</b>\n\n` +
+          `👤 Your Telegram Name: <b>${user.first_name}</b> (@${user.username || 'none'})\n` +
+          `🆔 Your User ID: <code>${user.user_id}</code>\n` +
+          `💬 Your Chat ID: <code>${chatId}</code>\n\n` +
+          `🔒 <i>This terminal requires Master Administrator authorization.</i>\n\n` +
+          `👉 <b>How to activate Admin Access:</b>\n` +
+          `1️⃣ Open your Web Admin Hub ➔ Settings\n` +
+          `2️⃣ Set <b>Admin ID</b> to <code>${chatId}</code> and save.\n` +
+          `3️⃣ Or send <code>/setadmin ${chatId}</code> right here in bot to bind your account as Admin.\n\n` +
+          `<i>Once configured, typing <code>@admin</code> or <code>/admin</code> opens the Admin Panel directly inside Telegram!</i>`
+        );
       }
       return;
     }
@@ -1376,7 +1730,133 @@ class TelegramEngine {
       return;
     }
 
-    if (data === 'admin_panel' && user.user_id === settings.admin_id) {
+    if (data === 'admin_panel' || data === 'admin_refresh') {
+      if (this.isAdmin(user, chatId)) {
+        await this.sendAdminPanel(chatId, user, messageId);
+      } else {
+        await this.answerCallback(cb.id, '⛔ Master admin access denied!', true);
+      }
+      return;
+    }
+
+    if (data === 'admin_add_bal') {
+      if (!this.isAdmin(user, chatId)) {
+        await this.answerCallback(cb.id, '⛔ Admin only', true);
+        return;
+      }
+      dbStore.setFsmState(user.user_id, 'admin_wait_add_bal');
+      await this.editMessageText(
+        chatId,
+        messageId,
+        `💳 <b>+ ADD BALANCE TO USER</b>\n\n` +
+        `👇 <b>Reply with User ID and Amount (and optional reason):</b>\n\n` +
+        `<code>&lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\n` +
+        `📌 <b>Example:</b>\n` +
+        `<code>${chatId} 500 Payment confirmation</code>\n\n` +
+        `<i>Send /cancel to abort.</i>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (data === 'admin_ded_bal') {
+      if (!this.isAdmin(user, chatId)) {
+        await this.answerCallback(cb.id, '⛔ Admin only', true);
+        return;
+      }
+      dbStore.setFsmState(user.user_id, 'admin_wait_ded_bal');
+      await this.editMessageText(
+        chatId,
+        messageId,
+        `🔻 <b>- DEDUCT BALANCE FROM USER</b>\n\n` +
+        `👇 <b>Reply with User ID and Amount (and optional reason):</b>\n\n` +
+        `<code>&lt;User_ID&gt; &lt;Amount&gt; [Reason]</code>\n\n` +
+        `📌 <b>Example:</b>\n` +
+        `<code>${chatId} 150 Refund adjustment</code>\n\n` +
+        `<i>Send /cancel to abort.</i>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (data === 'admin_users') {
+      if (!this.isAdmin(user, chatId)) return;
+      const allUsers = dbStore.getData().users;
+      const totalBal = allUsers.reduce((a, b) => a + b.balance, 0);
+      let userListText = `👥 <b>ACTIVE SYSTEM USERS (${allUsers.length})</b>\n💰 Total User Funds: ₹${totalBal.toFixed(2)}\n━━━━━━━━━━━━━━━━━━\n`;
+      allUsers.slice(0, 10).forEach(u => {
+        userListText += `• <b>${u.first_name}</b> (@${u.username || 'none'})\n  🆔 <code>${u.user_id}</code> | 💰 ₹${u.balance.toFixed(2)} | 🛒 ${u.orders_count} orders\n`;
+      });
+      if (allUsers.length > 10) userListText += `\n<i>...and ${allUsers.length - 10} more in Web Admin Hub.</i>`;
+      await this.editMessageText(chatId, messageId, userListText, {
+        inline_keyboard: [
+          [{ text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() } }],
+          [{ text: '💳 + Add Balance', callback_data: 'admin_add_bal' }, { text: '🔻 - Deduct Balance', callback_data: 'admin_ded_bal' }],
+          [{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      });
+      return;
+    }
+
+    if (data === 'admin_stock') {
+      if (!this.isAdmin(user, chatId)) return;
+      const d = dbStore.getData();
+      const prods = d.products;
+      const unusedKeys = d.productKeys.filter(k => k.is_used === 0);
+      let stockMsg = `📦 <b>CATALOG & VAULT STOCK</b>\n━━━━━━━━━━━━━━━━━━\n`;
+      prods.forEach(p => {
+        const avail = unusedKeys.filter(k => k.product_id === p.id).length;
+        stockMsg += `• <b>${p.panel_name} (${p.name})</b>\n  Price: ₹${p.price_inr} | Stock: <b>${avail} ready</b>\n`;
+      });
+      await this.editMessageText(chatId, messageId, stockMsg, {
+        inline_keyboard: [
+          [{ text: '🚀 Manage in Web Admin Hub', web_app: { url: this.getWebAppUrl() } }],
+          [{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      });
+      return;
+    }
+
+    if (data === 'admin_tickets') {
+      if (!this.isAdmin(user, chatId)) return;
+      const tickets = dbStore.getData().tickets;
+      const open = tickets.filter(t => t.status === 'Open');
+      let ticketMsg = `🎫 <b>SUPPORT TICKETS (${open.length} OPEN / ${tickets.length} TOTAL)</b>\n━━━━━━━━━━━━━━━━━━\n`;
+      if (open.length === 0) {
+        ticketMsg += `<i>All customer inquiries resolved! Zero open tickets.</i>`;
+      } else {
+        open.slice(0, 5).forEach(t => {
+          ticketMsg += `• <b>Ticket #${t.id}</b> from User <code>${t.user_id}</code>:\n  "${t.message.substring(0, 60)}"\n  <i>Reply with: /reply_${t.user_id}_YourReply</i>\n\n`;
+        });
+      }
+      await this.editMessageText(chatId, messageId, ticketMsg, {
+        inline_keyboard: [
+          [{ text: '🚀 Manage Tickets in Web Hub', web_app: { url: this.getWebAppUrl() } }],
+          [{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      });
+      return;
+    }
+
+    if (data === 'admin_broadcast') {
+      if (!this.isAdmin(user, chatId)) return;
+      dbStore.setFsmState(user.user_id, 'admin_wait_broadcast');
+      await this.editMessageText(
+        chatId,
+        messageId,
+        `📢 <b>SYSTEM-WIDE BROADCAST</b>\n\n` +
+        `Send your broadcast text message now. It will be pushed in real-time to all registered bot users.\n\n` +
+        `<i>Send /cancel to abort.</i>`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (data === 'admin_toggle_maint') {
+      if (!this.isAdmin(user, chatId)) return;
+      const newStatus = settings.bot_status === 'ON' ? 'OFF' : 'ON';
+      dbStore.updateSettings({ bot_status: newStatus });
+      await this.answerCallback(cb.id, `Bot status set to ${newStatus}`, true);
       await this.sendAdminPanel(chatId, user, messageId);
       return;
     }
@@ -1399,7 +1879,6 @@ class TelegramEngine {
   }
 
   private getMainMenuKeyboard(user: User) {
-    const settings = dbStore.getData().settings;
     const buttons: any[] = [
       [
         { text: '🛒 Product Store', callback_data: 'shop_categories' },
@@ -1419,9 +1898,9 @@ class TelegramEngine {
       ]
     ];
 
-    if (user.user_id === settings.admin_id) {
+    if (this.isAdmin(user, user.user_id)) {
       buttons.push([
-        { text: '⚙️ Master Admin Terminal', callback_data: 'admin_panel' }
+        { text: '⚙️ Master Admin Terminal (@admin)', callback_data: 'admin_panel' }
       ]);
     }
 
@@ -1766,22 +2245,65 @@ class TelegramEngine {
 
   private async sendAdminPanel(chatId: number, user: User, messageId?: number) {
     const data = dbStore.getData();
+    const settings = data.settings;
     const totalRevenue = data.users.reduce((acc, u) => acc + u.spent, 0);
+    const totalUserBal = data.users.reduce((acc, u) => acc + u.balance, 0);
     const totalKeys = data.productKeys.filter(k => k.is_used === 0).length;
     const openTickets = data.tickets.filter(t => t.status === 'Open').length;
+    const vipCount = data.users.filter(u => u.is_vip === 1).length;
+    const resellerCount = data.users.filter(u => u.is_reseller === 1).length;
+    const webAppUrl = this.getWebAppUrl();
 
-    const text = `⚙️ <b>MASTER ADMINISTRATOR TERMINAL</b>\n\n` +
-      `📊 <b>System Statistics:</b>\n` +
-      `• Total Users: <b>${data.users.length}</b>\n` +
+    const text = `⚙️ <b>MASTER ADMINISTRATOR TERMINAL</b> ⚙️\n\n` +
+      `👑 <b>Admin:</b> ${user.first_name} (@${user.username || 'admin'})\n` +
+      `🆔 <b>Admin Chat ID:</b> <code>${chatId}</code>\n` +
+      `🟢 <b>System Status:</b> <b>${settings.bot_status === 'ON' ? 'ONLINE & ACTIVE' : 'MAINTENANCE MODE'}</b>\n\n` +
+      `📊 <b>LIVE SYSTEM METRICS:</b>\n` +
+      `• Total Users: <b>${data.users.length}</b> (🌟 ${resellerCount} Resellers | 💎 ${vipCount} VIPs)\n` +
       `• Gross Sales: <b>₹${totalRevenue.toLocaleString()}</b>\n` +
-      `• Keys in Vault: <b>${totalKeys} ready</b>\n` +
-      `• Total Orders: <b>${data.orders.length}</b>\n` +
+      `• Total User Funds in Wallets: <b>₹${totalUserBal.toFixed(2)}</b>\n` +
+      `• Keys in Vault: <b>${totalKeys} ready</b> (${data.products.length} Products)\n` +
+      `• Total Orders Processed: <b>${data.orders.length}</b>\n` +
       `• Open Support Tickets: <b>${openTickets}</b>\n\n` +
-      `<i>Full administrative workstation available at your Web Admin Dashboard.</i>`;
+      `⚡ <b>Quick Bot Slash Commands:</b>\n` +
+      `• <code>/addbalance &lt;user_id&gt; &lt;amount&gt;</code> - Credit wallet\n` +
+      `• <code>/deduct &lt;user_id&gt; &lt;amount&gt;</code> - Deduct wallet\n` +
+      `• <code>/users</code> - View active users & balances\n` +
+      `• <code>/stock</code> - View product stock\n` +
+      `• <code>/broadcast &lt;message&gt;</code> - Message all users\n` +
+      `• <code>/setadmin ${chatId}</code> - Bind current Chat ID\n\n` +
+      `👇 <i>Use the interactive buttons below or launch the Full Web Admin Hub:</i>`;
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+        [
+          { text: '🚀 Launch Admin Hub (Mini App)', web_app: { url: webAppUrl } }
+        ],
+        [
+          { text: '🌐 Open Admin Hub in Browser', url: webAppUrl }
+        ],
+        [
+          { text: '💳 + Add Balance', callback_data: 'admin_add_bal' },
+          { text: '🔻 - Deduct Balance', callback_data: 'admin_ded_bal' }
+        ],
+        [
+          { text: '👥 View Users', callback_data: 'admin_users' },
+          { text: '📦 Products & Vault', callback_data: 'admin_stock' }
+        ],
+        [
+          { text: `🎫 Tickets (${openTickets})`, callback_data: 'admin_tickets' },
+          { text: '📢 Send Broadcast', callback_data: 'admin_broadcast' }
+        ],
+        [
+          {
+            text: settings.bot_status === 'ON' ? '🟢 Bot: Online (Click to Pause)' : '🔴 Bot: Maintenance (Click to Resume)',
+            callback_data: 'admin_toggle_maint'
+          }
+        ],
+        [
+          { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh' },
+          { text: '🔙 Main Menu', callback_data: 'main_menu' }
+        ]
       ]
     };
 

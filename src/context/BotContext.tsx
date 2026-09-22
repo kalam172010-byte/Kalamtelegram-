@@ -77,8 +77,11 @@ export interface BotContextType {
     name: string;
     username: string;
     bot_token: string;
+    admin_id?: number;
+    admin_chat_id?: number;
     description?: string;
     theme_color?: string;
+    clone_products?: boolean;
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => BotInstance;
@@ -168,10 +171,21 @@ export interface BotContextType {
 const BotContext = createContext<BotContextType | null>(null);
 
 export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load local persistence or defaults
+  // Load local persistence or defaults (clearing any old demo users/products)
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('kalam_bot_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    if (saved) {
+      try {
+        const parsed: User[] = JSON.parse(saved);
+        // Filter out legacy demo accounts (58941209, 77489012, 88192031) if present
+        const demoUids = [58941209, 77489012, 88192031];
+        const filtered = parsed.filter(u => !demoUids.includes(u.user_id));
+        if (filtered.length > 0) return filtered;
+      } catch (e) {
+        console.error('Error parsing stored users', e);
+      }
+    }
+    return INITIAL_USERS;
   });
 
   const [currentUserId, setCurrentUserIdState] = useState<number>(() => {
@@ -189,39 +203,63 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('kalam_bot_products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // If it contains legacy hardcoded demo IDs (1 to 11 with known dummy names) and user never added custom ones, start clean
+        const isLegacyDemo = Array.isArray(parsed) && parsed.some(p => p.panel_name === 'MST PANEL' || p.panel_name === 'DRIP PANEL');
+        if (!isLegacyDemo && Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error('Error parsing products', e);
+      }
+    }
+    return INITIAL_PRODUCTS;
   });
 
   const [productKeys, setProductKeys] = useState<ProductKey[]>(() => {
     const saved = localStorage.getItem('kalam_bot_keys');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCT_KEYS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.some(k => k.key_text?.includes('MST-24H'))) {
+          return [];
+        }
+        return parsed;
+      } catch (e) {
+        console.error('Error parsing product keys', e);
+      }
+    }
+    return INITIAL_PRODUCT_KEYS;
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('kalam_bot_orders');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 1,
-        user_id: 58941209,
-        product_name: 'ANDROID NON ROOT PANEL - MST PANEL (24 Hours)',
-        price_paid: 60.0,
-        delivered_key: 'MST-24H-SAMPLE-KEY-99',
-        purchase_date: '2026-02-18 16:30:00'
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((o: any) => o.user_id !== 58941209);
+        }
+      } catch (e) {
+        console.error('Error parsing orders', e);
       }
-    ];
+    }
+    return [];
   });
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const saved = localStorage.getItem('kalam_bot_tickets');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 101,
-        user_id: 58941209,
-        message: 'How do I bypass Android 14 installation permissions for MST Panel?',
-        status: 'Open',
-        created_at: '2026-02-20 11:15:00'
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t: any) => t.user_id !== 58941209);
+        }
+      } catch (e) {
+        console.error('Error parsing tickets', e);
       }
-    ];
+    }
+    return [];
   });
 
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
@@ -246,15 +284,17 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [logs, setLogs] = useState<ActivityLog[]>(() => {
     const saved = localStorage.getItem('kalam_bot_logs');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 1,
-        user_id: 58941209,
-        action: 'ACCOUNT_CREATED',
-        details: 'User joined telegram grid',
-        timestamp: '2026-02-14 14:22:10'
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((l: any) => l.user_id !== 58941209);
+        }
+      } catch (e) {
+        console.error('Error parsing logs', e);
       }
-    ];
+    }
+    return [];
   });
 
   const [settings, setSettings] = useState<Settings>(() => {
@@ -417,16 +457,24 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     name: string;
     username: string;
     bot_token: string;
+    admin_id?: number;
+    admin_chat_id?: number;
     description?: string;
     theme_color?: string;
+    clone_products?: boolean;
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => {
     const cleanUsername = params.username.replace(/^@/, '').trim();
+    const adminIdToUse = Number(params.admin_id || params.admin_chat_id) || settings.admin_id || 12846461;
+    const shouldClone = params.clone_products !== false;
+
     const newBot: BotInstance = {
       id: 'bot_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       owner_id: currentUserId,
       owner_email: currentUser.email || 'user@panel.io',
+      admin_id: adminIdToUse,
+      admin_chat_id: adminIdToUse,
       name: params.name.trim() || 'My Telegram Store Bot',
       username: cleanUsername || 'MyStoreBot',
       bot_token: params.bot_token.trim(),
@@ -438,16 +486,16 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         upi_id: params.payment_gateway?.upi_id || '',
         merchant_name: params.payment_gateway?.merchant_name || params.name,
         qr_image_url: params.payment_gateway?.qr_image_url || 'https://fampay.anujbots.xyz/qr.php',
-        gateway_provider: params.payment_gateway?.gateway_provider || 'fampay',
+        gateway_provider: params.payment_gateway?.gateway_provider || 'famgateway',
         api_key: params.payment_gateway?.api_key || '',
         secret_key: params.payment_gateway?.secret_key || ('FP_SEC_' + Math.random().toString(36).substring(2, 10)),
-        verify_endpoint: params.payment_gateway?.verify_endpoint || 'https://fampay.anujbots.xyz/verify.php',
+        verify_endpoint: params.payment_gateway?.verify_endpoint || 'https://famgateway.in/api/create-order.php',
         usdt_trc20_address: params.payment_gateway?.usdt_trc20_address || '',
         usdt_to_inr_rate: params.payment_gateway?.usdt_to_inr_rate || 90.0,
         auto_approve: params.payment_gateway?.auto_approve ?? true
       },
       reseller_api: {
-        provider_name: params.reseller_api?.provider_name || 'Reseller Provider API',
+        provider_name: params.reseller_api?.provider_name || 'BantiBhaiya Reseller Gateway',
         api_url: params.reseller_api?.api_url || 'https://bantibhaiya.to/api/reseller_v1.php',
         api_key: params.reseller_api?.api_key || '',
         master_key: params.reseller_api?.master_key || '',
@@ -455,12 +503,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auto_fallback: params.reseller_api?.auto_fallback ?? true,
         sync_balance: params.reseller_api?.sync_balance || 0
       },
-      products: [...products],
-      productKeys: [...productKeys],
+      products: shouldClone ? [...products] : [],
+      productKeys: shouldClone ? [...productKeys] : [],
       settings: {
         ...settings,
+        admin_id: adminIdToUse,
         bot_token: params.bot_token.trim(),
         bot_username: cleanUsername || 'MyStoreBot',
+        famgateway_api_key: params.payment_gateway?.api_key || '',
         fampay_upi_id: params.payment_gateway?.upi_id || '',
         bantibhaiya_api_key: params.reseller_api?.api_key || '',
         bantibhaiya_master_key: params.reseller_api?.master_key || '',
@@ -478,18 +528,28 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBotId(newBot.id);
     setSettings(prev => ({
       ...prev,
+      admin_id: adminIdToUse,
       bot_token: newBot.bot_token,
-      bot_username: newBot.username
+      bot_username: newBot.username,
+      famgateway_api_key: newBot.payment_gateway?.api_key || prev.famgateway_api_key,
+      fampay_upi_id: newBot.payment_gateway?.upi_id || prev.fampay_upi_id,
+      bantibhaiya_api_key: newBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
+      bantibhaiya_master_key: newBot.reseller_api?.master_key || prev.bantibhaiya_master_key,
+      bantibhaiya_api_url: newBot.reseller_api?.api_url || prev.bantibhaiya_api_url
     }));
 
-    // Immediately push new bot token to server and restart polling engine
+    // Immediately push new bot settings to server and restart polling engine
     fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         bot_token: newBot.bot_token,
         bot_username: newBot.username,
-        admin_id: settings.admin_id
+        admin_id: adminIdToUse,
+        famgateway_api_key: newBot.payment_gateway?.api_key,
+        bantibhaiya_api_key: newBot.reseller_api?.api_key,
+        bantibhaiya_master_key: newBot.reseller_api?.master_key,
+        bantibhaiya_api_url: newBot.reseller_api?.api_url
       })
     }).catch(() => {});
 
@@ -506,7 +566,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     }).catch(() => {});
 
-    logActivity(currentUserId, 'BOT_CREATED', `Created new bot @${newBot.username}`);
+    logActivity(currentUserId, 'BOT_CREATED', `Created new bot @${newBot.username} (Admin ID: ${adminIdToUse})`);
     return newBot;
   }, [currentUserId, currentUser, products, productKeys, settings, logActivity]);
 
@@ -576,29 +636,41 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBotId(botId);
     const targetBot = bots.find(b => b.id === botId);
     if (targetBot) {
+      const targetAdminId = targetBot.admin_id || targetBot.admin_chat_id || targetBot.settings?.admin_id || settings.admin_id || 12846461;
+      const targetFamKey = targetBot.payment_gateway?.api_key || targetBot.settings?.famgateway_api_key || settings.famgateway_api_key || '';
+      const targetBantiKey = targetBot.reseller_api?.api_key || targetBot.settings?.bantibhaiya_api_key || settings.bantibhaiya_api_key || '';
+      const targetBantiMaster = targetBot.reseller_api?.master_key || targetBot.settings?.bantibhaiya_master_key || settings.bantibhaiya_master_key || '';
+      const targetBantiUrl = targetBot.reseller_api?.api_url || targetBot.settings?.bantibhaiya_api_url || 'https://bantibhaiya.to/api/reseller_v1.php';
+
       setSettings(prev => ({
         ...prev,
+        admin_id: targetAdminId,
         bot_token: targetBot.bot_token,
         bot_username: targetBot.username,
+        famgateway_api_key: targetFamKey,
         fampay_upi_id: targetBot.payment_gateway?.upi_id || prev.fampay_upi_id,
-        bantibhaiya_api_key: targetBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
-        bantibhaiya_master_key: targetBot.reseller_api?.master_key || prev.bantibhaiya_master_key
+        bantibhaiya_api_key: targetBantiKey,
+        bantibhaiya_master_key: targetBantiMaster,
+        bantibhaiya_api_url: targetBantiUrl
       }));
 
-      // Notify backend server to switch polling to this bot's token
+      // Notify backend server to switch polling & admin auth to this bot's token & admin_id
       fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          admin_id: targetAdminId,
           bot_token: targetBot.bot_token,
           bot_username: targetBot.username,
+          famgateway_api_key: targetFamKey,
           fampay_upi_id: targetBot.payment_gateway?.upi_id,
-          bantibhaiya_api_key: targetBot.reseller_api?.api_key,
-          bantibhaiya_master_key: targetBot.reseller_api?.master_key
+          bantibhaiya_api_key: targetBantiKey,
+          bantibhaiya_master_key: targetBantiMaster,
+          bantibhaiya_api_url: targetBantiUrl
         })
       }).catch(() => {});
     }
-  }, [bots]);
+  }, [bots, settings.admin_id, settings.famgateway_api_key, settings.bantibhaiya_api_key, settings.bantibhaiya_master_key]);
 
   const duplicateBot = useCallback((botId: string) => {
     const target = bots.find(b => b.id === botId);
@@ -2215,11 +2287,128 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         return;
       }
 
-      if (cmd === '/admin') {
+      if (
+        cmd === '/admin' ||
+        cmd === '@admin' ||
+        cmd === 'admin' ||
+        cmd === '/panel' ||
+        cmd === '/dashboard' ||
+        cmd === '!admin' ||
+        cmd.startsWith('@admin')
+      ) {
         setCurrentFsmState(null);
         setFsmData({});
-        logActivity(currentUser.user_id, 'OPEN_ADMIN_PANEL');
-        pushBotMessage("⚙️ <b>Advanced Admin Terminal</b>\n<i>Authorized Access Granted.</i>", getAdminKeyboard());
+        const isAdminUser = (
+          currentUser.user_id === settings.admin_id ||
+          !settings.admin_id ||
+          settings.admin_id === 0 ||
+          currentUser.is_reseller === 1 ||
+          currentUser.username?.toLowerCase() === 'kalam172010'
+        );
+
+        if (isAdminUser) {
+          logActivity(currentUser.user_id, 'OPEN_ADMIN_PANEL');
+          pushBotMessage(
+            "⚙️ <b>MASTER ADMINISTRATOR TERMINAL</b> ⚙️\n\n" +
+            `👑 <b>Admin:</b> ${currentUser.first_name} (@${currentUser.username || 'admin'})\n` +
+            `🆔 <b>Admin Chat ID:</b> <code>${currentUser.user_id}</code>\n` +
+            `🟢 <b>System Status:</b> <b>${settings.bot_status === 'ON' ? 'ONLINE & ACTIVE' : 'MAINTENANCE'}</b>\n\n` +
+            `📊 <b>LIVE METRICS:</b>\n` +
+            `• Registered Users: <b>${users.length}</b>\n` +
+            `• Active Products: <b>${products.length}</b>\n` +
+            `• Unused Vault Keys: <b>${productKeys.filter(k => !k.is_used).length}</b>\n` +
+            `• Gross Sales: <b>${fmtCurr(users.reduce((a, b) => a + b.spent, 0))}</b>\n\n` +
+            `<i>Choose an administrative action below:</i>`,
+            getAdminKeyboard()
+          );
+        } else {
+          pushBotMessage(
+            `⛔ <b>MASTER ADMIN ACCESS RESTRICTED</b>\n\n` +
+            `👤 Your Name: <b>${currentUser.first_name}</b> (@${currentUser.username || 'none'})\n` +
+            `🆔 Your User ID: <code>${currentUser.user_id}</code>\n` +
+            `💬 Your Chat ID: <code>${currentUser.user_id}</code>\n\n` +
+            `🔒 <i>This terminal requires Master Administrator authorization.</i>\n\n` +
+            `👉 <b>How to activate Admin Access:</b>\n` +
+            `1️⃣ Go to Web Admin Hub ➔ Settings\n` +
+            `2️⃣ Set <b>Admin ID</b> to <code>${currentUser.user_id}</code>\n` +
+            `3️⃣ Or type <code>/setadmin ${currentUser.user_id}</code>\n\n` +
+            `<i>Type <code>@admin</code> or <code>/admin</code> to launch after setting your ID!</i>`
+          );
+        }
+        return;
+      }
+
+      if (cmd.startsWith('/setadmin')) {
+        const parts = trimmed.split(/\s+/);
+        const newAdminId = parts.length > 1 ? Number(parts[1]) : currentUser.user_id;
+        if (newAdminId && !isNaN(newAdminId)) {
+          setSettings(prev => ({ ...prev, admin_id: newAdminId }));
+          pushBotMessage(
+            `👑 <b>MASTER ADMIN ID UPDATED!</b>\n\n` +
+            `✅ Bound Admin ID: <code>${newAdminId}</code>\n` +
+            `You now have full master access. Type <code>@admin</code> or <code>/admin</code> to launch.`,
+            getAdminKeyboard()
+          );
+          return;
+        }
+      }
+
+      if (cmd.startsWith('/addbalance') || cmd.startsWith('/credit')) {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length >= 3) {
+          const targetUid = Number(parts[1]);
+          const amt = Number(parts[2]);
+          const reason = parts.slice(3).join(' ') || 'Admin Credit';
+          if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
+            const targetUser = users.find(u => u.user_id === targetUid);
+            if (targetUser) {
+              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: u.balance + amt } : u));
+              pushBotMessage(
+                `✅ <b>SUCCESS: +₹${amt} CREDITED!</b>\n\n` +
+                `👤 User: <b>${targetUser.first_name}</b>\n` +
+                `🆔 ID: <code>${targetUid}</code>\n` +
+                `💳 New Balance: <b>₹${(targetUser.balance + amt).toFixed(2)}</b>\n` +
+                `📝 Note: <i>${reason}</i>`,
+                getAdminKeyboard()
+              );
+              return;
+            } else {
+              pushBotMessage(`❌ User ID <code>${targetUid}</code> not found.`);
+              return;
+            }
+          }
+        }
+        pushBotMessage(`ℹ️ <b>Add Balance Usage:</b>\n<code>/addbalance <user_id> <amount> [reason]</code>`);
+        return;
+      }
+
+      if (cmd.startsWith('/deduct')) {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length >= 3) {
+          const targetUid = Number(parts[1]);
+          const amt = Number(parts[2]);
+          const reason = parts.slice(3).join(' ') || 'Admin Deduction';
+          if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
+            const targetUser = users.find(u => u.user_id === targetUid);
+            if (targetUser) {
+              const newBal = Math.max(0, targetUser.balance - amt);
+              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: newBal } : u));
+              pushBotMessage(
+                `✅ <b>SUCCESS: -₹${amt} DEDUCTED!</b>\n\n` +
+                `👤 User: <b>${targetUser.first_name}</b>\n` +
+                `🆔 ID: <code>${targetUid}</code>\n` +
+                `💳 New Balance: <b>₹${newBal.toFixed(2)}</b>\n` +
+                `📝 Note: <i>${reason}</i>`,
+                getAdminKeyboard()
+              );
+              return;
+            } else {
+              pushBotMessage(`❌ User ID <code>${targetUid}</code> not found.`);
+              return;
+            }
+          }
+        }
+        pushBotMessage(`ℹ️ <b>Deduct Balance Usage:</b>\n<code>/deduct <user_id> <amount> [reason]</code>`);
         return;
       }
 
@@ -2859,6 +3048,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           if (b.id === activeBotId) {
             return {
               ...b,
+              ...(newSettings.admin_id ? { admin_id: newSettings.admin_id, admin_chat_id: newSettings.admin_id } : {}),
               ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
               ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
               payment_gateway: {
@@ -2881,6 +3071,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       });
 
       setDoc(doc(db, 'bots', activeBotId), {
+        ...(newSettings.admin_id ? { admin_id: newSettings.admin_id } : {}),
         ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
         ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
         payment_gateway: {
