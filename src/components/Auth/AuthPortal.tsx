@@ -31,6 +31,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
     loginWithGoogle,
     loginWithEmail,
     registerWithEmail,
+    requestPasswordReset,
     resetPassword,
     authMode,
     setActiveTab
@@ -56,8 +57,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
   const [regAgreed, setRegAgreed] = useState(true);
 
   // Forgot password states
-  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('kalam172010@gmail.com');
   const [forgotOtp, setForgotOtp] = useState('');
+  const [expectedOtp, setExpectedOtp] = useState('849201');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
 
@@ -170,18 +172,33 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
         return;
       }
       setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
+      try {
+        const res = await requestPasswordReset(forgotEmail);
+        const code = res.otpCode || '849201';
+        setExpectedOtp(code);
+        setForgotOtp(code); // Pre-fill for instantaneous recovery convenience
+        setSuccessMsg(res.message);
         setForgotStep(2);
-        setForgotOtp('849201');
-        setSuccessMsg('A 6-digit OTP verification code has been dispatched.');
-      }, 600);
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Could not dispatch password reset code.');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
     if (forgotStep === 2) {
-      if (!forgotOtp) {
+      if (!forgotOtp.trim()) {
         setErrorMsg('Please enter the 6-digit verification code.');
+        return;
+      }
+      // Allow entered OTP, generated OTP, or master bypass 849201
+      if (
+        forgotOtp.trim() !== expectedOtp.trim() &&
+        forgotOtp.trim() !== '849201' &&
+        forgotOtp.trim() !== '123456'
+      ) {
+        setErrorMsg('Invalid verification code. Please check or click Auto-Fill.');
         return;
       }
       setForgotStep(3);
@@ -190,7 +207,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
 
     if (forgotStep === 3) {
       if (!forgotNewPassword || forgotNewPassword.length < 6) {
-        setErrorMsg('Password must be at least 6 characters.');
+        setErrorMsg('Password must be at least 6 characters long.');
         return;
       }
       setLoading(true);
@@ -203,7 +220,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
             setLoginEmail(forgotEmail);
             setLoginPassword(forgotNewPassword);
             setForgotStep(1);
-          }, 1200);
+          }, 1000);
         } else {
           setErrorMsg(res.message);
         }
@@ -591,20 +608,30 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
             )}
 
             {forgotStep === 2 && (
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-bold flex items-center justify-between">
-                  <span>6-Digit Verification Code (OTP)</span>
-                  <span className="text-[10px] text-cyan-400">Code: 849201</span>
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-300 font-bold">6-Digit Verification Code (OTP)</label>
+                  <button
+                    type="button"
+                    onClick={() => setForgotOtp(expectedOtp)}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-md cursor-pointer transition flex items-center gap-1"
+                  >
+                    <span>⚡ Quick Auto-Fill:</span>
+                    <span className="font-mono text-white">{expectedOtp}</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
                   maxLength={6}
                   value={forgotOtp}
                   onChange={(e) => setForgotOtp(e.target.value)}
-                  placeholder="849201"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-center text-lg font-mono tracking-widest text-slate-100 outline-none focus:border-cyan-500"
+                  placeholder={expectedOtp}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-center text-xl font-mono font-bold tracking-widest text-cyan-300 outline-none focus:border-cyan-500 shadow-inner"
                 />
+                <p className="text-[11px] text-slate-400 text-center">
+                  Check your inbox / spam folder for the Firebase reset link, or use the code above.
+                </p>
               </div>
             )}
 

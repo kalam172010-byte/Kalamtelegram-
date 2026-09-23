@@ -12,6 +12,7 @@ import { PaymentGatewayManager } from './components/Gateways/PaymentGatewayManag
 import { ResellerApiManager } from './components/ResellerAPI/ResellerApiManager';
 import { WebsiteLogo } from './components/Common/WebsiteLogo';
 import { useKeyboardAwareness } from './hooks/useKeyboardAwareness';
+import { usePageRouter } from './hooks/usePageRouter';
 import {
   LayoutDashboard,
   Bot,
@@ -67,6 +68,18 @@ const AppContent: React.FC = () => {
   const [isMobileFrame, setIsMobileFrame] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const { isKeyboardVisible } = useKeyboardAwareness();
+
+  // Dynamic Browser Tab Title & URL Path / Hash Synchronizer
+  usePageRouter({
+    isAuthenticated,
+    activeTab,
+    setActiveTab,
+    adminTab,
+    setAdminTab,
+    authMode,
+    setAuthMode,
+    activeBotName: activeBot?.name
+  });
 
   // Allow full Platform Master Admin access for the store owner/admin
   const isMasterAdmin =
