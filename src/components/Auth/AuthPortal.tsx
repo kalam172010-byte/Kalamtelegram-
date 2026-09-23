@@ -15,6 +15,7 @@ import {
   KeyRound,
   X
 } from 'lucide-react';
+import { WebsiteLogo } from '../Common/WebsiteLogo';
 
 interface AuthPortalProps {
   isModal?: boolean;
@@ -218,8 +219,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
       <div className="absolute -top-10 -left-10 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Header Badge */}
-      <div className="text-center mb-6">
+      {/* Header Badge & Brand Logo */}
+      <div className="text-center mb-6 flex flex-col items-center">
+        <WebsiteLogo size="lg" className="mb-2" />
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-semibold mb-3 shadow-inner">
           <Shield className="w-3.5 h-3.5 text-cyan-400" />
           <span>Firebase Secured Authentication</span>

@@ -43,7 +43,7 @@ export const PaymentGatewayManager: React.FC = () => {
   const [usdtAddress, setUsdtAddress] = useState(gateway.usdt_trc20_address || '');
   const [usdtRate, setUsdtRate] = useState(gateway.usdt_to_inr_rate || 90.0);
   const [autoApprove, setAutoApprove] = useState(gateway.auto_approve ?? true);
-  const [minDeposit, setMinDeposit] = useState(gateway.min_deposit_inr !== undefined ? gateway.min_deposit_inr : 10);
+  const [minDeposit, setMinDeposit] = useState(gateway.min_deposit_inr !== undefined ? gateway.min_deposit_inr : 1);
   const [maxDeposit, setMaxDeposit] = useState(gateway.max_deposit_inr !== undefined ? gateway.max_deposit_inr : 50000);
 
   // Sync state when active bot changes
@@ -59,7 +59,7 @@ export const PaymentGatewayManager: React.FC = () => {
       setUsdtAddress(g.usdt_trc20_address || '');
       setUsdtRate(g.usdt_to_inr_rate || 90.0);
       setAutoApprove(g.auto_approve ?? true);
-      setMinDeposit(g.min_deposit_inr !== undefined ? g.min_deposit_inr : 10);
+      setMinDeposit(g.min_deposit_inr !== undefined ? g.min_deposit_inr : 1);
       setMaxDeposit(g.max_deposit_inr !== undefined ? g.max_deposit_inr : 50000);
     }
   }, [activeBot?.id]);
@@ -109,7 +109,7 @@ export const PaymentGatewayManager: React.FC = () => {
       usdt_trc20_address: usdtAddress.trim(),
       usdt_to_inr_rate: Number(usdtRate),
       auto_approve: autoApprove,
-      min_deposit_inr: Number(minDeposit) > 0 ? Number(minDeposit) : 10,
+      min_deposit_inr: Number(minDeposit) > 0 ? Number(minDeposit) : 1,
       max_deposit_inr: Number(maxDeposit) > 0 ? Number(maxDeposit) : 50000
     });
     setSaveSuccess(true);

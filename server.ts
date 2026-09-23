@@ -12,7 +12,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // ---------------------------------------------------------------------------
   // API ROUTES
@@ -222,6 +223,33 @@ async function startServer() {
 
       dbStore.saveData();
       res.json({ success: true, user, users: data.users, transactions: data.transactions });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 6b. Update User Profile (Avatar, Name, Username, Last Login)
+  app.post('/api/users/profile', (req, res) => {
+    try {
+      const { userId, avatar_url, first_name, username, last_login } = req.body;
+      const numUserId = Number(userId);
+      if (!numUserId || isNaN(numUserId)) {
+        return res.status(400).json({ success: false, error: 'Valid userId is required' });
+      }
+
+      const data = dbStore.getData();
+      let user = data.users.find(u => u.user_id === numUserId);
+      if (!user) {
+        user = dbStore.getOrCreateUser(numUserId, first_name || `User ${numUserId}`, username || `user_${numUserId}`);
+      }
+
+      if (avatar_url !== undefined) user.avatar_url = avatar_url;
+      if (first_name) user.first_name = first_name;
+      if (username) user.username = username.replace(/^@/, '');
+      if (last_login) user.last_login = last_login;
+
+      dbStore.saveData();
+      res.json({ success: true, user, users: data.users });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -699,7 +727,43 @@ async function startServer() {
     }
   });
 
-  // 25. Retry Order Status Verification on Gateway
+  // 24. Bot Fleet Management API (Multi-bot CRUD)
+  app.get('/api/bots', (req, res) => {
+    try {
+      const bots = dbStore.getBots();
+      res.json({ success: true, bots });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/bots', (req, res) => {
+    try {
+      const { action, botId, bot, updates } = req.body;
+      if (action === 'delete') {
+        if (!botId) return res.status(400).json({ success: false, error: 'botId is required' });
+        dbStore.deleteBot(botId);
+        return res.json({ success: true, bots: dbStore.getBots() });
+      }
+      if (action === 'delete_all' || action === 'purge_all') {
+        dbStore.resetBots?.();
+        return res.json({ success: true, bots: [] });
+      }
+      if (action === 'create' || action === 'save') {
+        if (!bot) return res.status(400).json({ success: false, error: 'bot object is required' });
+        const saved = dbStore.saveBot(bot);
+        return res.json({ success: true, bot: saved, bots: dbStore.getBots() });
+      }
+      if (action === 'update') {
+        if (!botId || !updates) return res.status(400).json({ success: false, error: 'botId and updates required' });
+        const updated = dbStore.updateBot(botId, updates);
+        return res.json({ success: true, bot: updated, bots: dbStore.getBots() });
+      }
+      res.status(400).json({ success: false, error: 'Invalid action' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
   app.post('/api/system/retry-transaction', async (req, res) => {
     try {
       const { orderId } = req.body;

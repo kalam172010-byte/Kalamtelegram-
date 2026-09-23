@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3"/>
+      <stop offset="70%" stop-color="#3b82f6" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Main Shield Gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="30%" stop-color="#06b6d4"/>
+      <stop offset="70%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+
+    <!-- Inner Core Gradient -->
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <!-- Neon Cyan Stroke Gradient -->
+    <linearGradient id="neonCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+
+    <!-- Drop Shadows & Glow Filters -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Ambient Glow -->
+  <circle cx="100" cy="100" r="95" fill="url(#bgGlow)"/>
+
+  <!-- Outer Cyber Tech Hexagon Ring -->
+  <polygon points="100,12 174,48 174,138 100,188 26,138 26,48" 
+           fill="none" 
+           stroke="url(#neonCyan)" 
+           stroke-width="2.5" 
+           stroke-dasharray="8 4 2 4"
+           opacity="0.6"/>
+
+  <!-- Secondary Outer Shield Edge -->
+  <polygon points="100,18 168,52 168,134 100,180 32,134 32,52" 
+           fill="url(#coreGrad)" 
+           stroke="url(#shieldGrad)" 
+           stroke-width="4"
+           filter="url(#neonGlow)"/>
+
+  <!-- Geometric Circuit Accents -->
+  <path d="M 50,75 L 75,75 L 85,65" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="50" cy="75" r="3" fill="#38bdf8"/>
+  
+  <path d="M 150,75 L 125,75 L 115,65" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="150" cy="75" r="3" fill="#38bdf8"/>
+
+  <!-- Crown / Top VIP Emblem -->
+  <path d="M 80,42 L 88,48 L 100,38 L 112,48 L 120,42 L 116,56 L 84,56 Z" 
+        fill="url(#goldGrad)" 
+        stroke="#fef08a" 
+        stroke-width="1.5"
+        filter="url(#neonGlow)"/>
+  <circle cx="100" cy="36" r="2.5" fill="#fef08a"/>
+  <circle cx="80" cy="40" r="2" fill="#fef08a"/>
+  <circle cx="120" cy="40" r="2" fill="#fef08a"/>
+
+  <!-- Central Stylized 'K' Tech Monogram & Lightning -->
+  <!-- Left Vertical Stem of K -->
+  <path d="M 68,64 L 84,64 L 84,142 L 68,142 Z" 
+        fill="url(#shieldGrad)" 
+        stroke="#e0f2fe" 
+        stroke-width="1.5"/>
+
+  <!-- Diagonal Upper Blade of K -->
+  <polygon points="86,102 124,64 144,64 102,106" 
+           fill="url(#neonCyan)" 
+           stroke="#e0f2fe" 
+           stroke-width="1.5"
+           filter="url(#neonGlow)"/>
+
+  <!-- Diagonal Lower Blade of K (Lightning Bolt Angle) -->
+  <polygon points="96,98 140,142 120,142 84,106" 
+           fill="url(#shieldGrad)" 
+           stroke="#e0f2fe" 
+           stroke-width="1.5"/>
+
+  <!-- Central Energy Core Glow -->
+  <circle cx="94" cy="103" r="5" fill="#ffffff" filter="url(#neonGlow)"/>
+
+  <!-- Cyber Visor / Horizontal Slash -->
+  <path d="M 70,103 L 132,103" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Bottom Tech Dots -->
+  <circle cx="90" cy="162" r="2" fill="#38bdf8"/>
+  <circle cx="100" cy="164" r="3" fill="#22d3ee" filter="url(#neonGlow)"/>
+  <circle cx="110" cy="162" r="2" fill="#38bdf8"/>
+</svg>

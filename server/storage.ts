@@ -77,6 +77,12 @@ export class DatabaseStore {
           ? parsed.productKeys.filter((k: any) => !k.key_text?.includes('MST-24H') && !k.key_text?.includes('MST-7D'))
           : INITIAL_PRODUCT_KEYS;
 
+        // Filter out legacy demo bots
+        const demoBotIds = ['bot_kalam_main', 'bot_vip_reseller'];
+        const loadedBots = Array.isArray(parsed.bots)
+          ? parsed.bots.filter((b: any) => !demoBotIds.includes(b.id) && !b.bot_token?.includes('exampleToken') && !b.bot_token?.includes('SampleVip'))
+          : [];
+
         return {
           users: loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS,
           products: loadedProducts,
@@ -90,12 +96,13 @@ export class DatabaseStore {
           settings: {
             ...DEFAULT_SETTINGS,
             ...(parsed.settings || {}),
-            bot_token: parsed.settings?.bot_token || process.env.TELEGRAM_BOT_TOKEN || DEFAULT_SETTINGS.bot_token,
+            bot_token: parsed.settings?.bot_token && !parsed.settings.bot_token.includes('exampleToken') ? parsed.settings.bot_token : (process.env.TELEGRAM_BOT_TOKEN || ''),
+            bot_username: parsed.settings?.bot_username && parsed.settings.bot_username !== 'KalamFFPanelBot' ? parsed.settings.bot_username : '',
             admin_id: parsed.settings?.admin_id || (process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id)
           },
           emojis: parsed.emojis || DEFAULT_EMOJIS,
           fsmStates: parsed.fsmStates || {},
-          bots: parsed.bots || INITIAL_BOTS
+          bots: loadedBots
         };
       }
     } catch (err) {
@@ -155,11 +162,12 @@ export class DatabaseStore {
     this.saveData();
   }
 
-  public getOrCreateUser(tgId: number, firstName: string, username?: string): User {
+  public getOrCreateUser(tgId: number, firstName: string, username?: string, chatId?: number): User {
     let user = this.data.users.find(u => u.user_id === tgId);
     if (!user) {
       user = {
         user_id: tgId,
+        chat_id: chatId || tgId,
         first_name: firstName,
         username: username || firstName.toLowerCase().replace(/[^a-z0-9]/g, ''),
         balance: 0,
@@ -174,10 +182,14 @@ export class DatabaseStore {
         is_vip: 0
       };
       this.data.users.push(user);
-      this.logActivity(tgId, 'USER_REGISTERED', `New user @${user.username} joined on Telegram`);
+      this.logActivity(tgId, 'USER_REGISTERED', `New user @${user.username} (UID: ${tgId}, Chat: ${chatId || tgId}) joined`);
       this.saveData();
     } else {
       let updated = false;
+      if (!user.chat_id && chatId) {
+        user.chat_id = chatId;
+        updated = true;
+      }
       if (user.first_name !== firstName) {
         user.first_name = firstName;
         updated = true;
@@ -353,14 +365,14 @@ export class DatabaseStore {
 
   public getBots(): BotInstance[] {
     if (!Array.isArray(this.data.bots)) {
-      this.data.bots = INITIAL_BOTS;
+      this.data.bots = [];
     }
     return this.data.bots;
   }
 
   public saveBot(bot: BotInstance): BotInstance {
     if (!Array.isArray(this.data.bots)) {
-      this.data.bots = INITIAL_BOTS;
+      this.data.bots = [];
     }
     const idx = this.data.bots.findIndex(b => b.id === bot.id);
     if (idx >= 0) {
@@ -374,7 +386,7 @@ export class DatabaseStore {
 
   public updateBot(botId: string, updates: Partial<BotInstance>): BotInstance | null {
     if (!Array.isArray(this.data.bots)) {
-      this.data.bots = INITIAL_BOTS;
+      this.data.bots = [];
     }
     const idx = this.data.bots.findIndex(b => b.id === botId);
     if (idx === -1) return null;
@@ -385,10 +397,16 @@ export class DatabaseStore {
 
   public deleteBot(botId: string): boolean {
     if (!Array.isArray(this.data.bots)) {
-      this.data.bots = INITIAL_BOTS;
+      this.data.bots = [];
       return false;
     }
     this.data.bots = this.data.bots.filter(b => b.id !== botId);
+    this.saveData();
+    return true;
+  }
+
+  public resetBots(): boolean {
+    this.data.bots = [];
     this.saveData();
     return true;
   }
@@ -411,7 +429,7 @@ export class DatabaseStore {
       },
       emojis: DEFAULT_EMOJIS,
       fsmStates: {},
-      bots: INITIAL_BOTS
+      bots: []
     };
     this.saveData();
   }

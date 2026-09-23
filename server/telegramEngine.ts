@@ -29,6 +29,34 @@ class TelegramEngine {
   private updatesProcessed: number = 0;
   private pollingAbortController: AbortController | null = null;
   private updateOffset: number = 0;
+  private watchdogTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startWatchdog();
+  }
+
+  private startWatchdog() {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+    }
+    // Auto-reconnect watchdog runs every 8 seconds
+    this.watchdogTimer = setInterval(async () => {
+      try {
+        const token = dbStore.getData().settings.bot_token;
+        if (!token || token.includes('exampleToken')) {
+          return;
+        }
+        if (!this.isRunning) {
+          console.log('🔄 Telegram Watchdog: Auto-reconnecting bot engine...');
+          await this.start().catch((err: any) => {
+            console.warn('Telegram Watchdog reconnect notice:', err.message);
+          });
+        }
+      } catch (e: any) {
+        console.warn('Telegram Watchdog loop notice:', e.message);
+      }
+    }, 8000);
+  }
 
   public getStatus(): BotStatus {
     return {
@@ -263,12 +291,16 @@ class TelegramEngine {
 
         if (!response.ok) {
           const errBody = await response.text();
-          throw new Error(`HTTP ${response.status}: ${errBody || response.statusText}`);
+          this.lastError = `HTTP ${response.status}: ${errBody || response.statusText}`;
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
         }
 
         const data = await response.json();
         if (data.ok && Array.isArray(data.result)) {
           this.lastPollTimestamp = new Date().toISOString();
+          this.isConnected = true;
+          this.lastError = null;
           for (const update of data.result) {
             this.updateOffset = update.update_id + 1;
             this.updatesProcessed++;
@@ -279,11 +311,12 @@ class TelegramEngine {
           await new Promise(r => setTimeout(r, 2500));
         }
       } catch (err: any) {
-        if (err.name === 'AbortError') {
+        if (err.name === 'AbortError' || !this.isRunning) {
           break;
         }
         this.lastError = err.message;
-        await new Promise(r => setTimeout(r, 3000));
+        // Don't crash out of the polling loop on intermittent network errors - retry seamlessly
+        await new Promise(r => setTimeout(r, 2500));
       }
     }
   }
@@ -304,8 +337,9 @@ class TelegramEngine {
     const settings = dbStore.getData().settings;
     const bots = dbStore.getBots();
     const activeBot = bots.length > 0 ? bots[0] : null;
-    const min = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 10;
-    return Number(min) > 0 ? Number(min) : 10;
+    const min = activeBot?.payment_gateway?.min_deposit_inr ?? settings.min_deposit_inr ?? 1;
+    const num = Number(min);
+    return !isNaN(num) && num >= 1 ? num : 1;
   }
 
   public getMaxDeposit(): number {
@@ -313,7 +347,8 @@ class TelegramEngine {
     const bots = dbStore.getBots();
     const activeBot = bots.length > 0 ? bots[0] : null;
     const max = activeBot?.payment_gateway?.max_deposit_inr ?? settings.max_deposit_inr ?? 50000;
-    return Number(max) > 0 ? Number(max) : 50000;
+    const num = Number(max);
+    return !isNaN(num) && num > 0 ? num : 50000;
   }
 
   public async sendMessage(chatId: number, text: string, replyMarkup?: any): Promise<any> {
@@ -650,7 +685,7 @@ class TelegramEngine {
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
 
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username);
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, '🚫 <b>Account Suspended</b>\n\nYour account has been banned from using Kalam FF Panel. Contact support if you believe this is an error.');
@@ -1240,22 +1275,6 @@ class TelegramEngine {
       }
     }
 
-    if (lowerText.startsWith('/setadmin') || lowerText.startsWith('/claimadmin')) {
-      const parts = text.split(/\s+/);
-      const newAdminId = parts.length >= 2 ? Number(parts[1]) : chatId;
-      if (newAdminId && !isNaN(newAdminId)) {
-        dbStore.updateSettings({ admin_id: newAdminId });
-        await this.sendMessage(
-          chatId,
-          `👑 <b>MASTER ADMIN ID UPDATED!</b>\n\n` +
-          `✅ Registered Admin Chat ID: <code>${newAdminId}</code>\n` +
-          `You now have full master access! Type <code>@admin</code> or <code>/admin</code> to launch the Admin Terminal.`,
-          { inline_keyboard: [[{ text: '⚙️ Launch Admin Terminal', callback_data: 'admin_panel' }]] }
-        );
-        return;
-      }
-    }
-
     // Admin Panel Triggers: @admin, /admin, admin, /panel, /dashboard, !admin, @admin_bot, /adminhub
     const isAdminTrigger = (
       lowerText === '@admin' ||
@@ -1282,9 +1301,8 @@ class TelegramEngine {
           `🔒 <i>This terminal requires Master Administrator authorization.</i>\n\n` +
           `👉 <b>How to activate Admin Access:</b>\n` +
           `1️⃣ Open your Web Admin Hub ➔ Settings\n` +
-          `2️⃣ Set <b>Admin ID</b> to <code>${chatId}</code> and save.\n` +
-          `3️⃣ Or send <code>/setadmin ${chatId}</code> right here in bot to bind your account as Admin.\n\n` +
-          `<i>Once configured, typing <code>@admin</code> or <code>/admin</code> opens the Admin Panel directly inside Telegram!</i>`
+          `2️⃣ Set <b>Admin ID</b> to <code>${chatId}</code> and click Save.\n\n` +
+          `<i>For security, Admin IDs can only be configured from the Website Admin Panel. Once saved on the website, typing @admin or /admin opens your Admin Control Terminal!</i>`
         );
       }
       return;
@@ -1300,7 +1318,7 @@ class TelegramEngine {
     const chatId = msg.chat.id;
     const messageId = msg.message_id;
 
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username);
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
     const settings = dbStore.getData().settings;
 
     if (user.is_banned === 1) {

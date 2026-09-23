@@ -3,17 +3,17 @@
 @layer base {
   html, body {
     height: 100%;
-    height: 100dvh;
-    overscroll-behavior-y: none;
+    min-height: 100dvh;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: pan-y;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background-color: #030712;
-    scroll-behavior: smooth;
   }
 
-  * {
-    scroll-behavior: smooth;
+  /* Ensure inputs on mobile are always clearly visible when keyboard opens */
+  input, textarea, select {
+    scroll-margin-bottom: 7.5rem;
+    scroll-margin-top: 5rem;
   }
 
   /* Custom mobile safe area padding */

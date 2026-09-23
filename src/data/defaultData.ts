@@ -42,29 +42,35 @@ export const DEFAULT_EMOJIS: Record<string, string> = {
   wallet_left: '6210859306602995217',
   wallet_right: '5305699699204837855',
   point_down: '6161302621027049305',
+  referral: '5974026322961501198',
+  gift: '5974026322961501198',
 };
 
 export const UI_TEXTS = {
-  start_menu: `✨ <b>KALAM FF PANEL?</b>
+  start_menu: `✨ <b>KALAM PANEL BOT</b>
 
 {product_store} 𝗣𝗥𝗢𝗗𝗨𝗖𝗧 𝗦𝘁𝗼𝗿𝗲 : 𝗮𝗹𝗹 𝗸𝗲𝘆𝘀 𝗣𝘂𝗿𝗰𝗵𝗮𝘀𝗲  & 𝗶𝗻𝘀𝘁𝗮𝗻𝘁𝗹𝘆 𝗱𝗲𝗹𝗶𝘃𝗲𝗿𝘆
 {profile} 𝗠𝘆 𝗽𝗿𝗼𝗳𝗶𝗹𝗲 : 𝗰𝗵𝗲𝗰𝗸 𝘆𝗼𝘂𝗿 𝗮𝗰𝗰𝗼𝘂𝗻𝘁 𝗶𝗻𝗳𝗼𝗿𝗺𝗮𝘁𝗶𝗼𝗻
 {add_balance} 𝗔𝗱𝗱 𝗯𝗮𝗹𝗮𝗻𝗰𝗲 : 𝗱𝗲𝗽𝗼𝘀𝗶𝘁𝗲 𝗯𝗮𝗹𝗮𝗻𝗰𝗲 & 𝘀𝗲𝗰𝘂𝗿𝗲 𝘀𝗲𝗿𝘃𝗶𝗰𝗲
 {history} 𝗔𝗹𝗹 𝗵𝗶𝘀𝘁𝗼𝗿𝘆 : 𝗰𝗵𝗲𝗰𝗸 𝗮𝗹𝗹 𝗽𝘂𝗿𝗰𝗵𝗮𝘀𝗲 𝗵𝗶𝘀𝘁𝗼𝗿𝘆
-{tutorial} 𝗧𝘂𝘁𝗼𝗿𝗶𝗮𝗹 : 𝘃𝗶𝗲𝘄 𝘁𝘂𝘁𝗼𝗿𝗶𝗮𝗹 & 𝘄𝗼𝗿𝗸 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁
+{referral} 𝗥𝗲𝗳𝗲𝗿 & 𝗘𝗮𝗿𝗻 : 𝗶𝗻𝘃𝗶𝘁𝗲 𝗳𝗿𝗶𝗲𝗻𝗱𝘀 & 𝗲𝗮𝗿𝗻 𝘂𝗻𝗹𝗶𝗺𝗶𝘁𝗲𝗱 𝗰𝗮𝘀𝗵
 {support} 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 : 𝗯𝗼𝘁 𝗽𝗿𝗼𝗯𝗹𝗲𝗺 𝘀𝗼𝗹𝘃𝗲𝗱 𝗳𝗼𝗿 𝘀𝘂𝗽𝗽𝗼𝗿𝘁 𝗮𝗱𝗺𝗶𝗻`,
 
-  vip_menu: `🌟 <b><u>VIP MEMBERSHIP CLUB</u></b> 🌟
+  referral_menu: `🎁 <b><u>REFER & EARN REWARDS PROGRAM</u></b> 👥
+━━━━━━━━━━━━━━━━━━━━
+💰 <b>Earn ₹{referral_reward} instant cash</b> for every active friend you invite!
+📈 Plus get <b>{referral_commission}% lifetime commission</b> on every recharge & purchase!
+🎁 <b>Your invited friends receive ₹{referee_bonus}</b> welcome bonus!
 
-Unlock premium benefits and permanent discounts!
+🔗 <b>Your Exclusive Referral Link:</b>
+<code>{referral_link}</code>
 
-💎 <b>VIP Benefits:</b>
-• Flat 15% off on ALL products (Stacks with Reseller!)
-• Priority Support
-• Exclusive VIP-only giveaways
+📊 <b>Your Referral Performance:</b>
+👥 Total Friends Invited: <b>{referral_count}</b>
+💵 Total Referral Earnings: <b>₹{referral_earnings}</b>
+👛 Wallet Balance: <b>₹{current_balance}</b>
 
-💳 <b>VIP Price:</b> ₹299.00 (Lifetime)
-👤 <b>Your Status:</b> {vip_status}`,
+🚀 <i>Share your link with friends to earn real cash rewards!</i>`,
 
   add_balance_menu: `{add_balance} <b>FAMGATEWAY.IN ADD BALANCE</b> {info_icon}
 
@@ -76,16 +82,20 @@ Unlock premium benefits and permanent discounts!
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  bot_token: '7928194012:AAH9bK8xP_exampleTokenKalamBot',
-  bot_username: 'KalamFFPanelBot',
+  bot_token: '',
+  bot_username: '',
   admin_id: 12846461,
   admin_contact: '@kalam172010',
   reseller_system_status: 'ON',
+  referral_system_status: 'ON',
+  referral_reward_inr: 10.0,
+  referral_commission_percent: 5.0,
+  referral_referee_bonus_inr: 5.0,
   bot_status: 'ON',
   how_to_video: 'https://youtube.com/watch?v=kalam_panel_tutorial',
-  fampay_api_key: 'FP_LIVE_99481a8c3d11ef420b991',
+  fampay_api_key: '',
   famgateway_api_key: '',
-  famgateway_redirect_url: 'https://t.me/KalamFFPanelBot',
+  famgateway_redirect_url: '',
   bantibhaiya_api_url: 'https://bantibhaiya.to/api/reseller_v1.php',
   bantibhaiya_api_key: '87224c074a021676364829b5b3f0686e',
   bantibhaiya_master_key: 'a7f3e8b2c9d1f4a6b8c2d5e9f1a3b6c8',
@@ -94,10 +104,10 @@ export const DEFAULT_SETTINGS: Settings = {
   fampay_upi_id: 'kalampanel@fam',
   fampay_qr_url: 'https://fampay.anujbots.xyz/qr.php',
   fampay_verify_url: 'https://fampay.anujbots.xyz/verify.php',
-  binance_api: 'BN_API_8921849129034',
-  binance_secret: 'BN_SEC_991823901923',
-  binance_address: 'TXu8KalamUSDT9912083TronNetwork',
-  vip_status: 'ON',
+  binance_api: '',
+  binance_secret: '',
+  binance_address: '',
+  vip_status: 'OFF',
   reseller_setup_fee: 200.0,
   reseller_min_balance: 500.0,
   support_telegram: 'https://t.me/KalamPanelSupport',
@@ -105,12 +115,10 @@ export const DEFAULT_SETTINGS: Settings = {
   apk_channel_link: 'https://t.me/KalamFFPanelAPKs',
   official_channel_link: 'https://t.me/KalamFFPanelChannel',
   ui_start_menu: UI_TEXTS.start_menu,
-  ui_vip_menu: UI_TEXTS.vip_menu,
+  ui_referral_menu: UI_TEXTS.referral_menu,
   ui_add_balance_menu: UI_TEXTS.add_balance_menu,
   usdt_to_inr: 90.0,
-  vip_discount_percentage: 15.0,
-  vip_price_inr: 299.0,
-  min_deposit_inr: 10.0,
+  min_deposit_inr: 1.0,
   max_deposit_inr: 50000.0,
 };
 
@@ -126,7 +134,7 @@ export const INITIAL_USERS: User[] = [
     first_name: 'Kalam (Admin)',
     username: 'kalam172010',
     balance: 0.0,
-    account_type: 'VIP',
+    account_type: 'Reseller',
     orders_count: 0,
     spent: 0.0,
     joined_date: '2026-01-10 10:00:00',
@@ -135,8 +143,10 @@ export const INITIAL_USERS: User[] = [
     total_saved: 0.0,
     is_banned: 0,
     warnings: 0,
-    is_vip: 1,
-    vip_since: '2026-01-12'
+    is_vip: 0,
+    referral_code: 'ref_12846461',
+    referral_count: 3,
+    referral_earnings: 150.0
   }
 ];
 
@@ -161,7 +171,7 @@ export const DEFAULT_GATEWAY_CONFIG: PaymentGatewayConfig = {
   usdt_trc20_address: 'TXu8KalamUSDT9912083TronNetwork',
   usdt_to_inr_rate: 90.0,
   auto_approve: true,
-  min_deposit_inr: 10.0,
+  min_deposit_inr: 1.0,
   max_deposit_inr: 50000.0
 };
 
@@ -175,58 +185,4 @@ export const DEFAULT_RESELLER_CONFIG: ResellerApiConfig = {
   sync_balance: 14250.0
 };
 
-export const INITIAL_BOTS: BotInstance[] = [
-  {
-    id: 'bot_kalam_main',
-    owner_id: 12846461,
-    owner_email: 'kalam172010@gmail.com',
-    name: 'Kalam FF Panel Official Bot',
-    username: 'KalamFFPanelBot',
-    bot_token: '7928194012:AAH9bK8xP_exampleTokenKalamBot',
-    status: 'ONLINE',
-    created_at: '2026-01-15 10:30:00',
-    description: 'Main flagship Free Fire Panel & Mod Key Store bot with automated UPI & Provider API sync.',
-    theme_color: '#06b6d4',
-    payment_gateway: DEFAULT_GATEWAY_CONFIG,
-    reseller_api: DEFAULT_RESELLER_CONFIG,
-    products: [],
-    productKeys: [],
-    settings: DEFAULT_SETTINGS,
-    stats: {
-      total_orders: 0,
-      total_revenue: 0.0,
-      total_users: 1,
-      total_keys_delivered: 0
-    }
-  },
-  {
-    id: 'bot_vip_reseller',
-    owner_id: 12846461,
-    owner_email: 'kalam172010@gmail.com',
-    name: 'VIP Direct Keys Instant Bot',
-    username: 'VIPDirectKeysBot',
-    bot_token: '7819203112:AAG-SampleVipToken192',
-    status: 'ONLINE',
-    created_at: '2026-02-01 14:15:00',
-    description: 'Dedicated wholesale discount bot for VIP players and sub-resellers.',
-    theme_color: '#8b5cf6',
-    payment_gateway: {
-      ...DEFAULT_GATEWAY_CONFIG,
-      upi_id: 'vipkeys@fam',
-      merchant_name: 'VIP Direct Express'
-    },
-    reseller_api: DEFAULT_RESELLER_CONFIG,
-    products: [],
-    productKeys: [],
-    settings: {
-      ...DEFAULT_SETTINGS,
-      bot_username: 'VIPDirectKeysBot'
-    },
-    stats: {
-      total_orders: 0,
-      total_revenue: 0.0,
-      total_users: 1,
-      total_keys_delivered: 0
-    }
-  }
-];
+export const INITIAL_BOTS: BotInstance[] = [];

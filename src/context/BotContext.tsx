@@ -145,7 +145,7 @@ export interface BotContextType {
 
   // Admin Broadcast
   sendBroadcastMessage: (params: {
-    targetAudience: 'all' | 'vip' | 'reseller' | 'non_reseller';
+    targetAudience: 'all' | 'referrers' | 'vip' | 'reseller' | 'non_reseller';
     text: string;
     imageUrl?: string;
     buttonText?: string;
@@ -171,6 +171,7 @@ export interface BotContextType {
   closeTicket: (ticketId: number) => void;
   updateSettings: (newSettings: Partial<Settings>) => void;
   updateEmojiSlot: (slot: string, emojiId: string) => void;
+  updateUserProfile: (updates: Partial<User>) => void;
   resetDatabaseToDefaults: () => void;
 }
 
@@ -316,12 +317,27 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Multi-Bot Management State
   const [bots, setBots] = useState<BotInstance[]>(() => {
     const saved = localStorage.getItem('kalam_bot_instances');
-    return saved ? JSON.parse(saved) : INITIAL_BOTS;
+    if (saved) {
+      try {
+        const parsed: BotInstance[] = JSON.parse(saved);
+        const demoBotIds = ['bot_kalam_main', 'bot_vip_reseller'];
+        const filtered = Array.isArray(parsed)
+          ? parsed.filter(b => !demoBotIds.includes(b.id) && !b.bot_token?.includes('exampleToken') && !b.bot_token?.includes('SampleVip'))
+          : [];
+        return filtered;
+      } catch (e) {
+        console.error('Error parsing stored bots', e);
+      }
+    }
+    return [];
   });
 
   const [activeBotId, setActiveBotId] = useState<string>(() => {
     const saved = localStorage.getItem('kalam_active_bot_id');
-    return saved || 'bot_kalam_main';
+    if (saved && saved !== 'bot_kalam_main' && saved !== 'bot_vip_reseller') {
+      return saved;
+    }
+    return '';
   });
 
   const [activeTab, setActiveTab] = useState<ViewTab>(() => {
@@ -375,25 +391,95 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { localStorage.setItem('kalam_bot_settings', JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem('kalam_bot_emojis', JSON.stringify(emojis)); }, [emojis]);
 
-  // Firebase Auth listener and Cloud Firestore real-time sync
+  // Firebase Auth listener and Backend Database real-time sync
   useEffect(() => {
-    // 0. Fetch initial data from backend server database
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(serverData => {
-        if (serverData) {
-          if (Array.isArray(serverData.products)) {
-            setProducts(serverData.products);
-          }
-          if (Array.isArray(serverData.productKeys)) {
-            setProductKeys(serverData.productKeys);
-          }
-          if (serverData.settings) {
-            setSettings(prev => ({ ...prev, ...serverData.settings }));
+    // 0. Continuous Full-Duplex Real-Time Data Synchronizer
+    const syncServerData = async () => {
+      try {
+        const [dataRes, statusRes] = await Promise.allSettled([
+          fetch('/api/data'),
+          fetch('/api/status')
+        ]);
+
+        if (dataRes.status === 'fulfilled' && dataRes.value.ok) {
+          const serverData = await dataRes.value.json();
+          if (serverData) {
+            // Real-time Users Synchronization (Telegram registrations, real-time balances, etc.)
+            if (Array.isArray(serverData.users) && serverData.users.length > 0) {
+              setUsers(prevUsers => {
+                const userMap = new Map<number, User>();
+                prevUsers.forEach(u => userMap.set(u.user_id, u));
+                serverData.users.forEach((su: User) => {
+                  const existing = userMap.get(su.user_id);
+                  if (existing) {
+                    userMap.set(su.user_id, {
+                      ...existing,
+                      ...su,
+                      email: existing.email || su.email,
+                      password: existing.password || su.password,
+                      avatar_url: su.avatar_url || existing.avatar_url
+                    });
+                  } else {
+                    userMap.set(su.user_id, su);
+                  }
+                });
+                return Array.from(userMap.values());
+              });
+            }
+
+            if (Array.isArray(serverData.products)) {
+              setProducts(serverData.products);
+            }
+            if (Array.isArray(serverData.productKeys)) {
+              setProductKeys(serverData.productKeys);
+            }
+            if (Array.isArray(serverData.orders)) {
+              setOrders(serverData.orders);
+            }
+            if (Array.isArray(serverData.transactions)) {
+              setTransactions(serverData.transactions);
+            }
+            if (Array.isArray(serverData.logs)) {
+              setLogs(serverData.logs);
+            }
+            if (Array.isArray(serverData.tickets)) {
+              setTickets(serverData.tickets);
+            }
+            if (Array.isArray(serverData.coupons)) {
+              setCoupons(serverData.coupons);
+            }
+            if (serverData.settings) {
+              setSettings(prev => ({ ...prev, ...serverData.settings }));
+            }
           }
         }
-      })
-      .catch(err => console.warn('Backend initial load notice:', err));
+
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          const statusData = await statusRes.value.json();
+          setBotStatus(statusData);
+        }
+      } catch (err) {
+        // background sync notice
+      }
+    };
+
+    // Initial immediate sync
+    syncServerData();
+
+    // 2.5s real-time heartbeat sync
+    const syncInterval = setInterval(syncServerData, 2500);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        syncServerData();
+      }
+    };
+    const handleFocus = () => {
+      syncServerData();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
 
     // 1. Firebase Auth listener
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
@@ -447,6 +533,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => {
+      clearInterval(syncInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
       unsubscribeAuth();
       unsubBots();
       unsubProducts();
@@ -625,12 +714,11 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteBot = useCallback((botId: string) => {
     setBots(prev => {
       const remaining = prev.filter(b => b.id !== botId);
-      if (activeBotId === botId && remaining.length > 0) {
-        setActiveBotId(remaining[0].id);
+      if (activeBotId === botId) {
+        setActiveBotId(remaining.length > 0 ? remaining[0].id : '');
       }
-      const finalBots = remaining.length > 0 ? remaining : INITIAL_BOTS;
-      localStorage.setItem('kalam_bot_instances', JSON.stringify(finalBots));
-      return finalBots;
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(remaining));
+      return remaining;
     });
     // Delete from Firestore Cloud Database
     deleteDoc(doc(db, 'bots', botId)).catch(() => {});
@@ -830,6 +918,54 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   }, []);
 
+  const updateUserProfile = useCallback((updates: Partial<User>) => {
+    const targetUid = currentUserId || (currentUser ? currentUser.user_id : 12846461);
+
+    setUsers(prev => {
+      let matched = false;
+      const nextUsers = prev.map(u => {
+        if (u.user_id === targetUid || (currentUser && u.user_id === currentUser.user_id)) {
+          matched = true;
+          return { ...u, ...updates };
+        }
+        return u;
+      });
+
+      if (!matched && prev.length > 0) {
+        nextUsers[0] = { ...nextUsers[0], ...updates };
+      }
+
+      try {
+        localStorage.setItem('kalam_bot_users', JSON.stringify(nextUsers));
+      } catch (e) {
+        console.warn('Could not persist users to localStorage:', e);
+      }
+      return nextUsers;
+    });
+
+    // Also persist avatar to dedicated key for fallback
+    if (updates.avatar_url) {
+      try {
+        localStorage.setItem(`kalam_avatar_${targetUid}`, updates.avatar_url);
+      } catch (e) {}
+    }
+
+    // Sync to Firestore Cloud DB
+    try {
+      setDoc(doc(db, 'users', String(targetUid)), updates, { merge: true }).catch(() => {});
+    } catch (e) {}
+
+    // Sync to backend server
+    fetch('/api/users/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: targetUid,
+        ...updates
+      })
+    }).catch(() => {});
+  }, [currentUserId, currentUser]);
+
   // Format currency
   const fmtCurr = (amount: number) => `₹${amount.toFixed(2)}`;
 
@@ -878,9 +1014,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Keyboard generators mirroring python code
   const getMainMenuKeyboard = useCallback((user: User): InlineKeyboardButton[][] => {
     const isReseller = Boolean(user.is_reseller);
-    const isVip = Boolean(user.is_vip);
     const resellerSys = settings.reseller_system_status === 'ON';
-    const vipSys = settings.vip_status === 'ON';
+    const refSys = settings.referral_system_status !== 'OFF';
 
     const kb: InlineKeyboardButton[][] = [
       [
@@ -922,20 +1057,20 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     const extrasRow: InlineKeyboardButton[] = [];
+    if (refSys) {
+      extrasRow.push({
+        text: "🎁 Refer & Earn",
+        callback_data: "menu_referral",
+        icon_custom_emoji_id: emojis.referral || emojis.gift || DEFAULT_EMOJIS.referral,
+        style: "success"
+      });
+    }
     if (resellerSys || isReseller) {
       extrasRow.push({
         text: "Reseller Panel",
         callback_data: "menu_reseller_dash",
         icon_custom_emoji_id: emojis.reseller || DEFAULT_EMOJIS.reseller,
         style: "primary"
-      });
-    }
-    if (vipSys || isVip) {
-      extrasRow.push({
-        text: "VIP Club",
-        callback_data: "menu_vip_dash",
-        icon_custom_emoji_id: emojis.vip || DEFAULT_EMOJIS.vip,
-        style: "danger"
       });
     }
 
@@ -959,7 +1094,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const getAdminKeyboard = useCallback((): InlineKeyboardButton[][] => {
     const statusVal = settings.bot_status;
-    const vipVal = settings.vip_status;
+    const refSysVal = settings.referral_system_status || 'ON';
     return [
       [{ text: "📊 Bot Statistics", callback_data: "admin_view_stats", style: "primary" }],
       [{ text: "👥 User Control Panel", callback_data: "admin_user_control_start", style: "primary" }],
@@ -968,6 +1103,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { text: "📦 Manage Products", callback_data: "admin_manage_prods", style: "primary" }
       ],
       [
+        { text: "🎁 Referral Program", callback_data: "admin_ref_settings", style: "primary" },
         { text: "👑 Reseller Mgmt", callback_data: "admin_reseller_menu", style: "primary" }
       ],
       [
@@ -1008,9 +1144,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ],
       [
         {
-          text: `VIP System: ${vipVal} ${vipVal === 'ON' ? '🟢' : '🔴'}`,
-          callback_data: "admin_toggle_vip_sys",
-          style: vipVal === 'ON' ? "success" : "danger"
+          text: `Referral Program: ${refSysVal} ${refSysVal === 'ON' ? '🟢' : '🔴'}`,
+          callback_data: "admin_toggle_ref_sys",
+          style: refSysVal === 'ON' ? "success" : "danger"
         }
       ]
     ];
@@ -1374,6 +1510,28 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers(prev => prev.map(u => u.user_id === txn.user_id ? { ...u, balance: u.balance + txn.amount_inr } : u));
     logActivity(txn.user_id, 'DEPOSIT_SUCCESS', `Amount: ${txn.amount_inr}, Gateway: FamGateway, Order: ${orderId}, UTR: ${utr}`);
 
+    // Referral Commission on deposit
+    if (txn.user_id && settings.referral_system_status !== 'OFF') {
+      const payingUser = users.find(u => u.user_id === txn.user_id);
+      if (payingUser && payingUser.referred_by) {
+        const commRate = settings.referral_commission_percent ?? 5.0;
+        const commission = Number(((txn.amount_inr * commRate) / 100).toFixed(2));
+        if (commission > 0) {
+          setUsers(prev => prev.map(u => {
+            if (u.user_id === payingUser.referred_by) {
+              return {
+                ...u,
+                balance: u.balance + commission,
+                referral_earnings: (u.referral_earnings || 0) + commission
+              };
+            }
+            return u;
+          }));
+          logActivity(payingUser.referred_by, 'REFERRAL_COMMISSION', `Earned ₹${commission} (${commRate}% deposit commission) from referred friend #${payingUser.user_id}`);
+        }
+      }
+    }
+
     confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
 
     const successMsg = `🎉 <b>PAYMENT VERIFIED & CREDITED!</b>\n\n` +
@@ -1425,11 +1583,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const isReseller = Boolean(currentUser.is_reseller);
-    const isVip = Boolean(currentUser.is_vip);
-
     const normalPrice = prod.price_inr;
-    const basePrice = isReseller ? prod.reseller_price : normalPrice;
-    const finalPrice = isVip ? basePrice * (1 - (settings.vip_discount_percentage / 100)) : basePrice;
+    const finalPrice = isReseller ? prod.reseller_price : normalPrice;
     const savings = normalPrice - finalPrice;
 
     if (currentUser.balance < finalPrice) {
@@ -1664,7 +1819,6 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       }
 
       const isReseller = Boolean(currentUser.is_reseller);
-      const isVip = Boolean(currentUser.is_vip);
 
       let text = `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()} - ${panelName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━\n\n`;
 
@@ -1672,16 +1826,13 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       prods.forEach(p => {
         const normalPrice = p.price_inr;
-        const basePrice = isReseller ? p.reseller_price : normalPrice;
-        const finalPrice = isVip ? basePrice * (1 - (settings.vip_discount_percentage / 100)) : basePrice;
+        const finalPrice = isReseller ? p.reseller_price : normalPrice;
         const stockStatus = p.stock > 0 ? `✅ In Stock (${p.stock})` : "❌ Out of Stock";
 
         text += `${getEmojiTag('product_store')} ⏱ <b>Validity: ${p.name}</b>\n`;
-        if (isReseller || isVip) {
+        if (isReseller) {
           text += `💰 Regular Price: <s>${fmtCurr(normalPrice)}</s>\n`;
-          if (isReseller && !isVip) text += `👑 <b>Reseller Price: ${fmtCurr(finalPrice)}</b>\n`;
-          else if (isVip && !isReseller) text += `🌟 <b>VIP Price: ${fmtCurr(finalPrice)}</b>\n`;
-          else text += `👑🌟 <b>Super Reseller+VIP Price: ${fmtCurr(finalPrice)}</b>\n`;
+          text += `👑 <b>Wholesale Reseller Price: ${fmtCurr(finalPrice)}</b>\n`;
         } else {
           text += `💰 Price: ${fmtCurr(normalPrice)}\n`;
         }
@@ -2005,64 +2156,90 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       return;
     }
 
-    // 17. VIP Dashboard & Upgrade
-    if (callbackData === 'menu_vip_dash') {
-      const isVip = Boolean(currentUser.is_vip);
-      const statusStr = isVip ? "🟢 Active (Lifetime)" : "🔴 Not Subscribed";
-      let text = renderUiText('vip_menu', { '{vip_status}': statusStr });
+    // 17. Referral Program Dashboard & Link Sharing
+    if (callbackData === 'menu_referral' || callbackData === 'menu_refer' || callbackData === 'referral_dash') {
+      logActivity(currentUser.user_id, 'VIEW_REFERRALS');
+      const botUsername = activeBot?.username || settings.bot_username || 'kalam_store_bot';
+      const referralLink = `https://t.me/${botUsername}?start=ref_${currentUser.user_id}`;
+      const rewardAmt = settings.referral_reward_inr ?? 10;
+      const commRate = settings.referral_commission_percent ?? 5;
+      const refBonus = settings.referral_referee_bonus_inr ?? 5;
+      const refCount = currentUser.referral_count || 0;
+      const refEarned = currentUser.referral_earnings || 0;
 
-      const kb: InlineKeyboardButton[][] = [];
-      if (isVip) {
-        text += `\n📅 <b>Member Since:</b> ${currentUser.vip_since || '2026'}\n\nEnjoy your permanent 15% discount!`;
-      } else {
-        text += `\n\n💳 <b>Your Current Balance:</b> ${fmtCurr(currentUser.balance)}\n`;
-        if (currentUser.balance >= settings.vip_price_inr) {
-          kb.push([{
-            text: `✅ Purchase VIP for ${fmtCurr(settings.vip_price_inr)}`,
-            callback_data: "execute_vip_upgrade",
-            style: "success"
-          }]);
-        } else {
-          kb.push([{
-            text: `❌ Need ${fmtCurr(settings.vip_price_inr)} to Upgrade`,
-            callback_data: "ignore_stock_click",
-            style: "danger"
-          }]);
-          kb.push([{
-            text: "💳 Add Balance Now",
-            callback_data: "menu_add_balance",
+      const text = renderUiText('referral_menu', {
+        '{referral_reward}': rewardAmt.toFixed(0),
+        '{referral_commission}': commRate.toFixed(0),
+        '{referee_bonus}': refBonus.toFixed(0),
+        '{referral_link}': referralLink,
+        '{referral_count}': String(refCount),
+        '{referral_earnings}': refEarned.toFixed(2),
+        '{current_balance}': currentUser.balance.toFixed(2)
+      });
+
+      const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${refBonus} free bonus: ${referralLink}`);
+      const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
+
+      const kb: InlineKeyboardButton[][] = [
+        [
+          {
+            text: "🚀 Share on Telegram",
+            url: tgShareUrl,
+            icon_custom_emoji_id: emojis.telegram || DEFAULT_EMOJIS.telegram,
             style: "primary"
-          }]);
-        }
-      }
+          }
+        ],
+        [
+          {
+            text: `👥 My Invited Friends (${refCount})`,
+            callback_data: "my_referral_list",
+            icon_custom_emoji_id: emojis.profile || DEFAULT_EMOJIS.profile,
+            style: "primary"
+          },
+          {
+            text: "💳 Add Balance",
+            callback_data: "menu_add_balance",
+            icon_custom_emoji_id: emojis.add_balance || DEFAULT_EMOJIS.add_balance,
+            style: "primary"
+          }
+        ],
+        getBackKeyboard('back_main')[0]
+      ];
 
-      kb.push(getBackKeyboard('back_main')[0]);
       editLastBotMessage(text, kb);
       return;
     }
 
-    // Execute VIP Upgrade
-    if (callbackData === 'execute_vip_upgrade') {
-      if (currentUser.is_vip) {
-        pushBotMessage("⚠️ You are already a VIP Member!");
-        return;
-      }
-      if (currentUser.balance < settings.vip_price_inr) {
-        pushBotMessage(`❌ Your balance dropped below ${fmtCurr(settings.vip_price_inr)}.`);
-        return;
+    // View My Referral Team / List
+    if (callbackData === 'my_referral_list') {
+      const myReferees = users.filter(u => u.referred_by === currentUser.user_id);
+      let text = `👥 <b><u>— YOUR INVITED FRIENDS —</u></b> 👥\n━━━━━━━━━━━━━━━━━━━━\n`;
+      
+      if (myReferees.length === 0) {
+        text += `<i>You haven't invited any friends yet.</i>\n\n` +
+          `💰 Share your referral link to earn <b>₹${settings.referral_reward_inr ?? 10} instant cash</b> for each friend, plus <b>${settings.referral_commission_percent ?? 5}% lifetime commission</b> on every recharge!`;
+      } else {
+        text += `Total Invited: <b>${myReferees.length} users</b>\nTotal Earned: <b>₹${(currentUser.referral_earnings || 0).toFixed(2)}</b>\n\n`;
+        myReferees.slice(0, 10).forEach((r, idx) => {
+          text += `${idx + 1}. <b>${r.first_name}</b> (@${r.username || 'user'}) | UID: <code>${r.user_id}</code>\n` +
+            `   📅 <i>Joined: ${r.joined_date.substring(0, 10)}</i> | Total Spent: ₹${r.spent.toFixed(0)}\n`;
+        });
+        if (myReferees.length > 10) {
+          text += `\n<i>...and ${myReferees.length - 10} more users!</i>\n`;
+        }
       }
 
-      setUsers(prev => prev.map(u => u.user_id === currentUser.user_id ? {
-        ...u,
-        balance: u.balance - settings.vip_price_inr,
-        is_vip: 1,
-        vip_since: new Date().toISOString().substring(0, 10),
-        account_type: 'VIP'
-      } : u));
+      const kb: InlineKeyboardButton[][] = [
+        [
+          {
+            text: "🔙 Back to Refer & Earn",
+            callback_data: "menu_referral",
+            style: "danger"
+          }
+        ]
+      ];
 
-      logActivity(currentUser.user_id, 'UPGRADED_VIP');
-      confetti({ particleCount: 100, spread: 90, origin: { y: 0.4 } });
-      pushBotMessage("🎉 <b>Upgrade Successful!</b> You are now a lifetime VIP Member with 15% discount on all store items.", getBackKeyboard('menu_vip_dash'));
+      editLastBotMessage(text, kb);
       return;
     }
 
@@ -2156,20 +2333,22 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     if (callbackData === 'admin_view_stats') {
       const tUsers = users.length;
       const tResellers = users.filter(u => u.is_reseller).length;
-      const tVip = users.filter(u => u.is_vip).length;
+      const tReferrals = users.filter(u => u.referred_by).length;
       const tProds = products.length;
       const tKeys = productKeys.filter(k => !k.is_used).length;
       const tRev = users.reduce((acc, u) => acc + u.spent, 0);
+      const tRefEarned = users.reduce((acc, u) => acc + (u.referral_earnings || 0), 0);
 
       const msg = `📊 <b><u>GRID INTELLIGENCE DASHBOARD</u></b> 📊
 ━━━━━━━━━━━━━━━━━━
 👥 <b>Total Grid Users:</b> ${tUsers}
 👑 <b>Wholesale Resellers:</b> ${tResellers}
-🌟 <b>Elite VIP Members:</b> ${tVip}
+🎁 <b>Referred Users:</b> ${tReferrals}
 ━━━━━━━━━━━━━━━━━━
 📦 <b>Active Products:</b> ${tProds}
 🔑 <b>Unused Keys in Vault:</b> ${tKeys}
 💰 <b>Total Gross Revenue:</b> ${fmtCurr(tRev)}
+💵 <b>Total Referral Rewards:</b> ${fmtCurr(tRefEarned)}
 ━━━━━━━━━━━━━━━━━━`;
 
       editLastBotMessage(msg, [[{ text: "Back to Admin", callback_data: "admin_panel_back", style: "danger" }]]);
@@ -2183,10 +2362,23 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       return;
     }
 
-    if (callbackData === 'admin_toggle_vip_sys') {
-      const newStatus = settings.vip_status === 'ON' ? 'OFF' : 'ON';
-      setSettings(prev => ({ ...prev, vip_status: newStatus }));
+    if (callbackData === 'admin_toggle_ref_sys') {
+      const newStatus = settings.referral_system_status === 'OFF' ? 'ON' : 'OFF';
+      setSettings(prev => ({ ...prev, referral_system_status: newStatus }));
       editLastBotMessage("⚙️ <b>Advanced Admin Terminal</b>\n<i>Authorized Access Granted.</i>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_ref_settings') {
+      const text = `🎁 <b><u>REFERRAL PROGRAM SETTINGS</u></b>
+━━━━━━━━━━━━━━━━━━
+🟢 <b>Status:</b> ${settings.referral_system_status || 'ON'}
+💰 <b>Instant Invite Reward:</b> ₹${settings.referral_reward_inr ?? 10}
+💵 <b>Referee Welcome Bonus:</b> ₹${settings.referral_referee_bonus_inr ?? 5}
+📈 <b>Lifetime Commission Rate:</b> ${settings.referral_commission_percent ?? 5}%
+━━━━━━━━━━━━━━━━━━
+<i>You can configure exact values anytime in the Web Admin Hub!</i>`;
+      editLastBotMessage(text, [[{ text: "Back to Admin", callback_data: "admin_panel_back", style: "danger" }]]);
       return;
     }
 
@@ -2312,6 +2504,56 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         setCurrentFsmState(null);
         setFsmData({});
         logActivity(currentUser.user_id, 'CMD_START');
+
+        // Check for referral argument: e.g. /start ref_12846461
+        const parts = trimmed.split(/\s+/);
+        if (parts.length > 1 && parts[1].startsWith('ref_')) {
+          const rawRef = parts[1].replace('ref_', '');
+          const referrerId = Number(rawRef);
+
+          if (!isNaN(referrerId) && referrerId !== currentUser.user_id && !currentUser.referred_by) {
+            const rewardAmount = settings.referral_reward_inr ?? 10.0;
+            const refereeBonus = settings.referral_referee_bonus_inr ?? 5.0;
+
+            // Update current user & referrer
+            setUsers(prev => prev.map(u => {
+              if (u.user_id === currentUser.user_id) {
+                return {
+                  ...u,
+                  referred_by: referrerId,
+                  balance: u.balance + refereeBonus
+                };
+              }
+              if (u.user_id === referrerId) {
+                return {
+                  ...u,
+                  referral_count: (u.referral_count || 0) + 1,
+                  referral_earnings: (u.referral_earnings || 0) + rewardAmount,
+                  balance: u.balance + rewardAmount
+                };
+              }
+              return u;
+            }));
+
+            logActivity(currentUser.user_id, 'REFERRAL_JOINED', `Joined via Referral link of User #${referrerId}. Welcome bonus ₹${refereeBonus} credited.`);
+            logActivity(referrerId, 'REFERRAL_BONUS_EARNED', `New user #${currentUser.user_id} (${currentUser.first_name}) joined via your referral link. ₹${rewardAmount} credited.`);
+
+            confetti({ particleCount: 80, spread: 70, origin: { y: 0.5 } });
+
+            const welcomeRefMsg = `🎉 <b>WELCOME TO KALAM PANEL!</b> 🎁\n━━━━━━━━━━━━━━━━━━━━\n` +
+              `✅ You joined via referral from <b>User #${referrerId}</b>!\n` +
+              `💰 <b>₹${refereeBonus.toFixed(2)} Welcome Bonus</b> has been credited to your wallet!\n\n` +
+              `👉 Use your wallet balance to buy license keys or invite your friends to earn unlimited cash!`;
+
+            pushBotMessage(welcomeRefMsg, getMainMenuKeyboard({
+              ...currentUser,
+              referred_by: referrerId,
+              balance: currentUser.balance + refereeBonus
+            }));
+            return;
+          }
+        }
+
         pushBotMessage(renderUiText('start_menu'), getMainMenuKeyboard(currentUser));
         return;
       }
@@ -2358,28 +2600,12 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
             `💬 Your Chat ID: <code>${currentUser.user_id}</code>\n\n` +
             `🔒 <i>This terminal requires Master Administrator authorization.</i>\n\n` +
             `👉 <b>How to activate Admin Access:</b>\n` +
-            `1️⃣ Go to Web Admin Hub ➔ Settings\n` +
-            `2️⃣ Set <b>Admin ID</b> to <code>${currentUser.user_id}</code>\n` +
-            `3️⃣ Or type <code>/setadmin ${currentUser.user_id}</code>\n\n` +
-            `<i>Type <code>@admin</code> or <code>/admin</code> to launch after setting your ID!</i>`
+            `1️⃣ Open your Web Admin Hub ➔ Settings\n` +
+            `2️⃣ Set <b>Master Admin ID</b> to <code>${currentUser.user_id}</code> and click Save.\n\n` +
+            `<i>For security, Admin IDs can only be configured from the Website Admin Panel. Once saved on the website, typing @admin or /admin opens your Admin Control Terminal!</i>`
           );
         }
         return;
-      }
-
-      if (cmd.startsWith('/setadmin')) {
-        const parts = trimmed.split(/\s+/);
-        const newAdminId = parts.length > 1 ? Number(parts[1]) : currentUser.user_id;
-        if (newAdminId && !isNaN(newAdminId)) {
-          setSettings(prev => ({ ...prev, admin_id: newAdminId }));
-          pushBotMessage(
-            `👑 <b>MASTER ADMIN ID UPDATED!</b>\n\n` +
-            `✅ Bound Admin ID: <code>${newAdminId}</code>\n` +
-            `You now have full master access. Type <code>@admin</code> or <code>/admin</code> to launch.`,
-            getAdminKeyboard()
-          );
-          return;
-        }
       }
 
       if (cmd.startsWith('/addbalance') || cmd.startsWith('/credit')) {
@@ -3131,7 +3357,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const sendBroadcastMessage = async (params: {
-    targetAudience: 'all' | 'vip' | 'reseller' | 'non_reseller';
+    targetAudience: 'all' | 'referrers' | 'reseller' | 'non_reseller' | 'vip';
     text: string;
     imageUrl?: string;
     buttonText?: string;
@@ -3142,7 +3368,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Filter recipients
     let recipients = users;
-    if (targetAudience === 'vip') {
+    if (targetAudience === 'referrers') {
+      recipients = users.filter(u => (u.referral_count || 0) > 0);
+    } else if (targetAudience === 'vip') {
       recipients = users.filter(u => u.is_vip === 1);
     } else if (targetAudience === 'reseller') {
       recipients = users.filter(u => u.is_reseller === 1);
@@ -3169,6 +3397,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     // Check if currently simulated user belongs to target audience
     const isCurrentInAudience =
       targetAudience === 'all' ||
+      (targetAudience === 'referrers' && (currentUser.referral_count || 0) > 0) ||
       (targetAudience === 'vip' && currentUser.is_vip === 1) ||
       (targetAudience === 'reseller' && currentUser.is_reseller === 1) ||
       (targetAudience === 'non_reseller' && currentUser.is_reseller === 0);
@@ -3562,6 +3791,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         closeTicket,
         updateSettings,
         updateEmojiSlot,
+        updateUserProfile,
         resetDatabaseToDefaults
       }}
     >

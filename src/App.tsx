@@ -10,6 +10,8 @@ import { UserDashboard } from './components/Dashboard/UserDashboard';
 import { MyBotsDashboard } from './components/BotManager/MyBotsDashboard';
 import { PaymentGatewayManager } from './components/Gateways/PaymentGatewayManager';
 import { ResellerApiManager } from './components/ResellerAPI/ResellerApiManager';
+import { WebsiteLogo } from './components/Common/WebsiteLogo';
+import { useKeyboardAwareness } from './hooks/useKeyboardAwareness';
 import {
   LayoutDashboard,
   Bot,
@@ -64,6 +66,7 @@ const AppContent: React.FC = () => {
 
   const [isMobileFrame, setIsMobileFrame] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const { isKeyboardVisible } = useKeyboardAwareness();
 
   // Allow full Platform Master Admin access for the store owner/admin
   const isMasterAdmin =
@@ -79,19 +82,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="flex flex-col min-h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-y-auto">
         <header className="bg-slate-900/90 border-b border-slate-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-cyan-500/20 text-sm">
-              ⚡
-            </div>
-            <div>
-              <span className="font-bold text-sm md:text-base text-white tracking-tight">
-                KALAM FF PANEL
-              </span>
-              <span className="text-[10px] ml-2 bg-cyan-500/10 text-cyan-300 font-semibold px-2 py-0.5 rounded border border-cyan-500/20">
-                Multi-Bot Creator Hub
-              </span>
-            </div>
-          </div>
+          <WebsiteLogo size="md" />
           <div className="text-xs text-slate-400 hidden sm:block">
             Sign in with Google or Email to manage your Telegram Store Bots.
           </div>
@@ -105,7 +96,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-screen bg-[#030712] text-slate-100 font-sans overflow-hidden select-none relative">
+    <div className="flex flex-col h-[100dvh] w-full bg-[#030712] text-slate-100 font-sans overflow-hidden relative">
       {/* Liquid Glass Ambient Fluid Mesh Orbs in Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-gradient-to-br from-cyan-500/25 to-blue-600/20 rounded-full blur-[110px] animate-blob-1 opacity-70" />
@@ -114,55 +105,43 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* Top Application Navigation Bar with Liquid Glass */}
-      <header className="liquid-glass border-b border-white/10 px-3 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 shrink-0 z-30 shadow-2xl shadow-cyan-950/30 sticky top-0">
+      <header className="liquid-glass border-b border-white/10 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 z-30 shadow-2xl shadow-cyan-950/30 sticky top-0 overflow-hidden">
         {/* Brand & Title */}
-        <div className="flex items-center gap-2 md:gap-3 min-w-0">
-          <div className="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-tr from-cyan-400 via-teal-400 to-blue-500 flex items-center justify-center font-black text-slate-950 shadow-lg shadow-cyan-500/30 text-sm md:text-base shrink-0 border border-white/40">
-            ⚡
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <span className="font-extrabold text-xs md:text-base text-white tracking-tight truncate bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-transparent">
-                KALAM FF PANEL
-              </span>
-              {/* Active Bot Quick Switcher on Desktop */}
-              {myBots.length > 0 ? (
-                <div className="hidden lg:flex items-center gap-1.5 liquid-glass-pill px-2.5 py-1 rounded-xl text-xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                  <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
-                  <select
-                    value={activeBot?.id || ''}
-                    onChange={(e) => switchActiveBot(e.target.value)}
-                    className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer text-xs"
-                  >
-                    {myBots.map((b) => (
-                      <option key={b.id} value={b.id} className="bg-slate-900 text-white">
-                        @{b.username} ({b.name})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('my_bots')}
-                  className="hidden sm:flex items-center gap-1.5 liquid-glass-pill text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition"
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>+ Create Your Bot</span>
-                </button>
-              )}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
+          <WebsiteLogo
+            size="sm"
+            showSubtitle={false}
+            onClick={() => setActiveTab('dashboard')}
+            className="cursor-pointer hover:opacity-95 transition shrink-0"
+          />
+
+          {/* Active Bot Quick Switcher on Desktop */}
+          {myBots.length > 0 ? (
+            <div className="hidden lg:flex items-center gap-1.5 liquid-glass-pill px-2.5 py-1 rounded-xl text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+              <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
+              <select
+                value={activeBot?.id || ''}
+                onChange={(e) => switchActiveBot(e.target.value)}
+                className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer text-xs"
+              >
+                {myBots.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-slate-900 text-white">
+                    @{b.username} ({b.name})
+                  </option>
+                ))}
+              </select>
             </div>
-            {/* Mobile bot badge & quick picker */}
-            <div className="flex sm:hidden items-center gap-1 text-[10px] text-slate-400 leading-tight">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block shrink-0"></span>
-              {activeBot ? (
-                <span className="text-cyan-300 font-bold truncate max-w-[130px]">@{activeBot.username}</span>
-              ) : (
-                <span className="text-slate-400">Multi-Bot Hub</span>
-              )}
-            </div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTab('my_bots')}
+              className="hidden lg:flex items-center gap-1.5 liquid-glass-pill text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>+ Create Bot</span>
+            </button>
+          )}
         </div>
 
         {/* Center Primary Tab Toggle (Desktop) */}
@@ -281,14 +260,14 @@ const AppContent: React.FC = () => {
         </div>
 
         {/* Right User Status & Actions */}
-        <div className="flex items-center gap-1.5 md:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
           {/* Mobile Active Bot Switcher Dropdown if multiple bots */}
           {myBots.length > 1 && (
-            <div className="sm:hidden flex items-center liquid-glass-pill px-2 py-1 rounded-xl text-[11px]">
+            <div className="hidden min-[480px]:flex sm:hidden items-center liquid-glass-pill px-1.5 py-1 rounded-xl text-[11px]">
               <select
                 value={activeBot?.id || ''}
                 onChange={(e) => switchActiveBot(e.target.value)}
-                className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer max-w-[85px] truncate"
+                className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer max-w-[75px] truncate text-[10px]"
               >
                 {myBots.map((b) => (
                   <option key={b.id} value={b.id} className="bg-slate-900 text-white">
@@ -304,19 +283,19 @@ const AppContent: React.FC = () => {
             type="button"
             onClick={() => setActiveTab('bot')}
             title="Click to add balance in bot"
-            className="flex items-center gap-1.5 liquid-glass-pill hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-emerald-500/40 text-xs transition cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+            className="flex items-center gap-1 liquid-glass-pill hover:bg-white/10 px-2 sm:px-2.5 py-1.5 rounded-xl border border-emerald-500/40 text-xs transition cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.15)] shrink-0"
           >
-            <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-bold text-emerald-300 text-xs font-mono">
+            <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="font-bold text-emerald-300 text-xs font-mono whitespace-nowrap">
               ₹{currentUser.balance.toFixed(0)}
             </span>
           </button>
 
-          {/* Prominent + Add Product Button */}
+          {/* Prominent + Add Product Button (Desktop only) */}
           <button
             type="button"
             onClick={openAddProductModal}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 border border-amber-300/60 min-h-[36px]"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 border border-amber-300/60 min-h-[36px] shrink-0"
           >
             <Plus className="w-4 h-4 font-black" />
             <span>+ Add Product</span>
@@ -330,14 +309,14 @@ const AppContent: React.FC = () => {
                 setAdminTab('overview');
                 setActiveTab('admin');
               }}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md active:scale-95 min-h-[38px] ${
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md active:scale-95 min-h-[32px] sm:min-h-[36px] shrink-0 ${
                 activeTab === 'admin'
                   ? 'bg-gradient-to-r from-rose-500 to-indigo-600 text-white ring-2 ring-rose-400 shadow-rose-500/30'
                   : 'bg-indigo-600/30 text-rose-300 border border-rose-500/40 hover:bg-rose-500/20'
               }`}
             >
               <Shield className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
-              <span>Admin</span>
+              <span className="hidden min-[360px]:inline">Admin</span>
             </button>
           )}
 
@@ -345,9 +324,10 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-xs md:text-sm font-semibold text-slate-200 transition cursor-pointer min-h-[38px]"
+            className="flex items-center gap-1 p-1 sm:px-2 sm:py-1.5 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-xs md:text-sm font-semibold text-slate-200 transition cursor-pointer min-h-[32px] sm:min-h-[36px] shrink-0"
+            title="Profile & Settings"
           >
-            <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 overflow-hidden flex items-center justify-center text-xs text-slate-950 font-bold shrink-0 border border-white/30">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 overflow-hidden flex items-center justify-center text-xs text-slate-950 font-bold shrink-0 border border-white/30">
               {currentUser.avatar_url ? (
                 <img
                   src={currentUser.avatar_url}
@@ -359,7 +339,7 @@ const AppContent: React.FC = () => {
                 currentUser.first_name.charAt(0)
               )}
             </div>
-            <div className="text-left hidden md:block truncate max-w-[100px]">
+            <div className="text-left hidden lg:block truncate max-w-[90px]">
               <div className="leading-tight font-bold text-white truncate">{currentUser.first_name}</div>
             </div>
           </button>
@@ -373,15 +353,15 @@ const AppContent: React.FC = () => {
               }
             }}
             title="Reset Everything to Defaults"
-            className="p-2 md:p-2.5 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl liquid-glass-pill hover:bg-white/10 active:scale-95 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer shrink-0"
           >
-            <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
 
       {/* Main Content Area with Smooth Motion Transitions */}
-      <main className="flex-1 overflow-hidden relative flex flex-col z-10">
+      <main className="flex-1 min-h-0 relative flex flex-col z-10 w-full overflow-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' ? (
             <motion.div
@@ -390,7 +370,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
             >
               <UserDashboard />
             </motion.div>
@@ -401,7 +381,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
             >
               <MyBotsDashboard />
             </motion.div>
@@ -412,7 +392,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full flex flex-col overflow-hidden pb-20 sm:pb-0"
+              className="flex-1 min-h-0 w-full flex flex-col overflow-hidden pb-20 sm:pb-0"
             >
               <div
                 className={`w-full h-full flex flex-col mx-auto transition-all duration-300 ${
@@ -432,7 +412,7 @@ const AppContent: React.FC = () => {
                   isMobileFrame={isMobileFrame}
                   setIsMobileFrame={setIsMobileFrame}
                 />
-                <div className="flex-1 overflow-hidden relative">
+                <div className="flex-1 min-h-0 overflow-hidden relative">
                   <TelegramBotView />
                 </div>
               </div>
@@ -444,7 +424,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
             >
               <PaymentGatewayManager />
             </motion.div>
@@ -455,7 +435,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
             >
               <ResellerApiManager />
             </motion.div>
@@ -466,7 +446,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full flex flex-col overflow-hidden pb-16 sm:pb-0"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-16"
             >
               <AdminDashboard />
             </motion.div>
@@ -477,7 +457,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
             >
               <UserDashboard />
             </motion.div>
@@ -486,7 +466,13 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* Bottom Mobile Navigation Dock (Liquid Glass Mobile Dock) */}
-      <nav className="sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-1.5 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10">
+      <nav
+        className={`sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-1.5 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10 transition-all duration-300 ease-out ${
+          isKeyboardVisible || activeTab === 'bot'
+            ? 'translate-y-28 opacity-0 pointer-events-none'
+            : 'translate-y-0 opacity-100'
+        }`}
+      >
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}

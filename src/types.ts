@@ -51,6 +51,17 @@ export interface BotInstance {
   };
 }
 
+export interface ReferralRecord {
+  id: string;
+  referrer_id: number;
+  referee_id: number;
+  referee_name: string;
+  reward_amount: number;
+  commission_earned: number;
+  created_at: string;
+  status: 'completed' | 'pending';
+}
+
 export interface User {
   user_id: number;
   chat_id?: number;
@@ -67,6 +78,8 @@ export interface User {
   spent: number;
   last_spin?: string;
   joined_date: string;
+  last_login?: string;
+  login_at?: string;
   is_reseller: number; // 0 or 1
   reseller_since?: string;
   total_saved: number;
@@ -74,6 +87,10 @@ export interface User {
   warnings: number;
   is_vip: number; // 0 or 1
   vip_since?: string;
+  referral_code?: string;
+  referred_by?: number;
+  referral_count?: number;
+  referral_earnings?: number;
   is_admin?: number;
   role?: string;
 }
@@ -225,6 +242,10 @@ export interface Settings {
   admin_id: number;
   admin_contact: string;
   reseller_system_status: 'ON' | 'OFF';
+  referral_system_status?: 'ON' | 'OFF';
+  referral_reward_inr?: number;
+  referral_commission_percent?: number;
+  referral_referee_bonus_inr?: number;
   bot_status: 'ON' | 'OFF';
   how_to_video: string;
   fampay_api_key: string;
@@ -241,7 +262,7 @@ export interface Settings {
   binance_api: string;
   binance_secret: string;
   binance_address: string;
-  vip_status: 'ON' | 'OFF';
+  vip_status?: 'ON' | 'OFF';
   reseller_setup_fee: number;
   reseller_min_balance: number;
   support_telegram: string;
@@ -249,11 +270,12 @@ export interface Settings {
   apk_channel_link?: string;
   official_channel_link?: string;
   ui_start_menu: string;
-  ui_vip_menu: string;
+  ui_referral_menu?: string;
+  ui_vip_menu?: string;
   ui_add_balance_menu: string;
   usdt_to_inr: number;
-  vip_discount_percentage: number;
-  vip_price_inr: number;
+  vip_discount_percentage?: number;
+  vip_price_inr?: number;
   min_deposit_inr?: number;
   max_deposit_inr?: number;
   [key: string]: any;
@@ -292,4 +314,4 @@ export interface ChatMessage {
 
 export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'telegram' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
-export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code';
+export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code';

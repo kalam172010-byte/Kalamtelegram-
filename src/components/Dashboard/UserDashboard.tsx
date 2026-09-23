@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useBot } from '../../context/BotContext';
 import { motion } from 'motion/react';
 import {
@@ -6,7 +6,8 @@ import {
   Shield,
   CreditCard,
   Zap,
-  Crown,
+  Gift,
+  Share2,
   Wallet,
   Sparkles,
   Smartphone,
@@ -32,7 +33,9 @@ import {
   Activity,
   Package,
   Users,
-  Megaphone
+  Megaphone,
+  Camera,
+  Send
 } from 'lucide-react';
 import { CreateBotWizardModal } from '../BotManager/CreateBotWizardModal';
 import { UserProfileModal } from '../Auth/UserProfileModal';
@@ -40,6 +43,7 @@ import { UserProfileModal } from '../Auth/UserProfileModal';
 export const UserDashboard: React.FC = () => {
   const {
     currentUser,
+    updateUserProfile,
     myBots,
     activeBot,
     activeBotId,
@@ -51,6 +55,7 @@ export const UserDashboard: React.FC = () => {
     products,
     productKeys,
     allUsers,
+    settings,
     botStatus,
     logout
   } = useBot();
@@ -60,6 +65,37 @@ export const UserDashboard: React.FC = () => {
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
   const [copiedChatId, setCopiedChatId] = useState(false);
+  const [copiedRefLink, setCopiedRefLink] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDirectPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const targetSize = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const minDim = Math.min(img.width, img.height);
+          const startX = (img.width - minDim) / 2;
+          const startY = (img.height - minDim) / 2;
+          ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, targetSize, targetSize);
+          const compressed = canvas.toDataURL('image/jpeg', 0.88);
+          updateUserProfile({ avatar_url: compressed });
+        } else {
+          updateUserProfile({ avatar_url: event.target?.result as string });
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   // Allow full Master Admin access
   const isMasterAdmin =
@@ -96,6 +132,23 @@ export const UserDashboard: React.FC = () => {
     return 'Good evening';
   };
 
+  const formatLiveDate = (dateStr?: string) => {
+    if (!dateStr) return 'Active Now';
+    try {
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T'));
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -116,15 +169,37 @@ export const UserDashboard: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
           {/* User Info Block */}
           <div className="flex items-start md:items-center gap-4">
-            <div className="relative shrink-0">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleDirectPhotoUpload}
+              className="hidden"
+            />
+            <div
+              className="relative shrink-0 cursor-pointer group"
+              title="Click photo to upload or change profile image"
+            >
               <img
                 src={currentUser.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`}
                 alt={currentUser.first_name}
-                className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-900/80 border-2 border-white/20 p-1 shadow-xl object-cover"
+                className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-900/80 border-2 border-white/20 group-hover:border-cyan-400 p-1 shadow-xl object-cover transition"
+                onClick={() => setIsProfileOpen(true)}
               />
               <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-950 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.8)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="absolute -bottom-1 -left-1 p-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full shadow-lg border border-slate-900 transition cursor-pointer"
+                title="Quick Upload Image File"
+              >
+                <Camera className="w-3 h-3" />
+              </button>
             </div>
 
             <div>
@@ -137,10 +212,10 @@ export const UserDashboard: React.FC = () => {
                 </h1>
 
                 {/* Account Tier Badge */}
-                {currentUser.account_type === 'VIP' ? (
-                  <span className="inline-flex items-center gap-1 liquid-glass-pill text-amber-300 border-amber-500/40 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm">
-                    <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    VIP Member
+                {currentUser.referral_count && currentUser.referral_count > 0 ? (
+                  <span className="inline-flex items-center gap-1 liquid-glass-pill text-pink-300 border-pink-500/40 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+                    <Gift className="w-3.5 h-3.5 text-pink-400" />
+                    Top Promoter ({currentUser.referral_count})
                   </span>
                 ) : currentUser.account_type === 'Reseller' ? (
                   <span className="inline-flex items-center gap-1 liquid-glass-pill text-purple-300 border-purple-500/40 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm">
@@ -163,6 +238,12 @@ export const UserDashboard: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-2 text-xs text-slate-400">
+                {/* Real-time Login Date & Time */}
+                <span className="flex items-center gap-1 liquid-glass-pill px-2.5 py-0.5 rounded-xl border border-emerald-500/40 text-emerald-300 font-mono text-[11px] bg-emerald-950/40 shadow-sm">
+                  <Clock className="w-3 h-3 text-emerald-400 animate-pulse" />
+                  <span>Login: {formatLiveDate(currentUser.last_login || currentUser.login_at || currentUser.joined_date)}</span>
+                </span>
+
                 {/* Telegram UID */}
                 <span className="flex items-center gap-1 liquid-glass-pill px-2 py-0.5 rounded-xl border border-cyan-500/30">
                   <span className="text-cyan-400 font-mono font-bold text-[10px]">UID:</span>
@@ -277,49 +358,39 @@ export const UserDashboard: React.FC = () => {
 
       {/* 2. Overview Metrics & KPI Cards (Mobile Optimized 2x2 Liquid Glass Grid) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {/* Card 1: Subscription & Account Status */}
+        {/* Card 1: Refer & Earn Rewards */}
         <div className="liquid-glass-interactive rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between group">
           <div className="flex items-start justify-between gap-1.5">
             <div>
-              <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Account Tier</span>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="text-sm sm:text-lg font-extrabold text-white truncate max-w-[100px] sm:max-w-none">
-                  {currentUser.account_type === 'VIP'
-                    ? 'VIP Pass'
-                    : currentUser.account_type === 'Reseller'
-                    ? 'Reseller Pro'
-                    : 'Standard'}
+              <span className="text-[10px] sm:text-xs font-semibold text-pink-400 uppercase tracking-wider flex items-center gap-1">
+                <Gift className="w-3 h-3 text-pink-400" />
+                Refer & Earn
+              </span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-lg sm:text-2xl font-black text-white font-mono drop-shadow-[0_0_12px_rgba(244,114,182,0.3)]">
+                  ₹{(currentUser.referral_earnings || 0).toFixed(0)}
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>
+                <span className="text-[10px] sm:text-xs text-slate-400">earned</span>
               </div>
             </div>
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
-              currentUser.account_type === 'VIP'
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                : currentUser.account_type === 'Reseller'
-                ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-            }`}>
-              {currentUser.account_type === 'VIP' ? (
-                <Crown className="w-4 h-4 sm:w-5 sm:h-5" />
-              ) : currentUser.account_type === 'Reseller' ? (
-                <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-              ) : (
-                <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center justify-center shrink-0">
+              <Gift className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
 
           <div className="mt-2.5 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
-            <span className="truncate max-w-[90px] sm:max-w-none">
-              {currentUser.account_type === 'VIP' ? '15% VIP Off' : 'Regular Plan'}
+            <span className="truncate max-w-[90px] sm:max-w-none text-pink-300 font-medium">
+              👥 {currentUser.referral_count || 0} Invited
             </span>
             <button
               type="button"
-              onClick={() => setIsProfileOpen(true)}
-              className="text-cyan-300 hover:text-white font-semibold inline-flex items-center gap-0.5 shrink-0"
+              onClick={() => {
+                const el = document.getElementById('referral-hub-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="text-pink-300 hover:text-white font-semibold inline-flex items-center gap-0.5 shrink-0 cursor-pointer"
             >
-              Info <ChevronRight className="w-3 h-3" />
+              Share <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -567,7 +638,151 @@ export const UserDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Quick Links to Configurations Grid with Liquid Glass */}
+      {/* 4. 🎁 Refer & Earn Rewards Hub */}
+      <div id="referral-hub-section" className="liquid-glass-card rounded-3xl p-5 md:p-7 shadow-2xl relative overflow-hidden border border-pink-500/30">
+        {/* Glow Effects */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-0 w-60 h-60 bg-purple-500/10 rounded-full blur-2xl pointer-events-none -ml-20 -mb-20" />
+
+        <div className="relative z-10 space-y-6">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-white shadow-xl shadow-pink-500/25 shrink-0 border border-pink-400/40">
+                <Gift className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg md:text-xl font-black text-white tracking-tight">
+                    Refer & Earn Rewards Program
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                    Live Cash Bonus
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Invite friends to Kalam FF Panel Bot and earn real instant cash plus lifetime recharge commissions!
+                </p>
+              </div>
+            </div>
+
+            {/* Total Earnings Pill */}
+            <div className="flex items-center gap-3 bg-slate-900/80 px-4 py-2 rounded-2xl border border-pink-500/30 self-start md:self-auto">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Cash Earned</span>
+                <span className="text-lg font-black text-pink-300 font-mono">
+                  ₹{(currentUser.referral_earnings || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="w-px h-8 bg-slate-800" />
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Friends</span>
+                <span className="text-lg font-black text-white font-mono">
+                  {currentUser.referral_count || 0}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Referral Link Box & 1-Click Action */}
+          {(() => {
+            const botUser = activeBot?.username || settings.bot_username || 'kalam_store_bot';
+            const referralLink = `https://t.me/${botUser}?start=ref_${currentUser.user_id}`;
+            const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${settings.referral_referee_bonus_inr || 5} free bonus: ${referralLink}`);
+            const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
+
+            return (
+              <div className="bg-slate-950/70 p-4 md:p-5 rounded-2xl border border-slate-800/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                    Your Personal Telegram Referral Link:
+                  </span>
+                  <span className="text-[11px] text-pink-300 font-semibold">
+                    Give ₹{settings.referral_referee_bonus_inr || 5} • Get ₹{settings.referral_reward_inr || 10} + {settings.referral_commission_percent || 5}%
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+                  <div className="flex-1 bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-700/80 font-mono text-xs text-pink-200 truncate flex items-center select-all">
+                    {referralLink}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(referralLink);
+                      setCopiedRefLink(true);
+                      setTimeout(() => setCopiedRefLink(false), 2000);
+                    }}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer active:scale-95 border border-slate-600 shrink-0"
+                  >
+                    {copiedRefLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-300" />}
+                    <span>{copiedRefLink ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+
+                  <a
+                    href={tgShareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-400 hover:to-rose-500 text-white font-bold text-xs transition shadow-lg shadow-pink-500/25 cursor-pointer active:scale-95 shrink-0"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Share on Telegram</span>
+                  </a>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 3 Step Reward Breakdown Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="liquid-glass-pill p-4 rounded-2xl border border-pink-500/20 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-pink-400">Step 1 • Instant Bonus</span>
+                <h4 className="text-sm font-extrabold text-white mt-1">₹{settings.referral_reward_inr || 10} Per Friend</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Credited directly to your wallet balance the instant your friend opens your link and presses Start!
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] font-semibold text-emerald-300 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Instant Wallet Credit</span>
+              </div>
+            </div>
+
+            <div className="liquid-glass-pill p-4 rounded-2xl border border-purple-500/20 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">Step 2 • Lifetime Commission</span>
+                <h4 className="text-sm font-extrabold text-white mt-1">{settings.referral_commission_percent || 5}% Lifetime Cut</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Earn automated commission every single time any of your referred friends deposit balance or buy keys.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] font-semibold text-purple-300 flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Passive Income 24/7</span>
+              </div>
+            </div>
+
+            <div className="liquid-glass-pill p-4 rounded-2xl border border-cyan-500/20 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Step 3 • Welcome Bonus</span>
+                <h4 className="text-sm font-extrabold text-white mt-1">₹{settings.referral_referee_bonus_inr || 5} Free for Friends</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Your friends get free wallet cash to test out panels immediately upon clicking your invite link.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] font-semibold text-cyan-300 flex items-center gap-1">
+                <Gift className="w-3.5 h-3.5" />
+                <span>Mutual Benefit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Quick Links to Configurations Grid with Liquid Glass */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm md:text-base font-bold text-white flex items-center gap-2">

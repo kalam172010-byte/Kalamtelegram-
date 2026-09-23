@@ -18,6 +18,8 @@ import {
   Shield,
   ShieldAlert,
   Crown,
+  Gift,
+  Share2,
   DollarSign,
   Search,
   CheckCircle,
@@ -41,10 +43,12 @@ import {
   Radio,
   Bot,
   Wrench,
-  Activity
+  Activity,
+  Clock
 } from 'lucide-react';
-import { Product } from '../../types';
+import { Product, BotInstance } from '../../types';
 import { SystemHealthWidget } from './SystemHealthWidget';
+import { WebsiteLogo } from '../Common/WebsiteLogo';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -107,13 +111,14 @@ export const AdminDashboard: React.FC = () => {
   const handleTabChange = (newTab: typeof adminTab) => {
     setAdminTab(newTab);
     if (contentScrollRef.current) {
-      contentScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      contentScrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
   // Bot Cloner & Fleet state
   const [showCreateBotModal, setShowCreateBotModal] = useState(false);
   const [editingBotId, setEditingBotId] = useState<string | null>(null);
+  const [botToDelete, setBotToDelete] = useState<BotInstance | null>(null);
   const [copiedBotTokenId, setCopiedBotTokenId] = useState<string | null>(null);
   const [createBotSuccessMsg, setCreateBotSuccessMsg] = useState<string | null>(null);
 
@@ -144,7 +149,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Broadcast Message State
   const [broadcastForm, setBroadcastForm] = useState({
-    targetAudience: 'all' as 'all' | 'vip' | 'reseller' | 'non_reseller',
+    targetAudience: 'all' as 'all' | 'referrers' | 'vip' | 'reseller' | 'non_reseller',
     text: `⚡ <b>SPECIAL FLASH UPDATE</b> ⚡\n\nNew Non-Root Free Fire VIP panels are now back in stock with instant key delivery!\n\nUse code <code>KALAM50</code> for flat discount on your next recharge!`,
     imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
     buttonText: '🛒 Open Store & Buy',
@@ -404,14 +409,12 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full text-slate-100 overflow-hidden p-2 sm:p-4 md:p-6 space-y-3.5 max-w-7xl mx-auto w-full">
+    <div className="min-h-full w-full text-slate-100 p-2 sm:p-4 md:p-6 pb-28 md:pb-12 space-y-4 max-w-7xl mx-auto flex flex-col">
       {/* Top Admin Header Bar - Compact & Highly Visible */}
       <div className="liquid-glass-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 shrink-0 shadow-2xl">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border border-white/20 shrink-0">
-            <Shield className="w-5 h-5 text-cyan-200" />
-          </div>
-          <div>
+        <div className="flex items-center gap-3">
+          <WebsiteLogo size="md" showSubtitle={false} />
+          <div className="border-l border-white/10 pl-3">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h2 className="text-sm sm:text-base font-black text-white">
                 Admin Control Hub
@@ -440,18 +443,18 @@ export const AdminDashboard: React.FC = () => {
             <span>Bot: {settings.bot_status}</span>
           </button>
 
-          {/* VIP System Toggle */}
+          {/* Referral System Toggle */}
           <button
             type="button"
-            onClick={() => updateSettings({ vip_status: settings.vip_status === 'ON' ? 'OFF' : 'ON' })}
+            onClick={() => updateSettings({ referral_system_status: settings.referral_system_status === 'OFF' ? 'ON' : 'OFF' })}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 ${
-              settings.vip_status === 'ON'
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+              settings.referral_system_status !== 'OFF'
+                ? 'bg-pink-500/20 text-pink-300 border-pink-500/40 hover:bg-pink-500/30'
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
-            <Crown className="w-3.5 h-3.5 text-amber-400" />
-            <span>VIP: {settings.vip_status}</span>
+            <Gift className="w-3.5 h-3.5 text-pink-400" />
+            <span>Referrals: {settings.referral_system_status || 'ON'}</span>
           </button>
 
           {/* Active Bot Switcher */}
@@ -462,11 +465,17 @@ export const AdminDashboard: React.FC = () => {
               onChange={(e) => switchActiveBot(e.target.value)}
               className="bg-transparent text-cyan-300 text-xs font-bold outline-none cursor-pointer max-w-[120px] sm:max-w-[160px] truncate"
             >
-              {bots.map((b, idx) => (
-                <option key={`bot-sel-${b.id || idx}`} value={b.id} className="bg-slate-900 text-slate-200">
-                  {b.name} (@{b.username})
+              {bots.length === 0 ? (
+                <option value="" className="bg-slate-900 text-slate-400">
+                  No bots (Create +)
                 </option>
-              ))}
+              ) : (
+                bots.map((b, idx) => (
+                  <option key={`bot-sel-${b.id || idx}`} value={b.id} className="bg-slate-900 text-slate-200">
+                    {b.name} (@{b.username})
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
@@ -560,6 +569,7 @@ export const AdminDashboard: React.FC = () => {
           { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
           { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
+          { id: 'referrals', label: '🎁 Referral Program', icon: Gift },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
           { id: 'gateways', label: '💳 Payment & APIs', icon: CreditCard },
           { id: 'health', label: '⚡ Health & Diagnostics', icon: Activity },
@@ -593,7 +603,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Main Tab Content */}
       <div
         ref={contentScrollRef}
-        className="flex-1 overflow-y-auto pb-28 sm:pb-12 space-y-6 scrollbar-thin scrollbar-thumb-slate-800 touch-pan-y overscroll-contain pr-0.5 select-auto"
+        className="w-full space-y-6 pb-24 sm:pb-12 pr-0.5 select-auto"
       >
         {/* ================= BOT FLEET & CLONER TAB ================= */}
         {adminTab === 'bots' && (
@@ -731,180 +741,210 @@ export const AdminDashboard: React.FC = () => {
                 <span className="text-xs text-slate-400">Click &quot;Switch Active&quot; to manage any bot&apos;s isolated products and API keys.</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {bots.map((bot, idx) => {
-                  const isActive = activeBot?.id === bot.id;
-                  const botAdminId = bot.admin_id || bot.admin_chat_id || settings.admin_id;
+              {bots.length === 0 ? (
+                <div className="bg-slate-900/80 border border-dashed border-slate-700 rounded-3xl p-8 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto text-2xl">
+                    🤖
+                  </div>
+                  <div className="space-y-1 max-w-md mx-auto">
+                    <h4 className="text-base font-bold text-white">No Bots Configured Yet</h4>
+                    <p className="text-xs text-slate-400">
+                      All demo bots have been removed. Click <b>&quot;+ Clone New Bot Instance&quot;</b> or <b>&quot;Create First Bot&quot;</b> above to connect your real Telegram bot with your bot token and admin ID.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBotForm({
+                        name: 'My Telegram Shop Bot',
+                        username: '',
+                        bot_token: '',
+                        admin_id: String(settings.admin_id || 12846461),
+                        description: 'Automated Telegram Shop with independent API keys and admin authorization.',
+                        fampay_upi_id: settings.fampay_upi_id || 'kalampanel@fam',
+                        famgateway_api_key: '',
+                        bantibhaiya_api_key: '',
+                        bantibhaiya_master_key: '',
+                        clone_products: true
+                      });
+                      setShowCreateBotModal(true);
+                    }}
+                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg transition inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Your Bot Now</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {bots.map((bot, idx) => {
+                    const isActive = activeBot?.id === bot.id;
+                    const botAdminId = bot.admin_id || bot.admin_chat_id || settings.admin_id;
 
-                  return (
-                    <div
-                      key={`fleet-bot-${bot.id || idx}`}
-                      className={`bg-slate-900 border rounded-2xl p-5 space-y-4 transition ${
-                        isActive
-                          ? 'border-cyan-500 shadow-md shadow-cyan-500/10 bg-slate-900/90'
-                          : 'border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {/* Top Row: Info & Status */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow">
-                            🤖
+                    return (
+                      <div
+                        key={`fleet-bot-${bot.id || idx}`}
+                        className={`bg-slate-900 border rounded-2xl p-5 space-y-4 transition ${
+                          isActive
+                            ? 'border-cyan-500 shadow-md shadow-cyan-500/10 bg-slate-900/90'
+                            : 'border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        {/* Top Row: Info & Status */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow">
+                              🤖
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-white text-sm md:text-base">{bot.name}</h4>
+                                {isActive && (
+                                  <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
+                                    ACTIVE
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-cyan-400 font-mono">@{bot.username}</p>
+                            </div>
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-white text-sm md:text-base">{bot.name}</h4>
-                              {isActive && (
-                                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
-                                  ACTIVE
-                                </span>
+
+                          <span
+                            className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
+                              bot.status === 'ONLINE'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                            }`}
+                          >
+                            ● {bot.status}
+                          </span>
+                        </div>
+
+                        {/* Bot Parameters & Isolated APIs */}
+                        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2 text-xs">
+                          {/* Admin Chat ID (Crucial User Requirement) */}
+                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                            <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+                              <Shield className="w-3.5 h-3.5 text-amber-400" />
+                              Admin Chat ID (@admin auth):
+                            </span>
+                            <span className="font-mono text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                              {botAdminId}
+                            </span>
+                          </div>
+
+                          {/* Bot Token Preview */}
+                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                            <span className="text-slate-400 font-semibold">Bot Token:</span>
+                            <div className="flex items-center gap-1.5 font-mono text-slate-300 text-[11px]">
+                              <span>
+                                {bot.bot_token
+                                  ? copiedBotTokenId === bot.id
+                                    ? bot.bot_token
+                                    : `${bot.bot_token.substring(0, 10)}...`
+                                  : 'Default Token'}
+                              </span>
+                              {bot.bot_token && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(bot.bot_token);
+                                    setCopiedBotTokenId(bot.id);
+                                    setTimeout(() => setCopiedBotTokenId(null), 2000);
+                                  }}
+                                  className="text-cyan-400 hover:text-cyan-300"
+                                >
+                                  {copiedBotTokenId === bot.id ? '✓' : <Copy className="w-3 h-3" />}
+                                </button>
                               )}
                             </div>
-                            <p className="text-xs text-cyan-400 font-mono">@{bot.username}</p>
+                          </div>
+
+                          {/* FamGateway UPI */}
+                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                            <span className="text-slate-400 font-semibold">FamGateway UPI:</span>
+                            <span className="font-mono text-slate-300 text-[11px]">
+                              {bot.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam'}
+                            </span>
+                          </div>
+
+                          {/* Reseller API */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 font-semibold">BantiBhaiya API Key:</span>
+                            <span className="font-mono text-indigo-300 text-[11px]">
+                              {bot.reseller_api?.api_key ? '••••' + bot.reseller_api.api_key.slice(-4) : 'Default Provider'}
+                            </span>
                           </div>
                         </div>
 
-                        <span
-                          className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
-                            bot.status === 'ONLINE'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                          }`}
-                        >
-                          ● {bot.status}
-                        </span>
-                      </div>
-
-                      {/* Bot Parameters & Isolated APIs */}
-                      <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2 text-xs">
-                        {/* Admin Chat ID (Crucial User Requirement) */}
-                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                          <span className="text-slate-400 font-semibold flex items-center gap-1.5">
-                            <Shield className="w-3.5 h-3.5 text-amber-400" />
-                            Admin Chat ID (@admin auth):
-                          </span>
-                          <span className="font-mono text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            {botAdminId}
-                          </span>
-                        </div>
-
-                        {/* Bot Token Preview */}
-                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                          <span className="text-slate-400 font-semibold">Bot Token:</span>
-                          <div className="flex items-center gap-1.5 font-mono text-slate-300 text-[11px]">
-                            <span>
-                              {bot.bot_token
-                                ? copiedBotTokenId === bot.id
-                                  ? bot.bot_token
-                                  : `${bot.bot_token.substring(0, 10)}...`
-                                : 'Default Token'}
-                            </span>
-                            {bot.bot_token && (
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                          <div className="flex items-center gap-2">
+                            {!isActive ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(bot.bot_token);
-                                  setCopiedBotTokenId(bot.id);
-                                  setTimeout(() => setCopiedBotTokenId(null), 2000);
-                                }}
-                                className="text-cyan-400 hover:text-cyan-300"
+                                onClick={() => switchActiveBot(bot.id)}
+                                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow"
                               >
-                                {copiedBotTokenId === bot.id ? '✓' : <Copy className="w-3 h-3" />}
+                                <Zap className="w-3.5 h-3.5" />
+                                Switch Active
                               </button>
+                            ) : (
+                              <span className="px-4 py-2 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Active Live Bot
+                              </span>
                             )}
-                          </div>
-                        </div>
 
-                        {/* FamGateway UPI */}
-                        <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                          <span className="text-slate-400 font-semibold">FamGateway UPI:</span>
-                          <span className="font-mono text-slate-300 text-[11px]">
-                            {bot.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam'}
-                          </span>
-                        </div>
-
-                        {/* Reseller API */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400 font-semibold">BantiBhaiya API Key:</span>
-                          <span className="font-mono text-indigo-300 text-[11px]">
-                            {bot.reseller_api?.api_key ? '••••' + bot.reseller_api.api_key.slice(-4) : 'Default Provider'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                        <div className="flex items-center gap-2">
-                          {!isActive ? (
                             <button
                               type="button"
-                              onClick={() => switchActiveBot(bot.id)}
-                              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow"
+                              onClick={() => duplicateBot(bot.id)}
+                              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                              title="Quick duplicate bot"
                             >
-                              <Zap className="w-3.5 h-3.5" />
-                              Switch Active
+                              <Copy className="w-3.5 h-3.5 text-slate-400" />
+                              Clone
                             </button>
-                          ) : (
-                            <span className="px-4 py-2 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Active Live Bot
-                            </span>
-                          )}
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => duplicateBot(bot.id)}
-                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
-                            title="Quick duplicate bot"
-                          >
-                            <Copy className="w-3.5 h-3.5 text-slate-400" />
-                            Clone
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingBotId(bot.id);
-                              setEditBotForm({
-                                name: bot.name,
-                                username: bot.username,
-                                bot_token: bot.bot_token,
-                                admin_id: String(bot.admin_id || bot.admin_chat_id || settings.admin_id),
-                                status: bot.status,
-                                fampay_upi_id: bot.payment_gateway?.upi_id || '',
-                                famgateway_api_key: bot.payment_gateway?.api_key || '',
-                                bantibhaiya_api_key: bot.reseller_api?.api_key || '',
-                                bantibhaiya_master_key: bot.reseller_api?.master_key || ''
-                              });
-                            }}
-                            className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-xl text-xs font-semibold transition cursor-pointer"
-                            title="Edit Bot APIs & Admin ID"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-
-                          {bots.length > 1 && (
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => {
-                                if (confirm(`Are you sure you want to delete bot @${bot.username}?`)) {
-                                  deleteBot(bot.id);
-                                }
+                                setEditingBotId(bot.id);
+                                setEditBotForm({
+                                  name: bot.name,
+                                  username: bot.username,
+                                  bot_token: bot.bot_token,
+                                  admin_id: String(bot.admin_id || bot.admin_chat_id || settings.admin_id),
+                                  status: bot.status,
+                                  fampay_upi_id: bot.payment_gateway?.upi_id || '',
+                                  famgateway_api_key: bot.payment_gateway?.api_key || '',
+                                  bantibhaiya_api_key: bot.reseller_api?.api_key || '',
+                                  bantibhaiya_master_key: bot.reseller_api?.master_key || ''
+                                });
                               }}
+                              className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-xl text-xs font-semibold transition cursor-pointer"
+                              title="Edit Bot APIs & Admin ID"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setBotToDelete(bot)}
                               className="p-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 rounded-xl text-xs font-semibold transition cursor-pointer"
                               title="Delete Bot"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1565,14 +1605,53 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs font-mono">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300">UID</span>
-                        <span className="font-bold text-cyan-300">{user.user_id}</span>
+                    <div className="flex flex-col gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-xs font-mono">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        {/* Telegram User ID */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            UID
+                          </span>
+                          <span className="font-bold text-cyan-300">{user.user_id}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(String(user.user_id), `mob_uid_${user.user_id}`)}
+                            className="text-slate-500 hover:text-cyan-400 p-0.5 transition cursor-pointer"
+                            title="Copy Telegram UID"
+                          >
+                            {copiedItem === `mob_uid_${user.user_id}` ? (
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Telegram Chat ID */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                            CHAT ID
+                          </span>
+                          <span className="text-slate-300 font-semibold">{chatId}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(String(chatId), `mob_chat_${user.user_id}`)}
+                            className="text-slate-500 hover:text-indigo-400 p-0.5 transition cursor-pointer"
+                            title="Copy Telegram Chat ID"
+                          >
+                            {copiedItem === `mob_chat_${user.user_id}` ? (
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-400 text-[11px]">{user.orders_count} orders</span>
-                        <span className="text-slate-500 text-[11px]">₹{(user.spent || 0).toFixed(0)} spent</span>
+
+                      <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-900 text-slate-400">
+                        <span>🛒 {user.orders_count} orders</span>
+                        <span>₹{(user.spent || 0).toFixed(2)} spent</span>
+                        <span className="text-[10px] opacity-75">{user.joined_date ? user.joined_date.split(' ')[0] : 'Active'}</span>
                       </div>
                     </div>
 
@@ -1667,25 +1746,45 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td className="p-3.5">
-                            <div className="font-bold text-white flex items-center gap-1.5">
-                              <span>{user.first_name}</span>
-                              {user.auth_provider === 'google' && (
-                                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                  Google
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              @{user.username || 'none'}
-                              {user.email ? <span className="text-slate-500 ml-1">({user.email})</span> : null}
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden shadow">
+                                {user.avatar_url ? (
+                                  <img src={user.avatar_url} alt={user.first_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  user.first_name.charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold text-white flex items-center gap-1.5">
+                                  <span>{user.first_name}</span>
+                                  {user.auth_provider === 'google' && (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                      Google
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  @{user.username || 'none'}
+                                  {user.email ? <span className="text-slate-500 ml-1">({user.email})</span> : null}
+                                </div>
+                                <div className="text-[10px] text-cyan-400/90 font-mono flex items-center gap-1 mt-0.5">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>Login: {user.last_login || user.login_at || user.joined_date.split(' ')[0]}</span>
+                                </div>
+                              </div>
                             </div>
                           </td>
                           <td className="p-3.5 font-bold text-emerald-400 text-sm font-mono">₹{user.balance.toFixed(2)}</td>
                           <td className="p-3.5">
                             <div className="flex items-center gap-1 flex-wrap">
-                              {user.is_vip ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                  🌟 VIP
+                              {user.referral_count && user.referral_count > 0 ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                                  🎁 Promoter ({user.referral_count})
+                                </span>
+                              ) : null}
+                              {user.referred_by ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                  🔗 Ref #{user.referred_by}
                                 </span>
                               ) : null}
                               {user.is_reseller ? (
@@ -1693,8 +1792,8 @@ export const AdminDashboard: React.FC = () => {
                                   👑 Reseller
                                 </span>
                               ) : null}
-                              {!user.is_vip && !user.is_reseller && (
-                                <span className="text-slate-400 text-xs">Regular</span>
+                              {!user.referral_count && !user.referred_by && !user.is_reseller && (
+                                <span className="text-slate-400 text-xs">Standard</span>
                               )}
                             </div>
                           </td>
@@ -1846,11 +1945,11 @@ export const AdminDashboard: React.FC = () => {
                         color: 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
                       },
                       {
-                        id: 'vip',
-                        label: 'VIP Members',
-                        count: allUsers.filter(u => u.is_vip === 1).length,
-                        badge: 'VIP Only',
-                        color: 'border-amber-500 bg-amber-500/10 text-amber-300'
+                        id: 'referrers',
+                        label: 'Top Promoters',
+                        count: allUsers.filter(u => (u.referral_count || 0) > 0).length,
+                        badge: 'Promoters',
+                        color: 'border-pink-500 bg-pink-500/10 text-pink-300'
                       },
                       {
                         id: 'reseller',
@@ -2130,8 +2229,8 @@ export const AdminDashboard: React.FC = () => {
                         const targetLabel =
                           broadcastForm.targetAudience === 'all'
                             ? `All Users (${res.recipientCount})`
-                            : broadcastForm.targetAudience === 'vip'
-                            ? `VIP Members (${res.recipientCount})`
+                            : broadcastForm.targetAudience === 'referrers'
+                            ? `Top Promoters (${res.recipientCount})`
                             : broadcastForm.targetAudience === 'reseller'
                             ? `Resellers (${res.recipientCount})`
                             : `Regular Users (${res.recipientCount})`;
@@ -2433,6 +2532,270 @@ export const AdminDashboard: React.FC = () => {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ================= REFERRALS TAB ================= */}
+        {adminTab === 'referrals' && (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            {/* Header & Global Switch */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center justify-center shrink-0">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      Refer & Earn Program Control Center
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Configure viral invite rewards, instant cash bonuses, and lifetime commission rates.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ referral_system_status: settings.referral_system_status === 'OFF' ? 'ON' : 'OFF' })}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer border shadow-sm active:scale-95 ${
+                    settings.referral_system_status !== 'OFF'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${settings.referral_system_status !== 'OFF' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                  <span>Program: {settings.referral_system_status !== 'OFF' ? 'ACTIVE & LIVE' : 'DISABLED'}</span>
+                </button>
+              </div>
+
+              {/* KPI Metrics */}
+              {(() => {
+                const referredUsers = allUsers.filter(u => u.referred_by);
+                const activeReferrers = allUsers.filter(u => (u.referral_count || 0) > 0);
+                const totalPaidRewards = allUsers.reduce((sum, u) => sum + (u.referral_earnings || 0), 0);
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Total Referred</span>
+                      <span className="text-lg font-black text-white mt-1 block font-mono">{referredUsers.length} Users</span>
+                    </div>
+
+                    <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Active Referrers</span>
+                      <span className="text-lg font-black text-pink-300 mt-1 block font-mono">{activeReferrers.length} Users</span>
+                    </div>
+
+                    <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Total Rewards Paid</span>
+                      <span className="text-lg font-black text-emerald-300 mt-1 block font-mono">₹{totalPaidRewards.toFixed(2)}</span>
+                    </div>
+
+                    <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Per-Invite Reward</span>
+                      <span className="text-lg font-black text-cyan-300 mt-1 block font-mono">₹{settings.referral_reward_inr || 10}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Configuration Settings Form */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <SettingsIcon className="w-4 h-4 text-cyan-400" />
+                Referral Program Payout Rules & Bonuses
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Instant Referrer Reward (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={settings.referral_reward_inr ?? 10}
+                      onChange={(e) => updateSettings({ referral_reward_inr: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-pink-300 outline-none focus:border-pink-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400">Paid to referrer immediately when new user starts bot.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Referee Welcome Bonus (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={settings.referral_referee_bonus_inr ?? 5}
+                      onChange={(e) => updateSettings({ referral_referee_bonus_inr: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-cyan-300 outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400">Free test credit credited to the invited friend.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Lifetime Purchase Commission (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={settings.referral_commission_percent ?? 5}
+                      onChange={(e) => updateSettings({ referral_commission_percent: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-emerald-400 outline-none focus:border-emerald-500"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold text-sm">%</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Percentage cut from every deposit & key purchase.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Referrers Leaderboard Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  Top Referrers Leaderboard
+                </h4>
+                <span className="text-xs text-slate-400 font-mono">
+                  {allUsers.filter(u => (u.referral_count || 0) > 0).length} active promoters
+                </span>
+              </div>
+
+              {(() => {
+                const sortedReferrers = [...allUsers]
+                  .filter(u => (u.referral_count || 0) > 0 || (u.referral_earnings || 0) > 0)
+                  .sort((a, b) => (b.referral_earnings || 0) - (a.referral_earnings || 0));
+
+                if (sortedReferrers.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-slate-400 text-xs bg-slate-950/60 rounded-xl border border-slate-800">
+                      No referral activities recorded yet. When users invite friends using <code>/start ref_USERID</code>, they will appear here.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">Rank</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">User</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">User ID</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px] text-center">Invited Count</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px] text-right">Total Earned (₹)</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px] text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {sortedReferrers.map((user, idx) => (
+                          <tr key={user.user_id} className="hover:bg-slate-800/40 transition">
+                            <td className="py-3 font-bold font-mono">
+                              {idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`}
+                            </td>
+                            <td className="py-3">
+                              <div className="font-bold text-white">{user.first_name}</div>
+                              <div className="text-[11px] text-slate-400">@{user.username || 'user'}</div>
+                            </td>
+                            <td className="py-3 font-mono text-cyan-300">
+                              <code>{user.user_id}</code>
+                            </td>
+                            <td className="py-3 text-center font-bold text-pink-300 font-mono">
+                              {user.referral_count || 0}
+                            </td>
+                            <td className="py-3 text-right font-extrabold text-emerald-400 font-mono">
+                              ₹{(user.referral_earnings || 0).toFixed(2)}
+                            </td>
+                            <td className="py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDirectPayUserId(String(user.user_id));
+                                  setDirectPayReason('Bonus Credit / Promo Reward');
+                                  handleTabChange('users');
+                                }}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                View / Credit
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Recent Referral Link Signups Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-400" />
+                Recent Referred Users Ledger
+              </h4>
+
+              {(() => {
+                const referredUsers = allUsers.filter(u => u.referred_by);
+                if (referredUsers.length === 0) {
+                  return (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-slate-950/60 rounded-xl border border-slate-800">
+                      No referred signups recorded yet.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">Referred User</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">Referee UID</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">Invited By (Referrer UID)</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px]">Joined Date</th>
+                          <th className="pb-2.5 font-bold uppercase text-[10px] text-right">Spent (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {referredUsers.map((u) => {
+                          const referrer = allUsers.find(r => r.user_id === u.referred_by);
+                          return (
+                            <tr key={u.user_id} className="hover:bg-slate-800/40 transition">
+                              <td className="py-2.5 font-bold text-white">
+                                {u.first_name} <span className="text-slate-400 font-normal">(@{u.username || 'user'})</span>
+                              </td>
+                              <td className="py-2.5 font-mono text-cyan-300">
+                                <code>{u.user_id}</code>
+                              </td>
+                              <td className="py-2.5 font-mono text-pink-300">
+                                <code>#{u.referred_by}</code> {referrer ? `(${referrer.first_name})` : ''}
+                              </td>
+                              <td className="py-2.5 text-slate-400 font-mono text-[11px]">
+                                {u.joined_date.substring(0, 16)}
+                              </td>
+                              <td className="py-2.5 text-right font-bold text-emerald-400 font-mono">
+                                ₹{u.spent.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -2934,7 +3297,7 @@ export const AdminDashboard: React.FC = () => {
                     <input
                       type="number"
                       min="1"
-                      value={settings.min_deposit_inr !== undefined ? settings.min_deposit_inr : 10}
+                      value={settings.min_deposit_inr !== undefined ? settings.min_deposit_inr : 1}
                       onChange={(e) => {
                         const val = Number(e.target.value);
                         updateSettings({ min_deposit_inr: val > 0 ? val : 1 });
@@ -2942,7 +3305,7 @@ export const AdminDashboard: React.FC = () => {
                           updateActiveBotGateway({ min_deposit_inr: val > 0 ? val : 1 });
                         }
                       }}
-                      placeholder="10"
+                      placeholder="1"
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-emerald-300 outline-none font-mono text-xs font-bold focus:border-emerald-400"
                     />
                   </div>
@@ -3638,49 +4001,58 @@ export const AdminDashboard: React.FC = () => {
         const userChatId = u.chat_id || u.user_id;
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+          <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-4 sm:p-5 space-y-4 shadow-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
               <div className="flex items-start justify-between border-b border-slate-800 pb-3 gap-3">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white truncate">{u.first_name}</h3>
-                    <span className="text-[11px] text-slate-400 font-mono">@{u.username || 'none'}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-base shrink-0 overflow-hidden shadow-lg border border-white/20">
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt={u.first_name} className="w-full h-full object-cover" />
+                    ) : (
+                      u.first_name.charAt(0).toUpperCase()
+                    )}
                   </div>
-                  
-                  {/* Telegram IDs Pill Bar */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-cyan-500/30 text-[11px] font-mono">
-                      <span className="text-cyan-400 font-bold">UID:</span>
-                      <span className="text-slate-200 font-semibold">{u.user_id}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(String(u.user_id), 'modal_uid')}
-                        className="text-slate-500 hover:text-cyan-400 p-0.5 transition cursor-pointer"
-                        title="Copy Telegram UID"
-                      >
-                        {copiedItem === 'modal_uid' ? (
-                          <CheckCircle className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-white truncate">{u.first_name}</h3>
+                      <span className="text-[11px] text-slate-400 font-mono">@{u.username || 'none'}</span>
                     </div>
+                    
+                    {/* Telegram IDs Pill Bar */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-cyan-500/30 text-[11px] font-mono">
+                        <span className="text-cyan-400 font-bold">UID:</span>
+                        <span className="text-slate-200 font-semibold">{u.user_id}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(String(u.user_id), 'modal_uid')}
+                          className="text-slate-500 hover:text-cyan-400 p-0.5 transition cursor-pointer"
+                          title="Copy Telegram UID"
+                        >
+                          {copiedItem === 'modal_uid' ? (
+                            <CheckCircle className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
 
-                    <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-indigo-500/30 text-[11px] font-mono">
-                      <span className="text-indigo-400 font-bold">CHAT ID:</span>
-                      <span className="text-slate-200 font-semibold">{userChatId}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(String(userChatId), 'modal_chat')}
-                        className="text-slate-500 hover:text-indigo-400 p-0.5 transition cursor-pointer"
-                        title="Copy Telegram Chat ID"
-                      >
-                        {copiedItem === 'modal_chat' ? (
-                          <CheckCircle className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-indigo-500/30 text-[11px] font-mono">
+                        <span className="text-indigo-400 font-bold">CHAT ID:</span>
+                        <span className="text-slate-200 font-semibold">{userChatId}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(String(userChatId), 'modal_chat')}
+                          className="text-slate-500 hover:text-indigo-400 p-0.5 transition cursor-pointer"
+                          title="Copy Telegram Chat ID"
+                        >
+                          {copiedItem === 'modal_chat' ? (
+                            <CheckCircle className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3691,6 +4063,17 @@ export const AdminDashboard: React.FC = () => {
                 >
                   ✕
                 </button>
+              </div>
+
+              {/* Login & Registration Timing Bar */}
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <Clock className="w-3 h-3 animate-pulse" />
+                  <span>Last Login: <b>{u.last_login || u.login_at || 'Active Now'}</b></span>
+                </span>
+                <span className="text-slate-500">
+                  Joined: {u.joined_date ? u.joined_date.split(' ')[0] : 'N/A'}
+                </span>
               </div>
 
               {/* Stats Overview */}
@@ -3845,8 +4228,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= ADD PRODUCT MODAL ================= */}
       {showAddProductModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-4 sm:p-5 space-y-4 shadow-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Plus className="w-5 h-5 text-cyan-400" />
@@ -4141,7 +4524,7 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-800 flex justify-end gap-2 -mx-1 px-1 mt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddProductModal(false)}
@@ -4163,8 +4546,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= EDIT PRODUCT MODAL ================= */}
       {editingProductId !== null && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-4 sm:p-5 space-y-4 shadow-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-cyan-400" />
@@ -4438,7 +4821,7 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-800 flex justify-end gap-2 -mx-1 px-1 mt-2">
                 <button
                   type="button"
                   onClick={() => setEditingProductId(null)}
@@ -4460,8 +4843,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= TELEGRAM CREDENTIALS HELP MODAL ================= */}
       {showTelegramHelpModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3.5">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
@@ -4554,8 +4937,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= CREATE / CLONE BOT MODAL ================= */}
       {showCreateBotModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl my-8">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
@@ -4787,8 +5170,8 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= EDIT BOT MODAL ================= */}
       {editingBotId && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-cyan-400" />
@@ -4899,30 +5282,94 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingBotId(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold cursor-pointer"
+                  onClick={() => {
+                    const target = bots.find(b => b.id === editingBotId);
+                    setEditingBotId(null);
+                    if (target) {
+                      setBotToDelete(target);
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl font-semibold cursor-pointer transition flex items-center gap-1.5 text-xs"
                 >
-                  Cancel
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Bot
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold cursor-pointer transition shadow"
-                >
-                  Save Changes
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingBotId(null)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold cursor-pointer transition shadow text-xs"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* ================= DELETE BOT CONFIRMATION MODAL ================= */}
+      {botToDelete && (
+        <div className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center font-bold text-xl shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-white">Delete Bot Instance?</h3>
+                <p className="text-xs text-rose-400/90 font-mono truncate">@{botToDelete.username}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 text-xs">
+              <p className="text-slate-300">
+                Are you sure you want to permanently delete <b className="text-white">{botToDelete.name}</b>?
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                This will purge its dedicated bot token, isolated API credentials, and remove it from your bot fleet immediately.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setBotToDelete(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteBot(botToDelete.id);
+                  setBotToDelete(null);
+                }}
+                className="px-5 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-xl font-bold shadow-lg shadow-rose-600/30 cursor-pointer text-xs transition flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                Yes, Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= ADD KEYS MODAL ================= */}
       {showAddKeysModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-4 sm:p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Key className="w-5 h-5 text-amber-400" />
