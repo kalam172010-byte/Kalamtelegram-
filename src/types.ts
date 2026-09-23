@@ -74,6 +74,8 @@ export interface User {
   warnings: number;
   is_vip: number; // 0 or 1
   vip_since?: string;
+  is_admin?: number;
+  role?: string;
 }
 
 export interface Product {
@@ -289,3 +291,5 @@ export interface ChatMessage {
 }
 
 export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'telegram' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
+
+export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code';

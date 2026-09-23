@@ -385,7 +385,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ onRefres
           <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
             {failedTxns.map((txn, idx) => (
               <div
-                key={txn.order_id || idx}
+                key={`failed-txn-${txn.order_id || idx}`}
                 className="p-3 bg-slate-950 border border-rose-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
               >
                 <div className="space-y-1">
@@ -485,14 +485,14 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ onRefres
               No API events recorded yet for this filter. All background services running normally.
             </div>
           ) : (
-            filteredLogs.map(log => {
+            filteredLogs.map((log, idx) => {
               const isError = log.status === 'ERROR';
               const isWarning = log.status === 'WARNING';
               const isSuccess = log.status === 'SUCCESS';
 
               return (
                 <div
-                  key={log.id}
+                  key={`health-log-${log.id || idx}`}
                   className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-start justify-between gap-2 transition ${
                     isError
                       ? 'bg-rose-950/20 border-rose-500/30'

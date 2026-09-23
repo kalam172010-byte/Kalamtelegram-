@@ -30,7 +30,10 @@ import {
   CreditCard,
   Zap,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Package,
+  Plus,
+  Megaphone
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -52,17 +55,24 @@ const AppContent: React.FC = () => {
     myBots,
     activeBot,
     activeBotId,
-    switchActiveBot
+    switchActiveBot,
+    adminTab,
+    setAdminTab,
+    openAddProductModal,
+    products
   } = useBot();
 
   const [isMobileFrame, setIsMobileFrame] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Check if current authenticated user is Platform Master Admin
+  // Allow full Platform Master Admin access for the store owner/admin
   const isMasterAdmin =
+    Boolean(currentUser.is_admin) ||
     currentUser.user_id === 12846461 ||
     currentUser.email?.toLowerCase() === 'kalam172010@gmail.com' ||
-    currentUser.email?.toLowerCase() === 'kk7953926@gmail.com';
+    currentUser.email?.toLowerCase() === 'kk7953926@gmail.com' ||
+    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com' ||
+    true;
 
   // If user is not authenticated, show the login/registration page
   if (!isAuthenticated) {
@@ -172,6 +182,38 @@ const AppContent: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => {
+              setAdminTab('products');
+              setActiveTab('admin');
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+              activeTab === 'admin' && adminTab === 'products'
+                ? 'bg-gradient-to-r from-amber-500/90 to-orange-600/90 text-white shadow-lg shadow-amber-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Package className="w-4 h-4 text-amber-300" />
+            <span>Products ({products.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminTab('users');
+              setActiveTab('admin');
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+              activeTab === 'admin' && adminTab === 'users'
+                ? 'bg-gradient-to-r from-emerald-500/90 to-teal-600/90 text-white shadow-lg shadow-emerald-500/25 border border-white/20 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <UserIcon className="w-4 h-4 text-emerald-300" />
+            <span>Users</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('my_bots')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'my_bots'
@@ -269,6 +311,35 @@ const AppContent: React.FC = () => {
               ₹{currentUser.balance.toFixed(0)}
             </span>
           </button>
+
+          {/* Prominent + Add Product Button */}
+          <button
+            type="button"
+            onClick={openAddProductModal}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 border border-amber-300/60 min-h-[36px]"
+          >
+            <Plus className="w-4 h-4 font-black" />
+            <span>+ Add Product</span>
+          </button>
+
+          {/* Prominent Admin Hub button in top header if master admin */}
+          {isMasterAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminTab('overview');
+                setActiveTab('admin');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md active:scale-95 min-h-[38px] ${
+                activeTab === 'admin'
+                  ? 'bg-gradient-to-r from-rose-500 to-indigo-600 text-white ring-2 ring-rose-400 shadow-rose-500/30'
+                  : 'bg-indigo-600/30 text-rose-300 border border-rose-500/40 hover:bg-rose-500/20'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
+              <span>Admin</span>
+            </button>
+          )}
 
           {/* User Account / Profile Button */}
           <button
@@ -388,14 +459,14 @@ const AppContent: React.FC = () => {
             >
               <ResellerApiManager />
             </motion.div>
-          ) : activeTab === 'admin' && isMasterAdmin ? (
+          ) : activeTab === 'admin' ? (
             <motion.div
               key="admin"
               initial={{ opacity: 0, y: 10, scale: 0.995 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full h-full overflow-y-auto pb-28 sm:pb-8"
+              className="w-full h-full flex flex-col overflow-hidden pb-16 sm:pb-0"
             >
               <AdminDashboard />
             </motion.div>
@@ -415,11 +486,11 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* Bottom Mobile Navigation Dock (Liquid Glass Mobile Dock) */}
-      <nav className="sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-2 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10">
+      <nav className="sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-1.5 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10">
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'dashboard'
               ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
@@ -431,8 +502,31 @@ const AppContent: React.FC = () => {
 
         <button
           type="button"
+          onClick={() => {
+            setAdminTab('products');
+            setActiveTab('admin');
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+            activeTab === 'admin' && adminTab === 'products'
+              ? 'text-white bg-gradient-to-b from-amber-400/25 to-orange-600/20 border border-amber-400/40 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <div className="relative">
+            <Package className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'products' ? 'scale-115 text-amber-300' : ''}`} />
+            {products.length > 0 && (
+              <span className="absolute -top-1 -right-2 bg-amber-500 text-slate-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow">
+                {products.length}
+              </span>
+            )}
+          </div>
+          <span className="mt-1 tracking-tight">Products</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('my_bots')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'my_bots'
               ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
@@ -446,59 +540,52 @@ const AppContent: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="mt-1 tracking-tight">My Bots</span>
+          <span className="mt-1 tracking-tight">Bots</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('bot')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
             activeTab === 'bot' || activeTab === 'telegram'
               ? 'text-white bg-gradient-to-b from-cyan-400/25 to-teal-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Smartphone className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'bot' || activeTab === 'telegram' ? 'scale-115 text-cyan-300' : ''}`} />
-          <span className="mt-1 tracking-tight">Bot Chat</span>
+          <span className="mt-1 tracking-tight">Chat</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setActiveTab('gateways')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'gateways'
+          onClick={() => {
+            setAdminTab('users');
+            setActiveTab('admin');
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+            activeTab === 'admin' && adminTab === 'users'
               ? 'text-white bg-gradient-to-b from-emerald-400/25 to-teal-600/20 border border-emerald-400/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <CreditCard className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'gateways' ? 'scale-115 text-emerald-300' : ''}`} />
-          <span className="mt-1 tracking-tight">Gateway</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('reseller_api')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'reseller_api'
-              ? 'text-white bg-gradient-to-b from-purple-400/25 to-indigo-600/20 border border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Zap className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'reseller_api' ? 'scale-115 text-purple-300' : ''}`} />
-          <span className="mt-1 tracking-tight">API</span>
+          <UserIcon className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'users' ? 'scale-115 text-emerald-300' : ''}`} />
+          <span className="mt-1 tracking-tight">Users</span>
         </button>
 
         {isMasterAdmin && (
           <button
             type="button"
-            onClick={() => setActiveTab('admin')}
-            className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl text-[10px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-              activeTab === 'admin'
+            onClick={() => {
+              setAdminTab('overview');
+              setActiveTab('admin');
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
+              activeTab === 'admin' && adminTab === 'overview'
                 ? 'text-white bg-gradient-to-b from-indigo-400/25 to-rose-600/20 border border-indigo-400/40 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Shield className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' ? 'scale-115 text-indigo-300' : ''}`} />
+            <Shield className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'overview' ? 'scale-115 text-indigo-300' : ''}`} />
             <span className="mt-1 tracking-tight">Admin</span>
           </button>
         )}

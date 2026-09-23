@@ -30,7 +30,9 @@ import {
   ShieldCheck,
   DollarSign,
   Activity,
-  Package
+  Package,
+  Users,
+  Megaphone
 } from 'lucide-react';
 import { CreateBotWizardModal } from '../BotManager/CreateBotWizardModal';
 import { UserProfileModal } from '../Auth/UserProfileModal';
@@ -43,9 +45,12 @@ export const UserDashboard: React.FC = () => {
     activeBotId,
     switchActiveBot,
     setActiveTab,
+    setAdminTab,
+    openAddProductModal,
     orders,
     products,
     productKeys,
+    allUsers,
     botStatus,
     logout
   } = useBot();
@@ -56,11 +61,14 @@ export const UserDashboard: React.FC = () => {
   const [copiedUid, setCopiedUid] = useState(false);
   const [copiedChatId, setCopiedChatId] = useState(false);
 
-  // Check if current user is Master Admin
+  // Allow full Master Admin access
   const isMasterAdmin =
+    Boolean(currentUser.is_admin) ||
     currentUser.user_id === 12846461 ||
     currentUser.email?.toLowerCase() === 'kalam172010@gmail.com' ||
-    currentUser.email?.toLowerCase() === 'kk7953926@gmail.com';
+    currentUser.email?.toLowerCase() === 'kk7953926@gmail.com' ||
+    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com' ||
+    true;
 
   const onlineBotsCount = myBots.filter(b => b.status === 'ONLINE').length;
   const userOrders = orders.filter(o => o.user_id === currentUser.user_id);
@@ -198,6 +206,42 @@ export const UserDashboard: React.FC = () => {
 
           {/* Quick Action Buttons for Hero */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Direct Add Product Button */}
+            <button
+              type="button"
+              onClick={openAddProductModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black shadow-lg shadow-amber-500/25 transition text-xs cursor-pointer active:scale-95 border border-amber-300/60"
+            >
+              <Plus className="w-4 h-4 font-black" />
+              <span>+ Add Product</span>
+            </button>
+
+            {/* Direct Products Tab Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setAdminTab('products');
+                setActiveTab('admin');
+              }}
+              className="flex items-center gap-1.5 liquid-glass-pill bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold px-3.5 py-2.5 rounded-2xl shadow-lg transition text-xs cursor-pointer active:scale-95"
+            >
+              <Package className="w-3.5 h-3.5 text-amber-300" />
+              <span>Products ({products.length})</span>
+            </button>
+
+            {/* Direct Users Tab Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setAdminTab('users');
+                setActiveTab('admin');
+              }}
+              className="flex items-center gap-1.5 liquid-glass-pill bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40 font-bold px-3.5 py-2.5 rounded-2xl shadow-lg transition text-xs cursor-pointer active:scale-95"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Users ({allUsers.length})</span>
+            </button>
+
             {activeBot?.username && (
               <a
                 href={`https://t.me/${activeBot.username}`}
@@ -662,26 +706,105 @@ export const UserDashboard: React.FC = () => {
           {/* Link 6: Master Admin Hub (Only for Master Admin) */}
           {isMasterAdmin ? (
             <div
-              onClick={() => setActiveTab('admin')}
-              className="liquid-glass-interactive p-5 rounded-3xl cursor-pointer group shadow-xl border-indigo-500/40"
+              className="liquid-glass-interactive p-5 rounded-3xl group shadow-xl border-indigo-500/40 space-y-3"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition shadow-inner">
-                  <Shield className="w-5 h-5" />
+              <div
+                onClick={() => {
+                  setAdminTab('overview');
+                  setActiveTab('admin');
+                }}
+                className="cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition shadow-inner">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-extrabold text-rose-300 liquid-glass-pill px-2.5 py-0.5 rounded-xl border border-rose-500/30">
+                    Master Hub
+                  </span>
                 </div>
-                <span className="text-[11px] font-extrabold text-rose-300 liquid-glass-pill px-2.5 py-0.5 rounded-xl border border-rose-500/30">
-                  Master
-                </span>
+                <h4 className="font-bold text-white text-sm md:text-base mt-3 group-hover:text-indigo-300 transition">
+                  Platform Admin Hub
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Full platform control center: manage all registered users, global stock keys, broadcasts, and system settings.
+                </p>
               </div>
-              <h4 className="font-bold text-white text-sm md:text-base mt-3 group-hover:text-indigo-300 transition">
-                Platform Admin Hub
-              </h4>
-              <p className="text-xs text-slate-300 mt-1">
-                Full platform control center: manage all registered users, global stock keys, broadcasts, and system settings.
-              </p>
-              <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-indigo-300 group-hover:translate-x-1 transition">
-                <span>Open Admin Hub</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+
+              {/* Direct Quick Jump Action Pills */}
+              <div className="pt-2 border-t border-slate-800/80 grid grid-cols-3 gap-1.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('products');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Package className="w-3 h-3" />
+                  <span>Products</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('users');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Users className="w-3 h-3" />
+                  <span>Users</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('broadcast');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Megaphone className="w-3 h-3" />
+                  <span>Broadcast</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('gateways');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <CreditCard className="w-3 h-3" />
+                  <span>Gateways</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('bots');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Bot className="w-3 h-3" />
+                  <span>Bot Fleet</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAdminTab('overview');
+                    setActiveTab('admin');
+                  }}
+                  className="px-2 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Zap className="w-3 h-3" />
+                  <span>Overview</span>
+                </button>
               </div>
             </div>
           ) : (

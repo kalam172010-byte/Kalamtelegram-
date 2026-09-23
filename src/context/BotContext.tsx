@@ -32,6 +32,7 @@ import {
   ChatMessage,
   InlineKeyboardButton,
   ViewTab,
+  AdminTab,
   BotInstance,
   PaymentGatewayConfig,
   ResellerApiConfig
@@ -115,6 +116,11 @@ export interface BotContextType {
   // View state
   activeTab: ViewTab;
   setActiveTab: (tab: ViewTab) => void;
+  adminTab: AdminTab;
+  setAdminTab: (tab: AdminTab) => void;
+  showAddProductModal: boolean;
+  setShowAddProductModal: (open: boolean) => void;
+  openAddProductModal: () => void;
 
   // Bot Interactions
   sendUserMessage: (text: string) => Promise<void>;
@@ -322,6 +328,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const savedAuth = localStorage.getItem('kalam_bot_auth_logged_in');
     return savedAuth === 'false' ? 'auth' : 'dashboard';
   });
+  const [adminTab, setAdminTab] = useState<AdminTab>('overview');
+  const [showAddProductModal, setShowAddProductModal] = useState<boolean>(false);
+
+  const openAddProductModal = () => {
+    setAdminTab('products');
+    setActiveTab('admin');
+    setShowAddProductModal(true);
+  };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentFsmState, setCurrentFsmState] = useState<string | null>(null);
   const [fsmData, setFsmData] = useState<Record<string, any>>({});
@@ -3512,6 +3526,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         isBotTyping,
         activeTab,
         setActiveTab,
+        adminTab,
+        setAdminTab,
+        showAddProductModal,
+        setShowAddProductModal,
+        openAddProductModal,
         botStatus,
         testTelegramBotToken,
         sendAdminTestMessage,

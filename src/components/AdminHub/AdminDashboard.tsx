@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBot } from '../../context/BotContext';
+import { motion, AnimatePresence } from 'motion/react';
 import { formatTelegramHTML } from '../../utils/telegramFormatter';
 import {
   Users,
@@ -93,12 +94,22 @@ export const AdminDashboard: React.FC = () => {
     checkFamGatewayStatus,
     testProviderConnection,
     buyProviderKeyDirect,
-    sendBroadcastMessage
+    sendBroadcastMessage,
+    adminTab,
+    setAdminTab,
+    showAddProductModal,
+    setShowAddProductModal,
+    openAddProductModal
   } = useBot();
 
-  const [adminTab, setAdminTab] = useState<
-    'overview' | 'bots' | 'health' | 'products' | 'users' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code'
-  >('overview');
+  const contentScrollRef = React.useRef<HTMLDivElement>(null);
+
+  const handleTabChange = (newTab: typeof adminTab) => {
+    setAdminTab(newTab);
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Bot Cloner & Fleet state
   const [showCreateBotModal, setShowCreateBotModal] = useState(false);
@@ -180,7 +191,6 @@ export const AdminDashboard: React.FC = () => {
 
   // Products state
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [showAddKeysModal, setShowAddKeysModal] = useState<number | null>(null);
   const [newKeysText, setNewKeysText] = useState('');
@@ -394,125 +404,183 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full text-slate-100 overflow-hidden p-3 md:p-6 space-y-4 max-w-7xl mx-auto w-full">
-      {/* Admin Top Navigation with Liquid Glass */}
-      <div className="liquid-glass-card rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border border-white/20">
+    <div className="flex flex-col h-full text-slate-100 overflow-hidden p-2 sm:p-4 md:p-6 space-y-3.5 max-w-7xl mx-auto w-full">
+      {/* Top Admin Header Bar - Compact & Highly Visible */}
+      <div className="liquid-glass-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 shrink-0 shadow-2xl">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border border-white/20 shrink-0">
             <Shield className="w-5 h-5 text-cyan-200" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              Kalam FF Panel Admin Control
-              <span className="text-[10px] liquid-glass-pill text-emerald-300 border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                Authorized
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h2 className="text-sm sm:text-base font-black text-white">
+                Admin Control Hub
+              </h2>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.2 rounded-full font-bold">
+                Root Auth
               </span>
-            </h2>
-            <p className="text-xs text-slate-300">Master Grid Configuration & Vault Terminal</p>
+            </div>
+            <p className="text-[11px] text-slate-400 font-mono">Admin UID: {settings.admin_id || '12846461'}</p>
           </div>
         </div>
 
-        {/* Active Bot Switcher & Quick Toggles */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Active Bot Selector */}
-          <div className="flex items-center gap-2 liquid-glass-pill px-3 py-1.5 rounded-2xl border border-cyan-500/40 shadow-inner">
-            <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-            <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Active Bot</span>
-              <select
-                value={activeBot?.id || bots[0]?.id || ''}
-                onChange={(e) => switchActiveBot(e.target.value)}
-                className="bg-transparent text-cyan-300 text-xs font-bold outline-none cursor-pointer pr-1"
-              >
-                {bots.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-slate-900 text-slate-200">
-                    {b.name} (@{b.username}) — Admin ID: {b.admin_id || b.admin_chat_id || settings.admin_id}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setNewBotForm({
-                  name: `Kalam VIP Store #${bots.length + 1}`,
-                  username: `kalam_store${bots.length + 1}_bot`,
-                  bot_token: '',
-                  admin_id: String(activeBot?.admin_id || settings.admin_id || 12846461),
-                  description: 'Automated Telegram Shop with independent API keys and admin authorization.',
-                  fampay_upi_id: activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
-                  famgateway_api_key: '',
-                  bantibhaiya_api_key: '',
-                  bantibhaiya_master_key: '',
-                  clone_products: true
-                });
-                setShowCreateBotModal(true);
-              }}
-              className="liquid-glass-btn-cyan text-white text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition shadow cursor-pointer ml-1 active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5" /> Clone / New Bot
-            </button>
-          </div>
-
+        {/* Quick System Toggles */}
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Bot Maintenance Toggle */}
           <button
             type="button"
             onClick={() => updateSettings({ bot_status: settings.bot_status === 'ON' ? 'OFF' : 'ON' })}
-            className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 ${
               settings.bot_status === 'ON'
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                 : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${settings.bot_status === 'ON' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-            Bot: {settings.bot_status}
+            <span className={`w-2 h-2 rounded-full ${settings.bot_status === 'ON' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+            <span>Bot: {settings.bot_status}</span>
           </button>
 
           {/* VIP System Toggle */}
           <button
             type="button"
             onClick={() => updateSettings({ vip_status: settings.vip_status === 'ON' ? 'OFF' : 'ON' })}
-            className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 ${
               settings.vip_status === 'ON'
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                : 'liquid-glass-pill text-slate-400 hover:text-white'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
-            VIP System: {settings.vip_status}
+            <Crown className="w-3.5 h-3.5 text-amber-400" />
+            <span>VIP: {settings.vip_status}</span>
           </button>
+
+          {/* Active Bot Switcher */}
+          <div className="flex items-center gap-1.5 bg-slate-900/90 px-2.5 py-1 rounded-xl border border-cyan-500/30 min-h-[38px]">
+            <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
+            <select
+              value={activeBot?.id || bots[0]?.id || ''}
+              onChange={(e) => switchActiveBot(e.target.value)}
+              className="bg-transparent text-cyan-300 text-xs font-bold outline-none cursor-pointer max-w-[120px] sm:max-w-[160px] truncate"
+            >
+              {bots.map((b, idx) => (
+                <option key={`bot-sel-${b.id || idx}`} value={b.id} className="bg-slate-900 text-slate-200">
+                  {b.name} (@{b.username})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Admin Tab Bar with Liquid Glass */}
-      <div className="liquid-glass-pill rounded-2xl p-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
+      {/* Top Mobile-First Command Action Hub (Large Touch Cards - Always at Top & Fully Visible) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 shrink-0">
         {[
-          { id: 'overview', label: 'Overview', icon: Zap },
-          { id: 'bots', label: `🤖 Bot Fleet & Cloner (${bots.length})`, icon: Bot, badge: true },
-          { id: 'health', label: '⚡ System Health & Logs', icon: Activity },
-          { id: 'products', label: `Products & Vault (${products.length})`, icon: Package },
-          { id: 'users', label: `Users (${allUsers.length})`, icon: Users },
+          {
+            id: 'overview',
+            title: 'Overview',
+            subtitle: `₹${totalRevenue.toFixed(0)} Rev`,
+            icon: Zap,
+            color: 'from-cyan-500/20 to-blue-600/20 border-cyan-500/30 text-cyan-300'
+          },
+          {
+            id: 'bots',
+            title: 'Bot Fleet',
+            subtitle: `${bots.length} Active`,
+            icon: Bot,
+            badge: `${bots.length}`,
+            color: 'from-indigo-500/20 to-purple-600/20 border-indigo-500/30 text-indigo-300'
+          },
+          {
+            id: 'products',
+            title: 'Products & Keys',
+            subtitle: `${products.length} Panels`,
+            icon: Package,
+            badge: `${availableKeysCount} keys`,
+            color: 'from-amber-500/20 to-orange-600/20 border-amber-500/30 text-amber-300'
+          },
+          {
+            id: 'users',
+            title: 'Manage Users',
+            subtitle: `${allUsers.length} Users`,
+            icon: Users,
+            badge: `${allUsers.length}`,
+            color: 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-300'
+          },
+          {
+            id: 'broadcast',
+            title: 'Send Broadcast',
+            subtitle: 'Instant Alert',
+            icon: Megaphone,
+            color: 'from-rose-500/20 to-pink-600/20 border-rose-500/30 text-rose-300'
+          },
+          {
+            id: 'gateways',
+            title: 'Gateways & APIs',
+            subtitle: 'UPI & Provider',
+            icon: CreditCard,
+            color: 'from-teal-500/20 to-cyan-600/20 border-teal-500/30 text-teal-300'
+          }
+        ].map((hub) => {
+          const HubIcon = hub.icon;
+          const isActive = adminTab === hub.id;
+          return (
+            <button
+              key={hub.id}
+              type="button"
+              onClick={() => handleTabChange(hub.id as any)}
+              className={`p-2.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer active:scale-95 flex flex-col justify-between min-h-[64px] shadow-sm relative overflow-hidden ${
+                isActive
+                  ? 'bg-gradient-to-br from-cyan-500/30 via-slate-900 to-blue-600/30 border-cyan-400 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
+                  : `bg-slate-900/90 hover:bg-slate-800/90 bg-gradient-to-br ${hub.color}`
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <HubIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? 'text-cyan-300 scale-110' : ''}`} />
+                {hub.badge && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-black bg-white/10 text-white border border-white/15">
+                    {hub.badge}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1">
+                <div className="text-xs sm:text-sm font-black text-white tracking-tight leading-tight truncate">
+                  {hub.title}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono truncate">{hub.subtitle}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Secondary Tabs Bar - Scrollable with Big Touch Target Width */}
+      <div className="liquid-glass-pill rounded-2xl p-1 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
+        {[
+          { id: 'overview', label: '📊 Overview', icon: Zap },
+          { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
+          { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
+          { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
-          { id: 'tickets', label: `Tickets (${openTicketsCount})`, icon: TicketIcon, badge: openTicketsCount > 0 },
-          { id: 'coupons', label: `Coupons (${coupons.length})`, icon: Tag },
-          { id: 'gateways', label: 'Payment Gateways & APIs', icon: CreditCard },
-          { id: 'emojis', label: 'Emojis & Texts', icon: Sparkles },
-          { id: 'logs', label: 'Activity Logs', icon: FileText },
-          { id: 'code', label: 'Python Source & DB', icon: Code2 }
-        ].map(tab => {
-          const IconC = tab.icon;
+          { id: 'gateways', label: '💳 Payment & APIs', icon: CreditCard },
+          { id: 'health', label: '⚡ Health & Diagnostics', icon: Activity },
+          { id: 'tickets', label: `🎫 Tickets (${openTicketsCount})`, icon: TicketIcon, badge: openTicketsCount > 0 },
+          { id: 'coupons', label: `🏷️ Coupons (${coupons.length})`, icon: Tag },
+          { id: 'emojis', label: '✨ Custom Emojis', icon: Sparkles },
+          { id: 'logs', label: '📜 Live Logs', icon: FileText },
+          { id: 'code', label: '💻 Python Source', icon: Code2 }
+        ].map((tab) => {
           const isActive = adminTab === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setAdminTab(tab.id as any)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition whitespace-nowrap cursor-pointer active:scale-95 ${
+              onClick={() => handleTabChange(tab.id as any)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer active:scale-95 min-h-[38px] ${
                 isActive
                   ? 'liquid-glass-btn-cyan text-white shadow-lg'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
-              <IconC className="w-4 h-4 shrink-0" />
               <span>{tab.label}</span>
               {tab.badge && (
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
@@ -523,7 +591,10 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto pb-28 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+      <div
+        ref={contentScrollRef}
+        className="flex-1 overflow-y-auto pb-28 sm:pb-12 space-y-6 scrollbar-thin scrollbar-thumb-slate-800 touch-pan-y overscroll-contain pr-0.5 select-auto"
+      >
         {/* ================= BOT FLEET & CLONER TAB ================= */}
         {adminTab === 'bots' && (
           <div className="space-y-6 max-w-6xl mx-auto">
@@ -661,13 +732,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {bots.map((bot) => {
+                {bots.map((bot, idx) => {
                   const isActive = activeBot?.id === bot.id;
                   const botAdminId = bot.admin_id || bot.admin_chat_id || settings.admin_id;
 
                   return (
                     <div
-                      key={bot.id}
+                      key={`fleet-bot-${bot.id || idx}`}
                       className={`bg-slate-900 border rounded-2xl p-5 space-y-4 transition ${
                         isActive
                           ? 'border-cyan-500 shadow-md shadow-cyan-500/10 bg-slate-900/90'
@@ -957,9 +1028,9 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
-                  {logs.slice(0, 15).map(log => (
+                  {logs.slice(0, 15).map((log, idx) => (
                     <div
-                      key={log.id}
+                      key={`stream-log-${log.id || idx}`}
                       className="p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 flex items-start justify-between gap-3 text-xs"
                     >
                       <div>
@@ -1013,8 +1084,74 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Products Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            {/* Mobile Products Cards (Optimized for Handheld Mobile Usage) */}
+            <div className="grid grid-cols-1 gap-3.5 md:hidden">
+              {filteredProducts.map((prod, idx) => {
+                const prodKeys = productKeys.filter(k => k.product_id === prod.id && !k.is_used);
+                const isMaint = Boolean(prod.is_maintenance);
+                return (
+                  <div key={`mob-prod-${prod.id || idx}`} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-md">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-cyan-400 font-bold text-xs">#{prod.id}</span>
+                          <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">{prod.category}</span>
+                        </div>
+                        <h4 className="text-base font-bold text-white mt-1">{prod.panel_name}</h4>
+                        <div className="text-xs text-slate-400">{prod.name} • {prod.device_limit}</div>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full font-bold text-xs ${
+                        prodKeys.length > 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}>
+                        {prodKeys.length} Keys
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs">
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">User Price:</span>
+                        <span className="font-bold text-emerald-400 text-sm font-mono">₹{prod.price_inr.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Reseller Price:</span>
+                        <span className="font-bold text-amber-300 text-sm font-mono">₹{prod.reseller_price.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Big Finger-Friendly Mobile Action Buttons */}
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddKeysModal(prod.id)}
+                        className="py-2.5 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow cursor-pointer active:scale-95 min-h-[42px]"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>+ Keys</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditProduct(prod)}
+                        className="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border border-slate-700 cursor-pointer active:scale-95 min-h-[42px]"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteProduct(prod.id)}
+                        className="py-2.5 px-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border border-rose-500/30 cursor-pointer active:scale-95 min-h-[42px]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Products Table */}
+            <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs md:text-sm">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
@@ -1031,11 +1168,11 @@ export const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
-                    {filteredProducts.map(prod => {
+                    {filteredProducts.map((prod, idx) => {
                       const prodKeys = productKeys.filter(k => k.product_id === prod.id && !k.is_used);
                       const isMaint = Boolean(prod.is_maintenance);
                       return (
-                        <tr key={prod.id} className="hover:bg-slate-800/40 transition">
+                        <tr key={`desk-prod-${prod.id || idx}`} className="hover:bg-slate-800/40 transition">
                           <td className="p-3.5">
                             <div className="font-mono text-cyan-400 font-bold">#{prod.id}</div>
                             <div className="text-[11px] text-slate-400">{prod.category}</div>
@@ -1170,8 +1307,8 @@ export const AdminDashboard: React.FC = () => {
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-500"
                     >
                       <option value="">-- Select Existing User --</option>
-                      {allUsers.map(u => (
-                        <option key={u.user_id} value={String(u.user_id)}>
+                      {allUsers.map((u, idx) => (
+                        <option key={`direct-user-${u.user_id || idx}`} value={String(u.user_id)}>
                           UID: {u.user_id} | {u.first_name} (@{u.username || 'none'}) - Bal: ₹{u.balance}
                         </option>
                       ))}
@@ -1406,8 +1543,68 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Users Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            {/* Mobile Users Cards (Optimized for One-Handed Phone Operation) */}
+            <div className="grid grid-cols-1 gap-3.5 md:hidden">
+              {filteredUsers.map((user, idx) => {
+                const chatId = user.chat_id || user.user_id;
+                return (
+                  <div key={`mob-user-${user.user_id || idx}`} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-md">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-base font-bold text-white">{user.first_name}</h4>
+                          {user.is_vip ? <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold border border-amber-500/30">🌟 VIP</span> : null}
+                          {user.is_reseller ? <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold border border-indigo-500/30">👑 Reseller</span> : null}
+                          {user.is_banned ? <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-bold border border-rose-500/30">🚫 Banned</span> : null}
+                        </div>
+                        <div className="text-xs text-slate-400 font-mono">@{user.username || 'none'} {user.email ? `• ${user.email}` : ''}</div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[10px]">Balance</span>
+                        <span className="text-base font-black text-emerald-400 font-mono">₹{user.balance.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 text-xs font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300">UID</span>
+                        <span className="font-bold text-cyan-300">{user.user_id}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-[11px]">{user.orders_count} orders</span>
+                        <span className="text-slate-500 text-[11px]">₹{(user.spent || 0).toFixed(0)} spent</span>
+                      </div>
+                    </div>
+
+                    {/* Big Finger-Friendly Mobile Action Buttons */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDirectPayUserId(String(user.user_id));
+                          setBalanceAdjustAmt('100');
+                        }}
+                        className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95 min-h-[44px]"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        <span>+ Add Money</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUserForModal(user.user_id)}
+                        className="py-2.5 px-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95 min-h-[44px]"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Inspect & Ban</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Users Table */}
+            <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs md:text-sm">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
@@ -1422,10 +1619,10 @@ export const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
-                    {filteredUsers.map(user => {
+                    {filteredUsers.map((user, idx) => {
                       const chatId = user.chat_id || user.user_id;
                       return (
-                        <tr key={user.user_id} className="hover:bg-slate-800/40 transition">
+                        <tr key={`desk-user-${user.user_id || idx}`} className="hover:bg-slate-800/40 transition">
                           <td className="p-3.5">
                             <div className="space-y-1">
                               {/* Telegram User ID */}
@@ -1737,7 +1934,7 @@ export const AdminDashboard: React.FC = () => {
                       }
                     ].map((tpl, i) => (
                       <button
-                        key={i}
+                        key={`bcast-tpl-${tpl.title || i}`}
                         type="button"
                         onClick={() => {
                           setBroadcastForm(prev => ({
@@ -2094,8 +2291,8 @@ export const AdminDashboard: React.FC = () => {
                           onChange={(e) => setCurrentUserId(Number(e.target.value))}
                           className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-cyan-300 outline-none"
                         >
-                          {allUsers.map(u => (
-                            <option key={u.user_id} value={u.user_id}>
+                          {allUsers.map((u, idx) => (
+                            <option key={`sim-user-${u.user_id || idx}`} value={u.user_id}>
                               {u.first_name} (UID: {u.user_id}) - {u.is_vip ? 'VIP' : u.is_reseller ? 'Reseller' : 'Regular'}
                             </option>
                           ))}
@@ -2128,9 +2325,9 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div className="space-y-2 max-h-56 overflow-y-auto">
-                    {broadcastHistory.map((bh) => (
+                    {broadcastHistory.map((bh, idx) => (
                       <div
-                        key={bh.id}
+                        key={`bcast-hist-${bh.id || idx}`}
                         className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-xs space-y-1.5"
                       >
                         <div className="flex items-center justify-between text-[11px]">
@@ -2161,9 +2358,9 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              {tickets.map(t => (
+              {tickets.map((t, idx) => (
                 <div
-                  key={t.id}
+                  key={`ticket-card-${t.id || idx}`}
                   className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 space-y-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
@@ -2308,8 +2505,8 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {coupons.map(c => (
-                    <tr key={c.code} className="hover:bg-slate-800/40">
+                  {coupons.map((c, idx) => (
+                    <tr key={`coupon-row-${c.code || idx}`} className="hover:bg-slate-800/40">
                       <td className="p-3.5 font-mono font-bold text-pink-400">{c.code}</td>
                       <td className="p-3.5 font-bold text-emerald-400">₹{c.amount.toFixed(2)}</td>
                       <td className="p-3.5 text-slate-200">{c.uses_left} / {c.total_uses}</td>
@@ -3371,8 +3568,8 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl divide-y divide-slate-800/60 overflow-hidden">
-              {logs.map(log => (
-                <div key={log.id} className="p-3.5 flex items-start justify-between gap-4 text-xs hover:bg-slate-800/40 transition">
+              {logs.map((log, idx) => (
+                <div key={`audit-log-${log.id || idx}`} className="p-3.5 flex items-start justify-between gap-4 text-xs hover:bg-slate-800/40 transition">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-cyan-400 font-bold">UID: {log.user_id}</span>
