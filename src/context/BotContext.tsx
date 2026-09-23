@@ -204,7 +204,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const saved = localStorage.getItem('kalam_bot_auth_logged_in');
-    return saved !== null ? saved === 'true' : true;
+    return saved === 'true';
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);

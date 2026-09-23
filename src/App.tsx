@@ -90,19 +90,29 @@ const AppContent: React.FC = () => {
     currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com' ||
     true;
 
-  // If user is not authenticated, show the login/registration page
+  // Strict Auth Guard: If user is not authenticated, show ONLY the secure login/registration portal
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col min-h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-y-auto">
-        <header className="bg-slate-900/90 border-b border-slate-800 px-4 md:px-6 py-3 flex items-center justify-between gap-2 shrink-0">
+      <div className="flex flex-col min-h-[100dvh] w-full bg-[#030712] text-slate-100 font-sans relative overflow-x-hidden overflow-y-auto selection:bg-cyan-500/30 selection:text-cyan-200">
+        {/* Ambient Glowing Orbs */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-gradient-to-br from-cyan-500/20 to-blue-600/15 rounded-full blur-[110px] animate-pulse" />
+          <div className="absolute top-1/3 -right-28 w-[28rem] h-[28rem] bg-gradient-to-tr from-indigo-500/15 via-purple-600/10 to-cyan-400/15 rounded-full blur-[130px]" />
+          <div className="absolute -bottom-32 left-1/3 w-[32rem] h-[32rem] bg-gradient-to-tl from-teal-500/10 via-emerald-600/10 to-blue-600/15 rounded-full blur-[120px]" />
+        </div>
+
+        {/* Minimal Header */}
+        <header className="w-full liquid-glass border-b border-white/10 px-4 md:px-8 py-3.5 flex items-center justify-between shrink-0 z-20 sticky top-0">
           <WebsiteLogo size="md" />
-          <div className="text-xs text-slate-400 hidden sm:block">
-            Sign in with Google or Email to manage your Telegram Store Bots.
+          <div className="flex items-center gap-2 text-xs font-semibold text-cyan-300 liquid-glass-pill px-3 py-1 rounded-full border border-cyan-500/30">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            <span>Secure Access Gateway</span>
           </div>
         </header>
 
-        <main className="flex-1 flex items-center justify-center p-4">
-          <AuthPortal />
+        {/* Center Auth Screen */}
+        <main className="flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 z-10 my-auto">
+          <AuthPortal isModal={false} />
         </main>
       </div>
     );
