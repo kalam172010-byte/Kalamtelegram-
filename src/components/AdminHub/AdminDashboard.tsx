@@ -679,11 +679,11 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('bot')}
+                      onClick={() => setActiveTab('my_bots')}
                       className="px-3.5 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Open in Telegram Simulator
+                      <Bot className="w-3.5 h-3.5" />
+                      Manage Bot Fleet
                     </button>
                     <button
                       type="button"
@@ -1597,7 +1597,7 @@ export const AdminDashboard: React.FC = () => {
                           {user.is_reseller ? <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold border border-indigo-500/30">👑 Reseller</span> : null}
                           {user.is_banned ? <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-bold border border-rose-500/30">🚫 Banned</span> : null}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono">@{user.username || 'none'} {user.email ? `• ${user.email}` : ''}</div>
+                        <div className="text-xs text-slate-400 font-mono">@{user.username || 'none'}</div>
                       </div>
                       <div className="text-right">
                         <span className="text-slate-400 block text-[10px]">Balance</span>
@@ -1757,15 +1757,9 @@ export const AdminDashboard: React.FC = () => {
                               <div>
                                 <div className="font-bold text-white flex items-center gap-1.5">
                                   <span>{user.first_name}</span>
-                                  {user.auth_provider === 'google' && (
-                                    <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                      Google
-                                    </span>
-                                  )}
                                 </div>
                                 <div className="text-[11px] text-slate-400 font-mono">
                                   @{user.username || 'none'}
-                                  {user.email ? <span className="text-slate-500 ml-1">({user.email})</span> : null}
                                 </div>
                                 <div className="text-[10px] text-cyan-400/90 font-mono flex items-center gap-1 mt-0.5">
                                   <Clock className="w-2.5 h-2.5" />
@@ -1875,11 +1869,11 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('bot')}
+                    onClick={() => setActiveTab('my_bots')}
                     className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-semibold cursor-pointer transition"
                   >
                     <Bot className="w-3.5 h-3.5" />
-                    View Bot Simulator
+                    Manage Bot Fleet
                   </button>
                 </div>
               </div>
@@ -2392,20 +2386,20 @@ export const AdminDashboard: React.FC = () => {
                         >
                           {allUsers.map((u, idx) => (
                             <option key={`sim-user-${u.user_id || idx}`} value={u.user_id}>
-                              {u.first_name} (UID: {u.user_id}) - {u.is_vip ? 'VIP' : u.is_reseller ? 'Reseller' : 'Regular'}
+                              {u.first_name} (UID: {u.user_id}) - {u.is_reseller ? 'Reseller' : 'Regular'}
                             </option>
                           ))}
                         </select>
                         <button
                           type="button"
-                          onClick={() => setActiveTab('bot')}
+                          onClick={() => setActiveTab('my_bots')}
                           className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer transition shrink-0"
                         >
-                          Open Chat
+                          View Bots
                         </button>
                       </div>
                       <p className="text-[10px] text-slate-500">
-                        When you dispatch a broadcast, it is automatically pushed to all users matching your target audience in the client chat simulator.
+                        When you dispatch a broadcast, it is automatically pushed in real-time to all live Telegram users matching your target audience.
                       </p>
                     </div>
                   </div>

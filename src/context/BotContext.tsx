@@ -3195,7 +3195,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       ...u,
       is_vip: u.is_vip ? 0 : 1,
       vip_since: u.is_vip ? undefined : new Date().toISOString().substring(0, 10),
-      account_type: u.is_vip ? 'Regular' : 'VIP'
+      account_type: 'Regular'
     } : u));
   };
 
@@ -3639,9 +3639,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     const newUid = Math.floor(10000000 + Math.random() * 90000000);
-    const chosenRole = params.role || 'Regular';
-    const isVip = chosenRole === 'VIP' ? 1 : 0;
-    const isReseller = chosenRole === 'Reseller' ? 1 : 0;
+    const chosenRole: AccountType = 'Regular';
+    const isReseller = 0;
 
     const newUser: User = {
       user_id: newUid,
@@ -3651,7 +3650,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       username: params.username?.trim() || cleanEmail.split('@')[0],
       auth_provider: 'email',
       avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${params.name.trim()}`,
-      balance: chosenRole === 'VIP' ? 250.0 : chosenRole === 'Reseller' ? 500.0 : 50.0,
+      balance: 50.0,
       account_type: chosenRole,
       orders_count: 0,
       spent: 0,
@@ -3660,9 +3659,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       reseller_since: isReseller ? new Date().toISOString().split('T')[0] : undefined,
       total_saved: 0,
       is_banned: 0,
-      warnings: 0,
-      is_vip: isVip,
-      vip_since: isVip ? new Date().toISOString().split('T')[0] : undefined
+      warnings: 0
     };
 
     setUsers(prev => [newUser, ...prev]);

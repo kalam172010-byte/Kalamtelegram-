@@ -60,11 +60,7 @@ export function usePageRouter({
       else if (currentRoute.includes('code')) setAdminTab('code');
       else setAdminTab('overview');
     } else if (currentRoute.startsWith('my_bot') || currentRoute.startsWith('bot') || currentRoute === 'bots') {
-      if (currentRoute === 'bot' || currentRoute === 'chat' || currentRoute === 'simulator') {
-        setActiveTab('bot');
-      } else {
-        setActiveTab('my_bots');
-      }
+      setActiveTab('my_bots');
     } else if (currentRoute.startsWith('gateway')) {
       setActiveTab('gateways');
     } else if (currentRoute.startsWith('reseller') || currentRoute.startsWith('api')) {
@@ -102,9 +98,7 @@ export function usePageRouter({
         else if (currentRoute.includes('emoji')) setAdminTab('emojis');
         else if (currentRoute.includes('code')) setAdminTab('code');
         else setAdminTab('overview');
-      } else if (currentRoute === 'bot' || currentRoute === 'chat') {
-        setActiveTab('bot');
-      } else if (currentRoute === 'my_bots' || currentRoute === 'bots') {
+      } else if (currentRoute === 'my_bots' || currentRoute === 'bots' || currentRoute.startsWith('bot')) {
         setActiveTab('my_bots');
       } else if (currentRoute === 'gateways') {
         setActiveTab('gateways');
@@ -171,12 +165,6 @@ export function usePageRouter({
           pageTitle = 'Bot Fleet Manager (My Bots) | Kalam FF Panel';
           targetPath = '/bots';
           targetHash = 'bots';
-          break;
-        case 'bot':
-        case 'telegram':
-          pageTitle = `${activeBotName || 'Telegram Bot'} (Live Chat Simulator) | Kalam FF Panel`;
-          targetPath = '/chat';
-          targetHash = 'chat';
           break;
         case 'gateways':
           pageTitle = 'Payment Gateways & UPI QR | Kalam FF Panel';

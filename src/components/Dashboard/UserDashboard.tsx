@@ -445,7 +445,7 @@ export const UserDashboard: React.FC = () => {
             <span className="truncate">Spent: ₹{currentUser.spent.toFixed(0)}</span>
             <button
               type="button"
-              onClick={() => setActiveTab('bot')}
+              onClick={() => setActiveTab('gateways')}
               className="text-emerald-300 hover:text-white font-semibold inline-flex items-center gap-0.5 shrink-0"
             >
               + Add <ChevronRight className="w-3 h-3" />
@@ -472,10 +472,13 @@ export const UserDashboard: React.FC = () => {
             <span className="truncate">Saved: ₹{currentUser.total_saved.toFixed(0)}</span>
             <button
               type="button"
-              onClick={() => setActiveTab('bot')}
+              onClick={() => {
+                setAdminTab('products');
+                setActiveTab('admin');
+              }}
               className="text-purple-300 hover:text-white font-semibold inline-flex items-center gap-0.5 shrink-0"
             >
-              Shop <ChevronRight className="w-3 h-3" />
+              Catalog <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -550,14 +553,15 @@ export const UserDashboard: React.FC = () => {
 
             {/* Quick Actions for this Bot */}
             <div className="flex flex-wrap items-center gap-2.5 pt-3 lg:pt-0 border-t lg:border-t-0 border-white/5">
-              <button
-                type="button"
-                onClick={() => setActiveTab('bot')}
-                className="flex items-center gap-2 liquid-glass-btn-cyan text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg text-xs md:text-sm transition cursor-pointer active:scale-95"
+              <a
+                href={`https://t.me/${activeBot.username.replace(/^@/, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 liquid-glass-btn-cyan text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg text-xs md:text-sm transition cursor-pointer active:scale-95 no-underline"
               >
-                <Smartphone className="w-4 h-4" />
-                <span>Launch Simulator</span>
-              </button>
+                <ExternalLink className="w-4 h-4" />
+                <span>Open in Telegram</span>
+              </a>
 
               <button
                 type="button"
@@ -818,27 +822,27 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Link 2: Telegram Bot Simulator */}
+          {/* Link 2: Payment Gateways & UPI */}
           <div
-            onClick={() => setActiveTab('bot')}
+            onClick={() => setActiveTab('gateways')}
             className="liquid-glass-interactive p-5 rounded-3xl cursor-pointer group shadow-xl"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition shadow-inner">
-                <Smartphone className="w-5 h-5" />
+              <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition shadow-inner">
+                <CreditCard className="w-5 h-5" />
               </div>
               <span className="text-[11px] font-semibold text-emerald-300 liquid-glass-pill px-2.5 py-0.5 rounded-xl border border-emerald-500/30">
-                Interactive
+                Instant UPI
               </span>
             </div>
-            <h4 className="font-bold text-white text-sm md:text-base mt-3 group-hover:text-blue-300 transition">
-              Live Bot Simulator
+            <h4 className="font-bold text-white text-sm md:text-base mt-3 group-hover:text-emerald-300 transition">
+              Payment Gateways & QR
             </h4>
             <p className="text-xs text-slate-300 mt-1">
-              Test your active store bot in real-time mobile frame with inline keyboards, cart flow, and instant checkout.
+              Configure FamGateway, FamPay UPI QR, merchant webhooks, and automatic wallet recharge verification.
             </p>
-            <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-300 group-hover:translate-x-1 transition">
-              <span>Open Simulator</span>
+            <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-emerald-300 group-hover:translate-x-1 transition">
+              <span>Open Gateways</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1059,10 +1063,13 @@ export const UserDashboard: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={() => setActiveTab('bot')}
+            onClick={() => {
+              setAdminTab('products');
+              setActiveTab('admin');
+            }}
             className="text-xs text-cyan-300 hover:text-white font-semibold cursor-pointer"
           >
-            Open Store
+            View Products
           </button>
         </div>
 

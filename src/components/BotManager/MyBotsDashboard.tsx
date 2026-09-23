@@ -47,11 +47,6 @@ export const MyBotsDashboard: React.FC = () => {
     setTimeout(() => setCopiedTokenBotId(null), 2000);
   };
 
-  const handleLaunchSimulator = (botId: string) => {
-    switchActiveBot(botId);
-    setActiveTab('bot');
-  };
-
   const handleOpenGateway = (botId: string) => {
     switchActiveBot(botId);
     setActiveTab('gateways');
@@ -287,14 +282,15 @@ export const MyBotsDashboard: React.FC = () => {
                     {/* Card Bottom Actions */}
                     <div className="liquid-glass-pill px-5 py-3 border-t border-white/10 flex items-center justify-between gap-2 rounded-b-3xl rounded-t-none">
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleLaunchSimulator(bot.id)}
-                          className="px-3 py-1.5 rounded-xl liquid-glass-btn-cyan text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer active:scale-95"
+                        <a
+                          href={`https://t.me/${bot.username.replace(/^@/, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-xl liquid-glass-btn-cyan text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer active:scale-95 no-underline"
                         >
-                          <Smartphone className="w-3.5 h-3.5" />
-                          <span>Launch Simulator</span>
-                        </button>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open in Telegram</span>
+                        </a>
 
                         <button
                           type="button"

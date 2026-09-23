@@ -85,13 +85,15 @@ class TelegramEngine {
     const adminId = Number(settings.admin_id);
     const uid = Number(user.user_id);
     const cid = Number(chatId);
+
+    // Strict Website Admin ID Enforcement
+    if (adminId && (uid === adminId || cid === adminId)) return true;
+
+    // Fallback if Admin Contact username matches configured setting
     const uname = (user.username || '').toLowerCase().replace('@', '');
     const adminContact = (settings.admin_contact || '').toLowerCase().replace('@', '');
-
-    if (adminId && (uid === adminId || cid === adminId)) return true;
     if (adminContact && uname === adminContact) return true;
-    if (uname === 'kalam172010') return true;
-    if (!adminId && (uname === 'kalam172010' || user.is_reseller === 1)) return true;
+
     return false;
   }
 
@@ -448,7 +450,6 @@ class TelegramEngine {
 
   private getUserPrice(user: User, product: Product): number {
     if (user.is_reseller === 1) return product.reseller_price;
-    if (user.is_vip === 1) return Math.round(product.price_inr * 0.85);
     return product.price_inr;
   }
 
@@ -685,7 +686,73 @@ class TelegramEngine {
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
 
+    const isExistingUser = dbStore.getUser(fromUser.id);
     const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
+
+    // Check for referral code on first start e.g. /start ref_12846461 or /start 12846461
+    if (!isExistingUser && text.toLowerCase().startsWith('/start')) {
+      const parts = text.split(/\s+/);
+      if (parts.length > 1) {
+        const refPayload = parts[1].trim();
+        const rawRefId = refPayload.replace(/^ref_/, '');
+        const referrerId = Number(rawRefId);
+        if (referrerId && !isNaN(referrerId) && referrerId !== user.user_id) {
+          const referrer = dbStore.getUser(referrerId);
+          if (referrer) {
+            const settings = dbStore.getData().settings;
+            user.referred_by = referrerId;
+            const refReward = Number(settings.referral_reward_inr) || 10;
+            const welcomeBonus = Number(settings.referral_referee_bonus_inr) || 5;
+
+            // Credit referee welcome bonus
+            if (welcomeBonus > 0) {
+              user.balance += welcomeBonus;
+            }
+
+            // Credit referrer invite bonus
+            if (refReward > 0) {
+              referrer.balance += refReward;
+              referrer.referral_count = (referrer.referral_count || 0) + 1;
+              referrer.referral_earnings = (referrer.referral_earnings || 0) + refReward;
+              dbStore.updateUser(referrer.user_id, {
+                balance: referrer.balance,
+                referral_count: referrer.referral_count,
+                referral_earnings: referrer.referral_earnings
+              });
+              dbStore.logActivity(
+                referrer.user_id,
+                'REFERRAL_BONUS',
+                `+₹${refReward} for inviting @${user.username || user.user_id}`
+              );
+
+              // Notify referrer on Telegram
+              try {
+                this.sendMessage(
+                  referrer.user_id,
+                  `🎉 <b>NEW REFERRAL JOINED! (+₹${refReward.toFixed(2)})</b>\n\n` +
+                  `👤 <b>Friend:</b> <b>${user.first_name}</b> (@${user.username || user.user_id})\n` +
+                  `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
+                  `💰 <b>Signup Reward:</b> <b>+₹${refReward.toFixed(2)}</b> credited to your wallet!\n` +
+                  `💳 <b>Your New Balance:</b> <b>₹${referrer.balance.toFixed(2)}</b>\n\n` +
+                  `📈 <i>You will also earn <b>${settings.referral_commission_percent || 5}% lifetime commission</b> on all their future recharges!</i>`
+                ).catch(() => {});
+              } catch (e) {}
+            }
+
+            dbStore.updateUser(user.user_id, {
+              referred_by: referrerId,
+              balance: user.balance
+            });
+            dbStore.logActivity(
+              user.user_id,
+              'JOINED_VIA_REFERRAL',
+              `Referred by UID ${referrerId} (@${referrer.username || referrerId}) - Welcome bonus: +₹${welcomeBonus}`
+            );
+            dbStore.saveData();
+          }
+        }
+      }
+    }
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, '🚫 <b>Account Suspended</b>\n\nYour account has been banned from using Kalam FF Panel. Contact support if you believe this is an error.');
@@ -1115,8 +1182,8 @@ class TelegramEngine {
       return;
     }
 
-    if (lowerText.startsWith('/vip')) {
-      await this.sendVipMenu(chatId, user);
+    if (lowerText.startsWith('/referral') || lowerText.startsWith('/ref') || lowerText.startsWith('/invite') || lowerText.startsWith('/affiliate')) {
+      await this.sendReferralMenu(chatId, user);
       return;
     }
 
@@ -1677,36 +1744,8 @@ class TelegramEngine {
       return;
     }
 
-    if (data === 'vip_club') {
-      await this.sendVipMenu(chatId, user, messageId);
-      return;
-    }
-
-    if (data === 'vip_upgrade') {
-      const vipPrice = settings.vip_membership_price || 499;
-
-      if (user.is_vip === 1) {
-        await this.answerCallback(cb.id, 'You are already a Lifetime VIP Member!', true);
-        return;
-      }
-
-      if (user.balance < vipPrice) {
-        await this.answerCallback(cb.id, `You need ₹${vipPrice} in your wallet to unlock Lifetime VIP.`, true);
-        return;
-      }
-
-      user.balance -= vipPrice;
-      user.is_vip = 1;
-      user.account_type = 'VIP';
-      dbStore.updateUser(user.user_id, {
-        is_vip: 1,
-        account_type: 'VIP',
-        balance: user.balance
-      });
-      dbStore.logActivity(user.user_id, 'UPGRADE_VIP', 'Unlocked Lifetime VIP Membership');
-
-      await this.answerCallback(cb.id, '💎 Lifetime VIP Membership Activated! Enjoy 15% OFF everything.', true);
-      await this.sendVipMenu(chatId, user, messageId);
+    if (data === 'referral_menu' || data === 'referral') {
+      await this.sendReferralMenu(chatId, user, messageId);
       return;
     }
 
@@ -1932,11 +1971,11 @@ class TelegramEngine {
   }
 
   private getWelcomeText(user: User): string {
-    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : (user.is_vip === 1 ? '💎 VIP Member (15% OFF)' : '👤 Regular Member');
+    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Member';
 
     return `⚡ <b>WELCOME TO KALAM FF PANEL STORE</b> ⚡\n\n` +
       `👋 Hello, <b>${user.first_name}</b>!\n` +
-      `🆔 <b>Grid ID:</b> <code>${user.user_id}</code>\n` +
+      `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
       `💰 <b>Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n\n` +
       `🚀 <b>Instant Key Delivery System:</b>\n` +
@@ -1959,7 +1998,7 @@ class TelegramEngine {
       ],
       [
         { text: '🌟 Reseller Panel', callback_data: 'reseller_panel' },
-        { text: '💎 VIP Club', callback_data: 'vip_club' }
+        { text: '👥 Refer & Earn', callback_data: 'referral_menu' }
       ],
       [
         { text: '🎧 24/7 Support', callback_data: 'support_menu' },
@@ -2000,7 +2039,7 @@ class TelegramEngine {
 
   private async sendProfileMessage(chatId: number, user: User, messageId?: number) {
     const orders = dbStore.getData().orders.filter(o => o.user_id === user.user_id);
-    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : (user.is_vip === 1 ? '💎 VIP Member' : '👤 Regular Customer');
+    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Customer';
 
     let keysText = '';
     if (orders.length > 0) {
@@ -2016,15 +2055,19 @@ class TelegramEngine {
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
       `💰 <b>Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n` +
       `📊 <b>Total Orders:</b> ${orders.length}\n` +
-      `💸 <b>Total Spent:</b> ₹${user.spent.toFixed(2)}` + keysText;
+      `💸 <b>Total Spent:</b> ₹${user.spent.toFixed(2)}\n` +
+      `👥 <b>Friends Referred:</b> ${user.referral_count || 0} (Earned: ₹${(user.referral_earnings || 0).toFixed(2)})` + keysText;
 
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '💳 Add Balance', callback_data: 'add_balance' },
-          { text: '🎁 Redeem Code', callback_data: 'redeem_code' }
+          { text: '👥 Refer & Earn', callback_data: 'referral_menu' },
+          { text: '💳 Add Balance', callback_data: 'add_balance' }
         ],
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+        [
+          { text: '🎁 Redeem Code', callback_data: 'redeem_code' },
+          { text: '🔙 Back to Menu', callback_data: 'main_menu' }
+        ]
       ]
     };
 
@@ -2269,35 +2312,41 @@ class TelegramEngine {
     }
   }
 
-  private async sendVipMenu(chatId: number, user: User, messageId?: number) {
+  private async sendReferralMenu(chatId: number, user: User, messageId?: number) {
     const settings = dbStore.getData().settings;
-    const vipPrice = settings.vip_membership_price || 499;
-    const statusBadge = user.is_vip === 1 ? '💎 <b>Active VIP Lifetime Member</b>' : '❌ <i>Standard Member</i>';
+    const botUsername = settings.bot_username || 'kalam_ff_bot';
+    const cleanBotUsername = botUsername.replace(/^@/, '');
+    const refLink = `https://t.me/${cleanBotUsername}?start=ref_${user.user_id}`;
+    const refReward = Number(settings.referral_reward_inr) || 10;
+    const commPercent = Number(settings.referral_commission_percent) || 5;
+    const refereeBonus = Number(settings.referral_referee_bonus_inr) || 5;
 
-    const text = `💎 <b>KALAM FF PANEL - VIP CLUB</b>\n\n` +
-      `Status: ${statusBadge}\n\n` +
-      `✨ <b>VIP Club Privileges:</b>\n` +
-      `• <b>Flat 15% OFF</b> on every single store purchase for life\n` +
-      `• VIP Gold badge next to your profile name\n` +
-      `• Direct VIP support queue ticket escalation\n` +
-      `• Beta testing access for upcoming FF panel updates\n\n` +
-      `💰 <b>Lifetime Membership Fee:</b> <b>₹${vipPrice}</b>\n` +
-      `💳 <b>Your Current Balance:</b> ₹${user.balance.toFixed(2)}`;
+    const text = `🎁 <b><u>REFER & EARN REWARDS PROGRAM</u></b> 👥\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💰 <b>Earn ₹${refReward.toFixed(2)} instant cash</b> for every active friend you invite!\n` +
+      `📈 Plus get <b>${commPercent}% lifetime commission</b> on every recharge & purchase!\n` +
+      `🎁 <b>Your invited friends receive ₹${refereeBonus.toFixed(2)}</b> welcome bonus!\n\n` +
+      `🔗 <b>Your Exclusive Referral Link:</b>\n` +
+      `<code>${refLink}</code>\n\n` +
+      `📊 <b>Your Referral Performance:</b>\n` +
+      `👥 Total Friends Invited: <b>${user.referral_count || 0}</b>\n` +
+      `💵 Total Referral Earnings: <b>₹${(user.referral_earnings || 0).toFixed(2)}</b>\n` +
+      `👛 Wallet Balance: <b>₹${user.balance.toFixed(2)}</b>\n\n` +
+      `🚀 <i>Share your personal link to start earning real cash rewards instantly!</i>`;
 
-    const keyboard: any = {
-      inline_keyboard: []
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('🔥 Join Kalam FF Panel Bot for Free Fire VIP Injectors, Root/Non-Root Panels & instant key delivery!')}`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '📤 Share Link with Friends', url: shareUrl }
+        ],
+        [
+          { text: '💳 Add Balance', callback_data: 'add_balance' },
+          { text: '🔙 Back to Menu', callback_data: 'main_menu' }
+        ]
+      ]
     };
-
-    if (user.is_vip === 0) {
-      keyboard.inline_keyboard.push([
-        { text: `💎 Unlock VIP Membership (₹${vipPrice})`, callback_data: 'vip_upgrade' }
-      ]);
-    }
-
-    keyboard.inline_keyboard.push([
-      { text: '💳 Add Balance', callback_data: 'add_balance' },
-      { text: '🔙 Back to Menu', callback_data: 'main_menu' }
-    ]);
 
     if (messageId) {
       await this.editMessageText(chatId, messageId, text, keyboard);

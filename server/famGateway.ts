@@ -467,8 +467,51 @@ class FamGatewayService {
       });
     }
 
-    // 2. Alert Master Admin on Telegram
+    // 2. Process Referral Lifetime Deposit Commission if user was referred
     const settings = dbStore.getData().settings;
+    if (user.referred_by && user.referred_by !== user.user_id) {
+      const commPercent = Number(settings.referral_commission_percent) || 5;
+      if (commPercent > 0) {
+        const commAmount = Math.round(creditAmount * (commPercent / 100) * 100) / 100;
+        if (commAmount > 0) {
+          const referrer = data.users.find(u => u.user_id === user.referred_by);
+          if (referrer) {
+            referrer.balance += commAmount;
+            referrer.referral_earnings = (referrer.referral_earnings || 0) + commAmount;
+            dbStore.updateUser(referrer.user_id, {
+              balance: referrer.balance,
+              referral_earnings: referrer.referral_earnings
+            });
+            dbStore.logActivity(
+              referrer.user_id,
+              'REFERRAL_COMMISSION',
+              `+₹${commAmount.toFixed(2)} (${commPercent}% commission from UID ${user.user_id} recharge of ₹${creditAmount})`
+            );
+            dbStore.saveData();
+
+            try {
+              telegramEngine.sendMessage(
+                referrer.user_id,
+                `💸 <b>REFERRAL COMMISSION EARNED! (+₹${commAmount.toFixed(2)})</b>\n\n` +
+                `👥 <b>From Friend:</b> <b>${user.first_name}</b> (@${user.username || user.user_id})\n` +
+                `💳 <b>Friend Recharged:</b> ₹${creditAmount.toFixed(2)}\n` +
+                `💰 <b>Your Commission (${commPercent}%):</b> <b>+₹${commAmount.toFixed(2)}</b>\n` +
+                `👛 <b>Your Updated Balance:</b> <b>₹${referrer.balance.toFixed(2)}</b>\n\n` +
+                `🚀 <i>Keep sharing your referral link to earn unlimited passive income!</i>`,
+                {
+                  inline_keyboard: [
+                    [{ text: '👥 My Referral Dashboard', callback_data: 'referral_menu' }],
+                    [{ text: '🛒 Open Store', callback_data: 'shop_categories' }]
+                  ]
+                }
+              ).catch(() => {});
+            } catch (e) {}
+          }
+        }
+      }
+    }
+
+    // 3. Alert Master Admin on Telegram
     if (settings.admin_id) {
       try {
         await telegramEngine.sendMessage(

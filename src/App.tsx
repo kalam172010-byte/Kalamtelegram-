@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { BotProvider, useBot } from './context/BotContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { TelegramHeader } from './components/TelegramClient/TelegramHeader';
-import { TelegramBotView } from './components/TelegramClient/TelegramBotView';
 import { AdminDashboard } from './components/AdminHub/AdminDashboard';
 import { AuthPortal } from './components/Auth/AuthPortal';
 import { UserProfileModal } from './components/Auth/UserProfileModal';
@@ -36,7 +34,15 @@ import {
   ChevronDown,
   Package,
   Plus,
-  Megaphone
+  Megaphone,
+  Share2,
+  Menu,
+  X,
+  Gift,
+  FileText,
+  Database,
+  Radio,
+  Receipt
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -65,6 +71,7 @@ const AppContent: React.FC = () => {
     products
   } = useBot();
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileFrame, setIsMobileFrame] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const { isKeyboardVisible } = useKeyboardAwareness();
@@ -118,6 +125,14 @@ const AppContent: React.FC = () => {
     );
   }
 
+  const navigateTo = (tab: any, subAdminTab?: any) => {
+    setActiveTab(tab);
+    if (subAdminTab) {
+      setAdminTab(subAdminTab);
+    }
+    setIsSidebarOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-[#030712] text-slate-100 font-sans overflow-hidden relative">
       {/* Liquid Glass Ambient Fluid Mesh Orbs in Background */}
@@ -129,8 +144,18 @@ const AppContent: React.FC = () => {
 
       {/* Top Application Navigation Bar with Liquid Glass */}
       <header className="liquid-glass border-b border-white/10 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 z-30 shadow-2xl shadow-cyan-950/30 sticky top-0 overflow-hidden">
-        {/* Brand & Title */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
+        {/* Brand & Left Hamburger Drawer Toggle */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 border border-white/10 hover:border-cyan-400/40 transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center shrink-0"
+            title="Open Navigation Menu"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
           <WebsiteLogo
             size="sm"
             showSubtitle={false}
@@ -229,19 +254,6 @@ const AppContent: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setActiveTab('bot')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
-              activeTab === 'bot'
-                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>Bot Simulator</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab('gateways')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'gateways'
@@ -304,8 +316,8 @@ const AppContent: React.FC = () => {
           {/* Balance Pill */}
           <button
             type="button"
-            onClick={() => setActiveTab('bot')}
-            title="Click to add balance in bot"
+            onClick={() => setActiveTab('gateways')}
+            title="Click to add balance via Payment Gateway"
             className="flex items-center gap-1 liquid-glass-pill hover:bg-white/10 px-2 sm:px-2.5 py-1.5 rounded-xl border border-emerald-500/40 text-xs transition cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.15)] shrink-0"
           >
             <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -383,6 +395,238 @@ const AppContent: React.FC = () => {
         </div>
       </header>
 
+      {/* Slide-out Left Navigation Drawer */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <div className="fixed inset-0 z-50 flex">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm cursor-pointer"
+            />
+
+            {/* Sidebar Panel */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
+              className="relative w-80 max-w-[85vw] h-full bg-[#070d1e] border-r border-white/15 shadow-2xl flex flex-col z-10 overflow-hidden"
+            >
+              {/* Drawer Header */}
+              <div className="p-4 border-b border-white/10 flex items-center justify-between gap-2 bg-slate-950/70">
+                <WebsiteLogo size="sm" onClick={() => navigateTo('dashboard')} />
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Bot Selector in Drawer */}
+              {myBots.length > 0 && (
+                <div className="p-3 mx-3 mt-3 bg-cyan-950/40 border border-cyan-500/20 rounded-2xl">
+                  <div className="flex items-center justify-between mb-1.5 text-[11px] font-semibold text-cyan-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Active Telegram Bot:
+                    </span>
+                    <span className="text-slate-400 font-mono">@{activeBot?.username}</span>
+                  </div>
+                  <select
+                    value={activeBot?.id || ''}
+                    onChange={(e) => switchActiveBot(e.target.value)}
+                    className="w-full bg-slate-900 border border-cyan-500/30 rounded-xl px-2.5 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-cyan-400"
+                  >
+                    {myBots.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        @{b.username} ({b.name})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Navigation Items List */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-1">
+                  Main Navigation
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('dashboard')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'dashboard'
+                      ? 'bg-gradient-to-r from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <LayoutDashboard className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="flex-1 text-left">Dashboard</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('my_bots')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'my_bots'
+                      ? 'bg-gradient-to-r from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="flex-1 text-left">My Telegram Bots</span>
+                  <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full text-[10px]">
+                    {myBots.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'products')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'products'
+                      ? 'bg-gradient-to-r from-amber-500/25 to-orange-600/25 text-amber-300 border border-amber-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Package className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="flex-1 text-left">Products Catalog & Vault</span>
+                  <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px]">
+                    {products.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('gateways')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'gateways'
+                      ? 'bg-gradient-to-r from-emerald-500/25 to-teal-600/25 text-emerald-300 border border-emerald-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="flex-1 text-left">Payment Gateways & UPI QR</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('reseller_api')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'reseller_api'
+                      ? 'bg-gradient-to-r from-purple-500/25 to-indigo-600/25 text-purple-300 border border-purple-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="flex-1 text-left">Reseller API & Webhooks</span>
+                </button>
+
+                <div className="pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-1">
+                  Administration & Users
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'users')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'users'
+                      ? 'bg-gradient-to-r from-emerald-500/25 to-teal-600/25 text-emerald-300 border border-emerald-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <UserIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="flex-1 text-left">Telegram Users & Customers</span>
+                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px]">
+                    {allUsers.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'referrals')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'referrals'
+                      ? 'bg-gradient-to-r from-pink-500/25 to-rose-600/25 text-pink-300 border border-pink-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Gift className="w-4 h-4 text-pink-400 shrink-0" />
+                  <span className="flex-1 text-left">Referral Program & Rewards</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'broadcast')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'broadcast'
+                      ? 'bg-gradient-to-r from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Radio className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="flex-1 text-left">Broadcast Mass Messaging</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'overview')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'overview'
+                      ? 'bg-gradient-to-r from-indigo-500/25 to-purple-600/25 text-indigo-300 border border-indigo-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="flex-1 text-left">Master Admin Hub</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('admin', 'logs')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeTab === 'admin' && adminTab === 'logs'
+                      ? 'bg-gradient-to-r from-slate-500/25 to-slate-600/25 text-white border border-slate-500/40 shadow-lg'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="flex-1 text-left">Live System Logs</span>
+                </button>
+              </div>
+
+              {/* Bottom Quick Action in Drawer */}
+              <div className="p-3 border-t border-white/10 bg-slate-950/80 space-y-2">
+                {activeBot && (
+                  <a
+                    href={`https://t.me/${activeBot.username.replace(/^@/, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs shadow-lg hover:from-cyan-500 hover:to-blue-500 transition no-underline"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open Live Telegram Bot</span>
+                  </a>
+                )}
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                  <span>Logged in as:</span>
+                  <span className="font-bold text-cyan-300">{currentUser.first_name}</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Main Content Area with Smooth Motion Transitions */}
       <main className="flex-1 min-h-0 relative flex flex-col z-10 w-full overflow-hidden">
         <AnimatePresence mode="wait">
@@ -393,7 +637,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <UserDashboard />
             </motion.div>
@@ -404,41 +648,9 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <MyBotsDashboard />
-            </motion.div>
-          ) : activeTab === 'bot' || activeTab === 'telegram' ? (
-            <motion.div
-              key="telegram"
-              initial={{ opacity: 0, y: 10, scale: 0.995 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.995 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full flex flex-col overflow-hidden pb-20 sm:pb-0"
-            >
-              <div
-                className={`w-full h-full flex flex-col mx-auto transition-all duration-300 ${
-                  isMobileFrame
-                    ? 'max-w-md h-full md:my-3 md:rounded-3xl md:border md:border-white/10 md:shadow-2xl md:ring-8 md:ring-slate-950/80 overflow-hidden'
-                    : 'w-full h-full'
-                }`}
-              >
-                {/* Phone Speaker Notch if Mobile Frame on Desktop */}
-                {isMobileFrame && (
-                  <div className="hidden md:flex justify-center items-center py-1 bg-slate-950/80 border-b border-white/5">
-                    <div className="w-16 h-1 bg-slate-700 rounded-full"></div>
-                  </div>
-                )}
-
-                <TelegramHeader
-                  isMobileFrame={isMobileFrame}
-                  setIsMobileFrame={setIsMobileFrame}
-                />
-                <div className="flex-1 min-h-0 overflow-hidden relative">
-                  <TelegramBotView />
-                </div>
-              </div>
             </motion.div>
           ) : activeTab === 'gateways' ? (
             <motion.div
@@ -447,7 +659,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <PaymentGatewayManager />
             </motion.div>
@@ -458,7 +670,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <ResellerApiManager />
             </motion.div>
@@ -469,7 +681,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-16"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <AdminDashboard />
             </motion.div>
@@ -480,125 +692,13 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-32 sm:pb-12"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
             >
               <UserDashboard />
             </motion.div>
           )}
         </AnimatePresence>
       </main>
-
-      {/* Bottom Mobile Navigation Dock (Liquid Glass Mobile Dock) */}
-      <nav
-        className={`sm:hidden fixed bottom-2 left-2 right-2 liquid-glass rounded-3xl px-1.5 py-1.5 pb-[max(env(safe-area-inset-bottom),0.5rem)] flex items-center justify-around shrink-0 z-40 select-none shadow-2xl shadow-cyan-950/50 border border-white/10 transition-all duration-300 ease-out ${
-          isKeyboardVisible || activeTab === 'bot'
-            ? 'translate-y-28 opacity-0 pointer-events-none'
-            : 'translate-y-0 opacity-100'
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'dashboard'
-              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <LayoutDashboard className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'dashboard' ? 'scale-115 text-cyan-300' : ''}`} />
-          <span className="mt-1 tracking-tight">Home</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setAdminTab('products');
-            setActiveTab('admin');
-          }}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'admin' && adminTab === 'products'
-              ? 'text-white bg-gradient-to-b from-amber-400/25 to-orange-600/20 border border-amber-400/40 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <div className="relative">
-            <Package className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'products' ? 'scale-115 text-amber-300' : ''}`} />
-            {products.length > 0 && (
-              <span className="absolute -top-1 -right-2 bg-amber-500 text-slate-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow">
-                {products.length}
-              </span>
-            )}
-          </div>
-          <span className="mt-1 tracking-tight">Products</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('my_bots')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'my_bots'
-              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-blue-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <div className="relative">
-            <Bot className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'my_bots' ? 'scale-115 text-cyan-300' : ''}`} />
-            {myBots.length > 0 && (
-              <span className="absolute -top-1 -right-2 bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow">
-                {myBots.length}
-              </span>
-            )}
-          </div>
-          <span className="mt-1 tracking-tight">Bots</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('bot')}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'bot' || activeTab === 'telegram'
-              ? 'text-white bg-gradient-to-b from-cyan-400/25 to-teal-600/20 border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Smartphone className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'bot' || activeTab === 'telegram' ? 'scale-115 text-cyan-300' : ''}`} />
-          <span className="mt-1 tracking-tight">Chat</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setAdminTab('users');
-            setActiveTab('admin');
-          }}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-            activeTab === 'admin' && adminTab === 'users'
-              ? 'text-white bg-gradient-to-b from-emerald-400/25 to-teal-600/20 border border-emerald-400/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <UserIcon className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'users' ? 'scale-115 text-emerald-300' : ''}`} />
-          <span className="mt-1 tracking-tight">Users</span>
-        </button>
-
-        {isMasterAdmin && (
-          <button
-            type="button"
-            onClick={() => {
-              setAdminTab('overview');
-              setActiveTab('admin');
-            }}
-            className={`flex-1 flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl text-[9.5px] font-bold transition-all duration-200 active:scale-95 cursor-pointer min-h-[46px] ${
-              activeTab === 'admin' && adminTab === 'overview'
-                ? 'text-white bg-gradient-to-b from-indigo-400/25 to-rose-600/20 border border-indigo-400/40 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Shield className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'admin' && adminTab === 'overview' ? 'scale-115 text-indigo-300' : ''}`} />
-            <span className="mt-1 tracking-tight">Admin</span>
-          </button>
-        )}
-      </nav>
 
       {/* Auth Modal Overlay when opened from other screens */}
       {isAuthModalOpen && (

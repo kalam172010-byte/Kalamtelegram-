@@ -1,4 +1,4 @@
-export type AccountType = 'Regular' | 'Reseller' | 'VIP';
+export type AccountType = 'Regular' | 'Reseller';
 
 export interface PaymentGatewayConfig {
   upi_id: string;
@@ -54,6 +54,7 @@ export interface BotInstance {
 export interface ReferralRecord {
   id: string;
   referrer_id: number;
+  referrer_name?: string;
   referee_id: number;
   referee_name: string;
   reward_amount: number;
@@ -85,7 +86,7 @@ export interface User {
   total_saved: number;
   is_banned: number; // 0 or 1
   warnings: number;
-  is_vip: number; // 0 or 1
+  is_vip?: number;
   vip_since?: string;
   referral_code?: string;
   referred_by?: number;
@@ -312,6 +313,6 @@ export interface ChatMessage {
   };
 }
 
-export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'bot' | 'telegram' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
+export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
 export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code';

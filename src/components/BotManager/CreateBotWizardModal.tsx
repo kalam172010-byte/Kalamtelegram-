@@ -29,6 +29,7 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [botName, setBotName] = useState('');
   const [botUsername, setBotUsername] = useState('');
   const [botToken, setBotToken] = useState('');
+  const [adminChatId, setAdminChatId] = useState(String(currentUser.chat_id || currentUser.user_id || '12846461'));
   const [description, setDescription] = useState('');
   const [themeColor, setThemeColor] = useState('#06b6d4');
 
@@ -112,11 +113,14 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const cleanUsername = (botUsername || botName.replace(/\s+/g, '') + 'Bot').replace(/^@/, '');
     const cleanToken = botToken.trim() || `7928194${Math.floor(Math.random() * 9000 + 1000)}:AAH9bK8xP_custom_${cleanUsername}`;
+    const parsedAdminId = Number(adminChatId.trim()) || currentUser.chat_id || currentUser.user_id || 12846461;
 
     const newBot = createBot({
       name: botName.trim(),
       username: cleanUsername,
       bot_token: cleanToken,
+      admin_id: parsedAdminId,
+      admin_chat_id: parsedAdminId,
       description: description.trim() || `Official Telegram Store Bot for ${botName}`,
       theme_color: themeColor,
       payment_gateway: {
@@ -143,7 +147,7 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
     });
 
     onClose();
-    setActiveTab('bot');
+    setActiveTab('my_bots');
   };
 
   return (
@@ -317,6 +321,26 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <span>{tokenStatus.message}</span>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  Bot Master Admin Telegram Chat ID <span className="text-pink-400">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-indigo-400 font-bold text-xs">CHAT ID</span>
+                  <input
+                    type="number"
+                    required
+                    placeholder="e.g. 12846461 or 792819401"
+                    value={adminChatId}
+                    onChange={(e) => setAdminChatId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-20 pr-3.5 py-2.5 text-sm font-mono font-bold text-indigo-300 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Only this Telegram Chat ID will be granted full Master Admin privileges (/admin, /addbalance, broadcast, etc.) on the bot.
+                </p>
               </div>
 
               <div>
