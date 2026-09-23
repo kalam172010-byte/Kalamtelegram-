@@ -250,14 +250,24 @@ export class DatabaseStore {
 
   public updateSettings(updates: Partial<Settings>): Settings {
     const cleanUpdates: any = { ...updates };
-    if ('maintenance_mode' in cleanUpdates) {
-      const v = cleanUpdates.maintenance_mode;
-      cleanUpdates.maintenance_mode = (v === true || v === 'true' || v === 1 || v === '1' || v === 'ON' || v === 'on');
+    
+    // Strict bidirectional synchronization of maintenance flags
+    if ('maintenance_mode' in cleanUpdates || 'bot_status' in cleanUpdates) {
+      const mm = cleanUpdates.maintenance_mode;
+      const bs = cleanUpdates.bot_status !== undefined ? String(cleanUpdates.bot_status).trim().toUpperCase() : undefined;
+      
+      const isExplicitlyOff = mm === false || mm === 'false' || mm === 0 || mm === '0' || mm === 'OFF' || mm === 'off' || bs === 'ON' || bs === 'ONLINE';
+      const isExplicitlyOn = mm === true || mm === 'true' || mm === 1 || mm === '1' || mm === 'ON' || mm === 'on' || bs === 'OFF' || bs === 'MAINTENANCE' || bs === 'OFFLINE';
+
+      if (isExplicitlyOff) {
+        cleanUpdates.maintenance_mode = false;
+        cleanUpdates.bot_status = 'ON';
+      } else if (isExplicitlyOn) {
+        cleanUpdates.maintenance_mode = true;
+        cleanUpdates.bot_status = 'OFF';
+      }
     }
-    if ('bot_status' in cleanUpdates) {
-      const s = String(cleanUpdates.bot_status).trim().toUpperCase();
-      cleanUpdates.bot_status = (s === 'OFF' || s === 'MAINTENANCE' || s === 'OFFLINE') ? 'OFF' : 'ON';
-    }
+
     this.data.settings = { ...this.data.settings, ...cleanUpdates };
     this.saveData();
     return this.data.settings;

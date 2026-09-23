@@ -94,11 +94,12 @@ async function startServer() {
         }
       }
 
-      // If bot token, admin id, or status is provided, restart or start engine
+      // If bot token, admin id, or status/maintenance is provided, restart or start engine
       if (
         updates.bot_token ||
         updates.admin_id ||
         updates.bot_status ||
+        updates.maintenance_mode !== undefined ||
         !telegramEngine.getStatus().isRunning
       ) {
         await telegramEngine.restart();

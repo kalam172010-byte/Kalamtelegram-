@@ -55,12 +55,15 @@ import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
 
 export function isMaintenanceActive(settings?: { bot_status?: string; maintenance_mode?: boolean | string | number } | null): boolean {
   if (!settings) return false;
-  const botStatus = String(settings.bot_status || '').trim().toUpperCase();
-  if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
+  const mm = settings.maintenance_mode as any;
+  if (mm === false || mm === 'false' || mm === 0 || mm === '0' || mm === 'OFF' || mm === 'off') {
+    return false;
+  }
+  if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
     return true;
   }
-  const mm = settings.maintenance_mode as any;
-  if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
+  const botStatus = String(settings.bot_status || '').trim().toUpperCase();
+  if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
     return true;
   }
   return false;
@@ -3344,8 +3347,27 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const updateSettings = async (newSettings: Partial<Settings>) => {
+    const cleanSettings: Partial<Settings> = { ...newSettings };
+
+    // Strict bidirectional synchronization of maintenance flags
+    if ('maintenance_mode' in cleanSettings || 'bot_status' in cleanSettings) {
+      const mm = cleanSettings.maintenance_mode as any;
+      const bs = cleanSettings.bot_status !== undefined ? String(cleanSettings.bot_status).trim().toUpperCase() : undefined;
+
+      const isExplicitlyOff = mm === false || mm === 'false' || mm === 0 || mm === '0' || mm === 'OFF' || mm === 'off' || bs === 'ON' || bs === 'ONLINE';
+      const isExplicitlyOn = mm === true || mm === 'true' || mm === 1 || mm === '1' || mm === 'ON' || mm === 'on' || bs === 'OFF' || bs === 'MAINTENANCE' || bs === 'OFFLINE';
+
+      if (isExplicitlyOff) {
+        cleanSettings.maintenance_mode = false;
+        cleanSettings.bot_status = 'ON';
+      } else if (isExplicitlyOn) {
+        cleanSettings.maintenance_mode = true;
+        cleanSettings.bot_status = 'OFF';
+      }
+    }
+
     setSettings(prev => {
-      const updated = { ...prev, ...newSettings };
+      const updated = { ...prev, ...cleanSettings };
       localStorage.setItem('kalam_bot_settings', JSON.stringify(updated));
       return updated;
     });
@@ -3357,19 +3379,19 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           if (b.id === activeBotId) {
             return {
               ...b,
-              ...(newSettings.admin_id ? { admin_id: newSettings.admin_id, admin_chat_id: newSettings.admin_id } : {}),
-              ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
-              ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
+              ...(cleanSettings.admin_id ? { admin_id: cleanSettings.admin_id, admin_chat_id: cleanSettings.admin_id } : {}),
+              ...(cleanSettings.bot_token ? { bot_token: cleanSettings.bot_token } : {}),
+              ...(cleanSettings.bot_username ? { username: cleanSettings.bot_username } : {}),
               payment_gateway: {
                 ...b.payment_gateway,
-                ...(newSettings.fampay_upi_id ? { upi_id: newSettings.fampay_upi_id } : {}),
-                ...(newSettings.famgateway_api_key ? { api_key: newSettings.famgateway_api_key } : {})
+                ...(cleanSettings.fampay_upi_id ? { upi_id: cleanSettings.fampay_upi_id } : {}),
+                ...(cleanSettings.famgateway_api_key ? { api_key: cleanSettings.famgateway_api_key } : {})
               },
               reseller_api: {
                 ...b.reseller_api,
-                ...(newSettings.bantibhaiya_api_key ? { api_key: newSettings.bantibhaiya_api_key } : {}),
-                ...(newSettings.bantibhaiya_master_key ? { master_key: newSettings.bantibhaiya_master_key } : {}),
-                ...(newSettings.bantibhaiya_api_url ? { api_url: newSettings.bantibhaiya_api_url } : {})
+                ...(cleanSettings.bantibhaiya_api_key ? { api_key: cleanSettings.bantibhaiya_api_key } : {}),
+                ...(cleanSettings.bantibhaiya_master_key ? { master_key: cleanSettings.bantibhaiya_master_key } : {}),
+                ...(cleanSettings.bantibhaiya_api_url ? { api_url: cleanSettings.bantibhaiya_api_url } : {})
               }
             };
           }
@@ -3380,24 +3402,23 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       });
 
       setDoc(doc(db, 'bots', activeBotId), {
-        ...(newSettings.admin_id ? { admin_id: newSettings.admin_id } : {}),
-        ...(newSettings.bot_token ? { bot_token: newSettings.bot_token } : {}),
-        ...(newSettings.bot_username ? { username: newSettings.bot_username } : {}),
+        ...(cleanSettings.admin_id ? { admin_id: cleanSettings.admin_id } : {}),
+        ...(cleanSettings.bot_token ? { bot_token: cleanSettings.bot_token } : {}),
+        ...(cleanSettings.bot_username ? { username: cleanSettings.bot_username } : {}),
         payment_gateway: {
-          ...(newSettings.fampay_upi_id ? { upi_id: newSettings.fampay_upi_id } : {}),
-          ...(newSettings.famgateway_api_key ? { api_key: newSettings.famgateway_api_key } : {})
+          ...(cleanSettings.fampay_upi_id ? { upi_id: cleanSettings.fampay_upi_id } : {})
         }
       }, { merge: true }).catch(() => {});
     }
 
     // Sync to Cloud Firestore
-    setDoc(doc(db, 'settings', 'global'), newSettings, { merge: true }).catch(() => {});
+    setDoc(doc(db, 'settings', 'global'), cleanSettings, { merge: true }).catch(() => {});
 
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings)
+        body: JSON.stringify(cleanSettings)
       });
       if (res.ok) {
         const data = await res.json();

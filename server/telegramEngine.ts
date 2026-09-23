@@ -72,12 +72,15 @@ class TelegramEngine {
   public isMaintenanceModeActive(): boolean {
     const settings = dbStore.getData().settings;
     if (!settings) return false;
-    const botStatus = String(settings.bot_status || '').trim().toUpperCase();
-    if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
+    const mm = settings.maintenance_mode as any;
+    if (mm === false || mm === 'false' || mm === 0 || mm === '0' || mm === 'OFF' || mm === 'off') {
+      return false;
+    }
+    if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
       return true;
     }
-    const mm = settings.maintenance_mode as any;
-    if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
+    const botStatus = String(settings.bot_status || '').trim().toUpperCase();
+    if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
       return true;
     }
     return false;
