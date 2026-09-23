@@ -69,6 +69,20 @@ class TelegramEngine {
     };
   }
 
+  public isMaintenanceModeActive(): boolean {
+    const settings = dbStore.getData().settings;
+    if (!settings) return false;
+    const botStatus = String(settings.bot_status || '').trim().toUpperCase();
+    if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
+      return true;
+    }
+    const mm = settings.maintenance_mode as any;
+    if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
+      return true;
+    }
+    return false;
+  }
+
   public getWebAppUrl(): string {
     const settings = dbStore.getData().settings;
     if (settings.webapp_url && settings.webapp_url.trim().startsWith('http')) {
@@ -697,7 +711,7 @@ class TelegramEngine {
     const settings = dbStore.getData().settings;
 
     // Check Maintenance Mode (Only Master Admin can bypass)
-    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMaintenanceOn = this.isMaintenanceModeActive();
     const isMasterAdmin = this.isAdmin(user, chatId);
 
     if (isMaintenanceOn && !isMasterAdmin) {
@@ -1414,7 +1428,7 @@ class TelegramEngine {
     }
 
     // Check Maintenance Mode for Callback Queries
-    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMaintenanceOn = this.isMaintenanceModeActive();
     const isMasterAdmin = this.isAdmin(user, chatId);
 
     if (isMaintenanceOn && !isMasterAdmin && !data.startsWith('admin_')) {
@@ -1452,32 +1466,162 @@ class TelegramEngine {
 
     if (data.startsWith('cat_')) {
       let categoryName = 'ANDROID NON ROOT PANEL';
-      if (data === 'cat_root') categoryName = 'ANDROID ROOT PANEL';
-      else if (data === 'cat_pc') categoryName = 'PC PANEL';
-      else if (data === 'cat_nonroot') categoryName = 'ANDROID NON ROOT PANEL';
-      else categoryName = data.replace('cat_', '');
+      let catCode = 'cat_nonroot';
+      if (data === 'cat_root') {
+        categoryName = 'ANDROID ROOT PANEL';
+        catCode = 'cat_root';
+      } else if (data === 'cat_pc') {
+        categoryName = 'PC PANEL';
+        catCode = 'cat_pc';
+      } else if (data === 'cat_nonroot') {
+        categoryName = 'ANDROID NON ROOT PANEL';
+        catCode = 'cat_nonroot';
+      } else {
+        categoryName = data.replace('cat_', '');
+        catCode = data;
+      }
 
-      const products = dbStore.getData().products.filter(p => 
+      const allCatProducts = dbStore.getData().products.filter(p => 
         p.category.toLowerCase() === categoryName.toLowerCase() && p.is_active === 1
       );
 
-      let text = `📦 <b>${categoryName.toUpperCase()} PACKAGES</b>\n\n`;
-      if (products.length === 0) {
-        text += `<i>No products currently available in this category. Check back soon!</i>`;
-      } else {
-        text += `Choose a panel package to view full details and instant key pricing:`;
+      let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+      if (allCatProducts.length === 0) {
+        text += `<i>❌ No products currently available in this category. Check back soon!</i>`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🔙 Back to Categories', callback_data: 'shop_categories' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
       }
 
-      const buttons = products.map(p => {
-        const userPrice = this.getUserPrice(user, p);
-        const stockTag = this.getProductStockTag(p);
-        return [{
-          text: `${p.panel_name} - ${p.name} (₹${userPrice}) ${stockTag}`,
-          callback_data: `prod_${p.id}`
-        }];
-      });
+      // Group products by unique panel_name
+      const panelMap = new Map<string, typeof allCatProducts>();
+      for (const prod of allCatProducts) {
+        const pName = prod.panel_name || prod.name || 'VIP PANEL';
+        if (!panelMap.has(pName)) {
+          panelMap.set(pName, []);
+        }
+        panelMap.get(pName)!.push(prod);
+      }
 
-      buttons.push([{ text: '🔙 Back to Categories', callback_data: 'shop_categories' }]);
+      text += `👉 <b>Select a Product / Panel to view its available plan durations:</b>\n\n`;
+      
+      let pIdx = 1;
+      for (const [pName, plans] of panelMap.entries()) {
+        const lowestPrice = Math.min(...plans.map(p => this.getUserPrice(user, p)));
+        text += `<b>${pIdx}.</b> 📁 <b>${pName}</b> (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'} • From ₹${lowestPrice})\n`;
+        pIdx++;
+      }
+
+      const buttons: any[] = [];
+      for (const [pName, plans] of panelMap.entries()) {
+        const firstProd = plans[0];
+        buttons.push([{
+          text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
+          callback_data: `pnl_${firstProd.id}`
+        }]);
+      }
+
+      buttons.push([
+        { text: '🔙 Back to Categories', callback_data: 'shop_categories' },
+        { text: '🏠 Main Menu', callback_data: 'main_menu' }
+      ]);
+
+      await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
+      return;
+    }
+
+    if (data.startsWith('pnl_')) {
+      const refProdId = Number(data.replace('pnl_', ''));
+      const refProduct = dbStore.getProduct(refProdId);
+
+      if (!refProduct) {
+        await this.answerCallback(cb.id, '❌ Product panel no longer available.', true);
+        const text = `⚠️ <b>PANEL UNAVAILABLE</b>\n\nThis panel is no longer listed.`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
+      }
+
+      const targetCategory = refProduct.category;
+      const targetPanelName = refProduct.panel_name || refProduct.name;
+
+      const panelPlans = dbStore.getData().products.filter(p =>
+        p.category.toLowerCase() === targetCategory.toLowerCase() &&
+        (p.panel_name || p.name).toLowerCase() === targetPanelName.toLowerCase() &&
+        p.is_active === 1
+      );
+
+      if (panelPlans.length === 0) {
+        await this.answerCallback(cb.id, 'No active duration plans found for this product.', true);
+        return;
+      }
+
+      let catCode = 'cat_nonroot';
+      if (targetCategory.toLowerCase().includes('root') && !targetCategory.toLowerCase().includes('non')) {
+        catCode = 'cat_root';
+      } else if (targetCategory.toLowerCase().includes('pc')) {
+        catCode = 'cat_pc';
+      } else {
+        catCode = `cat_${targetCategory}`;
+      }
+
+      let text = `📦 <b><u>${targetPanelName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📂 <b>Category:</b> ${targetCategory}\n` +
+        `📱 <b>Device Limit:</b> ${refProduct.device_limit || '1 Device HWID'}\n`;
+
+      if (refProduct.apk_link && refProduct.apk_link.startsWith('http')) {
+        text += `📥 <b>APK Download:</b> <a href="${refProduct.apk_link}">Click Here to Download</a>\n`;
+      }
+
+      text += `━━━━━━━━━━━━━━━━━━━━\n` +
+        `⏱ <b>AVAILABLE DURATION PLANS:</b>\n\n`;
+
+      const buttons: any[] = [];
+      const isReseller = user.is_reseller === 1;
+
+      for (const plan of panelPlans) {
+        const userPrice = this.getUserPrice(user, plan);
+        const stockTag = this.getProductStockTag(plan);
+        const isMaint = Boolean(plan.is_maintenance);
+
+        text += `⏱ <b>Plan: ${plan.name}</b>\n`;
+        if (isReseller) {
+          text += `  • Regular: <s>₹${plan.price_inr}</s> | 👑 <b>Reseller: ₹${userPrice}</b>\n`;
+        } else if (user.is_vip === 1) {
+          text += `  • Regular: <s>₹${plan.price_inr}</s> | 💎 <b>VIP (15% OFF): ₹${userPrice}</b>\n`;
+        } else {
+          text += `  • Price: <b>₹${userPrice}</b>\n`;
+        }
+        text += `  • Stock: ${stockTag}\n\n`;
+
+        if (isMaint) {
+          buttons.push([{
+            text: `🛠️ ${plan.name} - Under Maintenance`,
+            callback_data: `maint_${plan.id}`
+          }]);
+        } else {
+          buttons.push([{
+            text: `⚡ ${plan.name} - ₹${userPrice} ${stockTag}`,
+            callback_data: `prod_${plan.id}`
+          }]);
+        }
+      }
+
+      text += `👇 <i>Select any duration plan above to view full details and instant key purchase:</i>`;
+
+      buttons.push([
+        { text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode },
+        { text: '🛒 Store Catalog', callback_data: 'shop_categories' }
+      ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
       return;
@@ -1523,13 +1667,20 @@ class TelegramEngine {
 
       const hwidNote = isDeviceBound ? `\n📱 <b>Device Lock:</b> <i>Requires Android HWID on purchase</i>` : ``;
 
-      const text = `📦 <b>${product.panel_name} (${product.name})</b>\n\n` +
+      let text = `📦 <b>${product.panel_name}</b>\n` +
+        `⏱ <b>Duration Plan:</b> ${product.name}\n━━━━━━━━━━━━━━━━━━━━\n` +
         `📂 <b>Category:</b> ${product.category}\n` +
         `⏳ <b>Validity:</b> ${product.validity}\n` +
         `🔒 <b>Device Limit:</b> ${product.device_limit}${hwidNote}\n` +
         `💰 <b>Price:</b> <b>₹${userPrice}</b>${discountText}\n` +
         `📊 <b>Stock Status:</b> ${stockInfo}\n` +
-        `💳 <b>Your Wallet Balance:</b> ₹${user.balance.toFixed(2)}\n\n` +
+        `💳 <b>Your Wallet Balance:</b> ₹${user.balance.toFixed(2)}\n`;
+
+      if (product.apk_link && product.apk_link.startsWith('http')) {
+        text += `📥 <b>APK Download Link:</b> <a href="${product.apk_link}">Click Here</a>\n`;
+      }
+
+      text += `━━━━━━━━━━━━━━━━━━━━\n` +
         `<i>Keys are delivered immediately upon checkout directly to this chat!</i>`;
 
       const keyboard: any = {
@@ -1555,7 +1706,11 @@ class TelegramEngine {
 
       keyboard.inline_keyboard.push([
         { text: '💳 Add Balance', callback_data: 'add_balance' },
-        { text: '🔙 Back to Shop', callback_data: 'shop_categories' }
+        { text: '🔙 Back to Plans', callback_data: `pnl_${product.id}` }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: '🛒 Store Catalog', callback_data: 'shop_categories' },
+        { text: '🏠 Main Menu', callback_data: 'main_menu' }
       ]);
 
       const maintenanceBanner = isUnderMaintenance

@@ -249,7 +249,16 @@ export class DatabaseStore {
   }
 
   public updateSettings(updates: Partial<Settings>): Settings {
-    this.data.settings = { ...this.data.settings, ...updates };
+    const cleanUpdates: any = { ...updates };
+    if ('maintenance_mode' in cleanUpdates) {
+      const v = cleanUpdates.maintenance_mode;
+      cleanUpdates.maintenance_mode = (v === true || v === 'true' || v === 1 || v === '1' || v === 'ON' || v === 'on');
+    }
+    if ('bot_status' in cleanUpdates) {
+      const s = String(cleanUpdates.bot_status).trim().toUpperCase();
+      cleanUpdates.bot_status = (s === 'OFF' || s === 'MAINTENANCE' || s === 'OFFLINE') ? 'OFF' : 'ON';
+    }
+    this.data.settings = { ...this.data.settings, ...cleanUpdates };
     this.saveData();
     return this.data.settings;
   }

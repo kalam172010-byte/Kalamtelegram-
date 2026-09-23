@@ -143,7 +143,7 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* Top Application Navigation Bar with Liquid Glass */}
-      <header className="liquid-glass border-b border-white/10 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 z-30 shadow-2xl shadow-cyan-950/30 sticky top-0 overflow-hidden">
+      <header className="bg-slate-950/85 backdrop-blur-xl border-b border-white/10 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 z-40 shadow-2xl shadow-black/40 sticky top-0">
         {/* Brand & Left Hamburger Drawer Toggle */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
           <button
@@ -165,7 +165,7 @@ const AppContent: React.FC = () => {
 
           {/* Active Bot Quick Switcher on Desktop */}
           {myBots.length > 0 ? (
-            <div className="hidden lg:flex items-center gap-1.5 liquid-glass-pill px-2.5 py-1 rounded-xl text-xs">
+            <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl text-xs shadow-inner">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
               <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
               <select
@@ -184,7 +184,7 @@ const AppContent: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('my_bots')}
-              className="hidden lg:flex items-center gap-1.5 liquid-glass-pill text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition"
+              className="hidden lg:flex items-center gap-1.5 bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer"
             >
               <Bot className="w-3.5 h-3.5" />
               <span>+ Create Bot</span>
@@ -192,14 +192,14 @@ const AppContent: React.FC = () => {
           )}
         </div>
 
-        {/* Center Primary Tab Toggle (Desktop) */}
-        <div className="hidden sm:flex items-center liquid-glass-pill p-1 rounded-2xl text-xs md:text-sm font-semibold overflow-x-auto max-w-full gap-0.5">
+        {/* Center Primary Tab Toggle (Desktop / Tablet) */}
+        <div className="hidden sm:flex items-center bg-slate-900/80 border border-slate-800 p-1 rounded-2xl text-xs md:text-sm font-semibold overflow-x-auto max-w-full gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'dashboard'
-                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -213,14 +213,14 @@ const AppContent: React.FC = () => {
               setAdminTab('products');
               setActiveTab('admin');
             }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'admin' && adminTab === 'products'
-                ? 'bg-gradient-to-r from-amber-500/90 to-orange-600/90 text-white shadow-lg shadow-amber-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Package className="w-4 h-4 text-amber-300" />
-            <span>Products ({products.length})</span>
+            <span>Products</span>
           </button>
 
           <button
@@ -229,9 +229,9 @@ const AppContent: React.FC = () => {
               setAdminTab('users');
               setActiveTab('admin');
             }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'admin' && adminTab === 'users'
-                ? 'bg-gradient-to-r from-emerald-500/90 to-teal-600/90 text-white shadow-lg shadow-emerald-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -242,22 +242,22 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('my_bots')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'my_bots'
-                ? 'bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white shadow-lg shadow-cyan-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Bot className="w-4 h-4 text-cyan-300" />
-            <span>My Bots ({myBots.length})</span>
+            <span>My Bots</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('gateways')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'gateways'
-                ? 'bg-gradient-to-r from-emerald-500/90 to-teal-600/90 text-white shadow-lg shadow-emerald-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -268,9 +268,9 @@ const AppContent: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('reseller_api')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
               activeTab === 'reseller_api'
-                ? 'bg-gradient-to-r from-purple-500/90 to-indigo-600/90 text-white shadow-lg shadow-purple-500/25 border border-white/20 font-bold'
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/25 font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -282,10 +282,10 @@ const AppContent: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
-                activeTab === 'admin'
-                  ? 'bg-gradient-to-r from-indigo-500/90 to-rose-600/90 text-white shadow-lg shadow-indigo-500/25 border border-white/20 font-bold'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'admin' && adminTab !== 'products' && adminTab !== 'users'
+                  ? 'bg-gradient-to-r from-indigo-500 to-rose-600 text-white shadow-lg shadow-indigo-500/25 font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               <Shield className="w-4 h-4" />

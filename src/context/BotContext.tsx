@@ -53,6 +53,19 @@ import {
 } from '../data/defaultData';
 import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
 
+export function isMaintenanceActive(settings?: { bot_status?: string; maintenance_mode?: boolean | string | number } | null): boolean {
+  if (!settings) return false;
+  const botStatus = String(settings.bot_status || '').trim().toUpperCase();
+  if (botStatus === 'OFF' || botStatus === 'MAINTENANCE' || botStatus === 'OFFLINE') {
+    return true;
+  }
+  const mm = settings.maintenance_mode as any;
+  if (mm === true || mm === 1 || mm === 'true' || mm === '1' || mm === 'ON' || mm === 'on') {
+    return true;
+  }
+  return false;
+}
+
 export interface BotContextType {
   // Authentication & Session
   currentUser: User;
@@ -1726,7 +1739,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
   // Main Callback Query Router
   const handleCallbackQuery = async (callbackData: string, btnText?: string) => {
     // Check Global Bot Maintenance Mode (Only Master Admin can bypass, except for admin commands)
-    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMaintenanceOn = isMaintenanceActive(settings);
     const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
       (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
       currentUser.user_id === 12846461 ||
@@ -2517,7 +2530,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setMessages(prev => [...prev, userMsg]);
 
     // Check Global Bot Maintenance Mode (Only Master Admin can bypass)
-    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMaintenanceOn = isMaintenanceActive(settings);
     const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
       (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
       currentUser.user_id === 12846461 ||
