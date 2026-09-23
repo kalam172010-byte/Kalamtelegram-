@@ -211,7 +211,7 @@ export const PaymentGatewayManager: React.FC = () => {
             <div>
               <div className="text-xs text-slate-400 font-medium">Gateway Provider</div>
               <div className="text-sm font-bold text-cyan-300 uppercase mt-0.5">
-                {provider.replace('_', ' ')}
+                {(provider || '').replace('_', ' ')}
               </div>
             </div>
             <Zap className="w-8 h-8 text-cyan-400/50" />

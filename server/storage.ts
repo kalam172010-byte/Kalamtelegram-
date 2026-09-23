@@ -61,48 +61,27 @@ export class DatabaseStore {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        
-        // Filter out legacy hardcoded demo users
-        const demoUids = [58941209, 77489012, 88192031];
-        const loadedUsers = Array.isArray(parsed.users)
-          ? parsed.users.filter((u: any) => !demoUids.includes(u.user_id))
-          : INITIAL_USERS;
-
-        // Filter out legacy hardcoded demo products
-        const loadedProducts = Array.isArray(parsed.products)
-          ? parsed.products.filter((p: any) => p.panel_name !== 'MST PANEL' && p.panel_name !== 'DRIP PANEL')
-          : INITIAL_PRODUCTS;
-
-        const loadedKeys = Array.isArray(parsed.productKeys)
-          ? parsed.productKeys.filter((k: any) => !k.key_text?.includes('MST-24H') && !k.key_text?.includes('MST-7D'))
-          : INITIAL_PRODUCT_KEYS;
-
-        // Filter out legacy demo bots
-        const demoBotIds = ['bot_kalam_main', 'bot_vip_reseller'];
-        const loadedBots = Array.isArray(parsed.bots)
-          ? parsed.bots.filter((b: any) => !demoBotIds.includes(b.id) && !b.bot_token?.includes('exampleToken') && !b.bot_token?.includes('SampleVip'))
-          : [];
 
         return {
-          users: loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS,
-          products: loadedProducts,
-          productKeys: loadedKeys,
-          orders: Array.isArray(parsed.orders) ? parsed.orders.filter((o: any) => !demoUids.includes(o.user_id)) : [],
-          tickets: Array.isArray(parsed.tickets) ? parsed.tickets.filter((t: any) => !demoUids.includes(t.user_id)) : [],
-          coupons: parsed.coupons || INITIAL_COUPONS,
-          redeemed: parsed.redeemed || [],
-          transactions: parsed.transactions || [],
-          logs: Array.isArray(parsed.logs) ? parsed.logs.filter((l: any) => !demoUids.includes(l.user_id)) : [],
+          users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS,
+          products: Array.isArray(parsed.products) ? parsed.products : INITIAL_PRODUCTS,
+          productKeys: Array.isArray(parsed.productKeys) ? parsed.productKeys : INITIAL_PRODUCT_KEYS,
+          orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+          tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
+          coupons: Array.isArray(parsed.coupons) ? parsed.coupons : INITIAL_COUPONS,
+          redeemed: Array.isArray(parsed.redeemed) ? parsed.redeemed : [],
+          transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+          logs: Array.isArray(parsed.logs) ? parsed.logs : [],
           settings: {
             ...DEFAULT_SETTINGS,
             ...(parsed.settings || {}),
-            bot_token: parsed.settings?.bot_token && !parsed.settings.bot_token.includes('exampleToken') ? parsed.settings.bot_token : (process.env.TELEGRAM_BOT_TOKEN || ''),
-            bot_username: parsed.settings?.bot_username && parsed.settings.bot_username !== 'KalamFFPanelBot' ? parsed.settings.bot_username : '',
-            admin_id: parsed.settings?.admin_id || (process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id)
+            bot_token: parsed.settings?.bot_token || '',
+            bot_username: parsed.settings?.bot_username || '',
+            admin_id: parsed.settings?.admin_id || DEFAULT_SETTINGS.admin_id
           },
           emojis: parsed.emojis || DEFAULT_EMOJIS,
           fsmStates: parsed.fsmStates || {},
-          bots: loadedBots
+          bots: Array.isArray(parsed.bots) ? parsed.bots : []
         };
       }
     } catch (err) {

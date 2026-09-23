@@ -605,9 +605,9 @@ const AppContent: React.FC = () => {
 
               {/* Bottom Quick Action in Drawer */}
               <div className="p-3 border-t border-white/10 bg-slate-950/80 space-y-2">
-                {activeBot && (
+                {activeBot && activeBot.username && (
                   <a
-                    href={`https://t.me/${activeBot.username.replace(/^@/, '')}`}
+                    href={`https://t.me/${(activeBot.username || '').replace(/^@/, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs shadow-lg hover:from-cyan-500 hover:to-blue-500 transition no-underline"

@@ -435,7 +435,7 @@ export const TelegramBotView: React.FC = () => {
           <div className="mb-2 px-3 py-1.5 bg-cyan-950/90 border border-cyan-500/40 rounded-xl flex items-center justify-between text-xs text-cyan-200">
             <span className="flex items-center gap-2 truncate">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
-              <span className="truncate">Input for: <b>{currentFsmState.replace(/_/g, ' ')}</b></span>
+              <span className="truncate">Input for: <b>{(currentFsmState || '').replace(/_/g, ' ')}</b></span>
             </span>
             <button
               type="button"

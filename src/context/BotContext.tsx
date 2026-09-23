@@ -466,6 +466,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (Array.isArray(serverData.coupons)) {
               setCoupons(serverData.coupons);
             }
+            if (Array.isArray(serverData.bots)) {
+              setBots(serverData.bots);
+            }
             if (serverData.settings) {
               setSettings(prev => ({ ...prev, ...serverData.settings }));
             }
@@ -515,13 +518,11 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Firestore Sync for Bots
     const unsubBots = onSnapshot(collection(db, 'bots'), (snapshot) => {
-      if (!snapshot.empty) {
-        const cloudBots: BotInstance[] = [];
-        snapshot.forEach((docSnap) => {
-          cloudBots.push(docSnap.data() as BotInstance);
-        });
-        setBots(cloudBots);
-      }
+      const cloudBots: BotInstance[] = [];
+      snapshot.forEach((docSnap) => {
+        cloudBots.push(docSnap.data() as BotInstance);
+      });
+      setBots(cloudBots);
     }, (err) => {
       console.warn('Firestore bots sync notice:', err.message);
     });
@@ -586,7 +587,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => {
-    const cleanUsername = params.username.replace(/^@/, '').trim();
+    const cleanUsername = (params.username || '').replace(/^@/, '').trim();
     const adminIdToUse = Number(params.admin_id || params.admin_chat_id) || settings.admin_id || 12846461;
     const shouldClone = params.clone_products !== false;
 
@@ -729,27 +730,54 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, [activeBotId, settings.bot_username]);
 
-  const deleteBot = useCallback((botId: string) => {
+  const deleteBot = useCallback(async (botId: string) => {
+    let nextRemaining: BotInstance[] = [];
     setBots(prev => {
       const remaining = prev.filter(b => b.id !== botId);
+      nextRemaining = remaining;
       if (activeBotId === botId) {
         setActiveBotId(remaining.length > 0 ? remaining[0].id : '');
       }
       localStorage.setItem('kalam_bot_instances', JSON.stringify(remaining));
       return remaining;
     });
+
+    if (nextRemaining.length === 0) {
+      setSettings(prev => {
+        const cleared = { ...prev, bot_token: '', bot_username: '' };
+        localStorage.setItem('kalam_bot_settings', JSON.stringify(cleared));
+        return cleared;
+      });
+    } else if (activeBotId === botId && nextRemaining.length > 0) {
+      const nextActive = nextRemaining[0];
+      setSettings(prev => {
+        const next = {
+          ...prev,
+          bot_token: nextActive.bot_token,
+          bot_username: nextActive.username,
+          admin_id: nextActive.admin_id || prev.admin_id
+        };
+        localStorage.setItem('kalam_bot_settings', JSON.stringify(next));
+        return next;
+      });
+    }
+
     // Delete from Firestore Cloud Database
     deleteDoc(doc(db, 'bots', botId)).catch(() => {});
 
-    // Delete from Backend Server
-    fetch('/api/bots', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'delete',
-        botId
-      })
-    }).catch(() => {});
+    // Delete from Backend Server and immediately stop/restart engine
+    try {
+      await fetch('/api/bots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          botId
+        })
+      });
+    } catch (e) {
+      // ignore
+    }
   }, [activeBotId]);
 
   const switchActiveBot = useCallback((botId: string) => {
@@ -1746,7 +1774,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
       (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
       currentUser.user_id === 12846461 ||
-      (currentUser.username && settings.admin_contact && currentUser.username.replace('@', '').toLowerCase() === settings.admin_contact.replace('@', '').toLowerCase());
+      (currentUser.username && settings.admin_contact && (currentUser.username || '').replace('@', '').toLowerCase() === (settings.admin_contact || '').replace('@', '').toLowerCase());
 
     if (isMaintenanceOn && !isUserMasterAdmin && !callbackData.startsWith('admin_')) {
       const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
@@ -2537,7 +2565,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
       (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
       currentUser.user_id === 12846461 ||
-      (currentUser.username && settings.admin_contact && currentUser.username.replace('@', '').toLowerCase() === settings.admin_contact.replace('@', '').toLowerCase());
+      (currentUser.username && settings.admin_contact && (currentUser.username || '').replace('@', '').toLowerCase() === (settings.admin_contact || '').replace('@', '').toLowerCase());
 
     if (isMaintenanceOn && !isUserMasterAdmin) {
       const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';

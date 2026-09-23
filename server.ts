@@ -39,20 +39,80 @@ async function startServer() {
   app.post('/api/bots', async (req, res) => {
     try {
       const { action, bot, botId, updates } = req.body;
+
       if (action === 'save' || action === 'create') {
-        if (bot) {
-          dbStore.saveBot(bot);
+        if (!bot) return res.status(400).json({ success: false, error: 'bot object is required' });
+        const saved = dbStore.saveBot(bot);
+        const allBots = dbStore.getBots();
+        if (allBots.length === 1 || (bot.bot_token && bot.bot_token.trim())) {
+          dbStore.updateSettings({
+            bot_token: bot.bot_token,
+            bot_username: bot.username,
+            admin_id: bot.admin_id || bot.admin_chat_id || dbStore.getData().settings.admin_id
+          });
+          await telegramEngine.restart();
         }
-      } else if (action === 'update') {
-        if (botId && updates) {
-          dbStore.updateBot(botId, updates);
-        }
-      } else if (action === 'delete') {
-        if (botId) {
-          dbStore.deleteBot(botId);
-        }
+        return res.json({ success: true, bot: saved, bots: allBots, settings: dbStore.getData().settings });
       }
-      res.json({ success: true, bots: dbStore.getBots() });
+
+      if (action === 'update') {
+        if (!botId || !updates) return res.status(400).json({ success: false, error: 'botId and updates required' });
+        const updated = dbStore.updateBot(botId, updates);
+        if (updates.bot_token || updates.admin_id) {
+          const currentToken = dbStore.getData().settings.bot_token;
+          if (updated && (updated.bot_token === currentToken || updates.bot_token)) {
+            dbStore.updateSettings({
+              bot_token: updated.bot_token,
+              bot_username: updated.username,
+              admin_id: updated.admin_id || dbStore.getData().settings.admin_id
+            });
+            await telegramEngine.restart();
+          }
+        }
+        return res.json({ success: true, bot: updated, bots: dbStore.getBots() });
+      }
+
+      if (action === 'delete') {
+        if (!botId) return res.status(400).json({ success: false, error: 'botId is required' });
+        const allBotsBefore = dbStore.getBots();
+        const targetBot = allBotsBefore.find(b => b.id === botId);
+        dbStore.deleteBot(botId);
+        const remainingBots = dbStore.getBots();
+
+        const currentSettings = dbStore.getData().settings;
+        const wasActiveToken = targetBot && (targetBot.bot_token === currentSettings.bot_token || targetBot.username === currentSettings.bot_username);
+
+        if (remainingBots.length === 0) {
+          dbStore.updateSettings({
+            bot_token: '',
+            bot_username: ''
+          });
+          await telegramEngine.stop();
+        } else if (wasActiveToken) {
+          const nextBot = remainingBots[0];
+          dbStore.updateSettings({
+            bot_token: nextBot.bot_token,
+            bot_username: nextBot.username,
+            admin_id: nextBot.admin_id || currentSettings.admin_id
+          });
+          await telegramEngine.restart();
+        } else {
+          await telegramEngine.restart();
+        }
+        return res.json({ success: true, bots: dbStore.getBots(), settings: dbStore.getData().settings });
+      }
+
+      if (action === 'delete_all' || action === 'purge_all') {
+        dbStore.resetBots?.();
+        dbStore.updateSettings({
+          bot_token: '',
+          bot_username: ''
+        });
+        await telegramEngine.stop();
+        return res.json({ success: true, bots: [], settings: dbStore.getData().settings });
+      }
+
+      res.status(400).json({ success: false, error: 'Invalid action' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -728,43 +788,7 @@ async function startServer() {
     }
   });
 
-  // 24. Bot Fleet Management API (Multi-bot CRUD)
-  app.get('/api/bots', (req, res) => {
-    try {
-      const bots = dbStore.getBots();
-      res.json({ success: true, bots });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  });
 
-  app.post('/api/bots', (req, res) => {
-    try {
-      const { action, botId, bot, updates } = req.body;
-      if (action === 'delete') {
-        if (!botId) return res.status(400).json({ success: false, error: 'botId is required' });
-        dbStore.deleteBot(botId);
-        return res.json({ success: true, bots: dbStore.getBots() });
-      }
-      if (action === 'delete_all' || action === 'purge_all') {
-        dbStore.resetBots?.();
-        return res.json({ success: true, bots: [] });
-      }
-      if (action === 'create' || action === 'save') {
-        if (!bot) return res.status(400).json({ success: false, error: 'bot object is required' });
-        const saved = dbStore.saveBot(bot);
-        return res.json({ success: true, bot: saved, bots: dbStore.getBots() });
-      }
-      if (action === 'update') {
-        if (!botId || !updates) return res.status(400).json({ success: false, error: 'botId and updates required' });
-        const updated = dbStore.updateBot(botId, updates);
-        return res.json({ success: true, bot: updated, bots: dbStore.getBots() });
-      }
-      res.status(400).json({ success: false, error: 'Invalid action' });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  });
   app.post('/api/system/retry-transaction', async (req, res) => {
     try {
       const { orderId } = req.body;

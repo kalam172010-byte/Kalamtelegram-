@@ -85,9 +85,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
 
   // Format real-time login timestamp
   const loginTimestamp = currentUser.last_login || currentUser.login_at || currentUser.joined_date || new Date().toISOString();
-  const formatLiveDate = (dateStr: string) => {
+  const formatLiveDate = (dateStr?: string) => {
+    if (!dateStr) return 'Active Now';
     try {
-      const d = new Date(dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T'));
+      const d = new Date(dateStr.includes('T') ? dateStr : (dateStr || '').replace(' ', 'T'));
       if (isNaN(d.getTime())) return dateStr;
       return d.toLocaleDateString('en-US', {
         weekday: 'short',

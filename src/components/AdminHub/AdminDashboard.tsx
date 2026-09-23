@@ -5540,7 +5540,7 @@ export const AdminDashboard: React.FC = () => {
                   alert('Please provide a valid Telegram Bot Token from @BotFather.');
                   return;
                 }
-                const parsedAdminId = Number(newBotForm.admin_id.replace(/[^0-9]/g, '')) || 12846461;
+                const parsedAdminId = Number(String(newBotForm.admin_id || '').replace(/[^0-9]/g, '')) || 12846461;
 
                 const created = createBot({
                   name: newBotForm.name,
@@ -5757,11 +5757,11 @@ export const AdminDashboard: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const parsedAdminId = Number(editBotForm.admin_id.replace(/[^0-9]/g, '')) || 12846461;
+                const parsedAdminId = Number(String(editBotForm.admin_id || '').replace(/[^0-9]/g, '')) || 12846461;
 
                 updateBot(editingBotId, {
                   name: editBotForm.name,
-                  username: editBotForm.username.replace(/^@/, ''),
+                  username: (editBotForm.username || '').replace(/^@/, ''),
                   bot_token: editBotForm.bot_token,
                   admin_id: parsedAdminId,
                   admin_chat_id: parsedAdminId,

@@ -282,15 +282,17 @@ export const MyBotsDashboard: React.FC = () => {
                     {/* Card Bottom Actions */}
                     <div className="liquid-glass-pill px-5 py-3 border-t border-white/10 flex items-center justify-between gap-2 rounded-b-3xl rounded-t-none">
                       <div className="flex items-center gap-2">
-                        <a
-                          href={`https://t.me/${bot.username.replace(/^@/, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 rounded-xl liquid-glass-btn-cyan text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer active:scale-95 no-underline"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Open in Telegram</span>
-                        </a>
+                        {bot.username && (
+                          <a
+                            href={`https://t.me/${(bot.username || '').replace(/^@/, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-xl liquid-glass-btn-cyan text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer active:scale-95 no-underline"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Open in Telegram</span>
+                          </a>
+                        )}
 
                         <button
                           type="button"

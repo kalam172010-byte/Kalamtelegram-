@@ -135,7 +135,7 @@ export const UserDashboard: React.FC = () => {
   const formatLiveDate = (dateStr?: string) => {
     if (!dateStr) return 'Active Now';
     try {
-      const d = new Date(dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T'));
+      const d = new Date(dateStr.includes('T') ? dateStr : (dateStr || '').replace(' ', 'T'));
       if (isNaN(d.getTime())) return dateStr;
       return d.toLocaleDateString('en-US', {
         month: 'short',
@@ -553,15 +553,17 @@ export const UserDashboard: React.FC = () => {
 
             {/* Quick Actions for this Bot */}
             <div className="flex flex-wrap items-center gap-2.5 pt-3 lg:pt-0 border-t lg:border-t-0 border-white/5">
-              <a
-                href={`https://t.me/${activeBot.username.replace(/^@/, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 liquid-glass-btn-cyan text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg text-xs md:text-sm transition cursor-pointer active:scale-95 no-underline"
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>Open in Telegram</span>
-              </a>
+              {activeBot?.username && (
+                <a
+                  href={`https://t.me/${(activeBot.username || '').replace(/^@/, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 liquid-glass-btn-cyan text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg text-xs md:text-sm transition cursor-pointer active:scale-95 no-underline"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open in Telegram</span>
+                </a>
+              )}
 
               <button
                 type="button"

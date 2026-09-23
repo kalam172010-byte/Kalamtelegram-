@@ -111,7 +111,7 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const cleanUsername = (botUsername || botName.replace(/\s+/g, '') + 'Bot').replace(/^@/, '');
+    const cleanUsername = ((botUsername || (botName || '').replace(/\s+/g, '') + 'Bot') || '').replace(/^@/, '');
     const cleanToken = botToken.trim() || `7928194${Math.floor(Math.random() * 9000 + 1000)}:AAH9bK8xP_custom_${cleanUsername}`;
     const parsedAdminId = Number(adminChatId.trim()) || currentUser.chat_id || currentUser.user_id || 12846461;
 
