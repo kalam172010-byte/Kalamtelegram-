@@ -57,11 +57,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
   const [regAgreed, setRegAgreed] = useState(true);
 
   // Forgot password states
-  const [forgotEmail, setForgotEmail] = useState('kalam172010@gmail.com');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [expectedOtp, setExpectedOtp] = useState('849201');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   // Status/Error states
   const [loading, setLoading] = useState(false);
@@ -79,7 +76,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
     try {
       const res = await loginWithEmail(loginEmail, loginPassword);
       if (res.success) {
-        setSuccessMsg(`Welcome back, ${res.user?.first_name || 'User'}!`);
+        setSuccessMsg(`Welcome back, ${res.user?.first_name || 'Admin'}!`);
         setActiveTab('my_bots');
         if (onClose) setTimeout(onClose, 600);
       } else {
@@ -160,73 +157,31 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
     }
   };
 
-  // Handle Password Reset
+  // Handle Password Reset (Send Reset Email)
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (forgotStep === 1) {
-      if (!forgotEmail) {
-        setErrorMsg('Please provide your registered email address.');
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await requestPasswordReset(forgotEmail);
-        const code = res.otpCode || '849201';
-        setExpectedOtp(code);
-        setForgotOtp(code); // Pre-fill for instantaneous recovery convenience
-        setSuccessMsg(res.message);
-        setForgotStep(2);
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Could not dispatch password reset code.');
-      } finally {
-        setLoading(false);
-      }
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Please provide your registered email address.');
       return;
     }
 
-    if (forgotStep === 2) {
-      if (!forgotOtp.trim()) {
-        setErrorMsg('Please enter the 6-digit verification code.');
-        return;
+    setLoading(true);
+    try {
+      const res = await requestPasswordReset(cleanEmail);
+      if (res.success) {
+        setResetEmailSent(true);
+        setSuccessMsg(`Password reset link sent to ${cleanEmail}. Please check your inbox / spam folder.`);
+      } else {
+        setErrorMsg(res.message || 'Could not dispatch password reset email.');
       }
-      // Allow entered OTP, generated OTP, or master bypass 849201
-      if (
-        forgotOtp.trim() !== expectedOtp.trim() &&
-        forgotOtp.trim() !== '849201' &&
-        forgotOtp.trim() !== '123456'
-      ) {
-        setErrorMsg('Invalid verification code. Please check or click Auto-Fill.');
-        return;
-      }
-      setForgotStep(3);
-      return;
-    }
-
-    if (forgotStep === 3) {
-      if (!forgotNewPassword || forgotNewPassword.length < 6) {
-        setErrorMsg('Password must be at least 6 characters long.');
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await resetPassword(forgotEmail, forgotNewPassword);
-        if (res.success) {
-          setSuccessMsg(res.message);
-          setTimeout(() => {
-            setActiveMode('login');
-            setLoginEmail(forgotEmail);
-            setLoginPassword(forgotNewPassword);
-            setForgotStep(1);
-          }, 1000);
-        } else {
-          setErrorMsg(res.message);
-        }
-      } finally {
-        setLoading(false);
-      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not dispatch password reset email.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -576,108 +531,97 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
           </form>
         )}
 
-        {/* ================= MODE 3: FORGOT PASSWORD ================= */}
+        {/* ================= MODE 3: FORGOT PASSWORD (EMAIL RESET) ================= */}
         {activeMode === 'forgot_password' && (
-          <form onSubmit={handleResetPassword} className="space-y-4 text-xs">
-            <div className="p-3 bg-cyan-950/40 border border-cyan-800/40 rounded-xl flex items-center gap-2.5 text-cyan-300 text-xs">
-              <KeyRound className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>
-                {forgotStep === 1
-                  ? 'Enter your registered email to receive an OTP code.'
-                  : forgotStep === 2
-                  ? 'Enter the 6-digit OTP code sent to your email.'
-                  : 'Set your new password to restore access.'}
-              </span>
-            </div>
+          <div className="space-y-4 text-xs">
+            {!resetEmailSent ? (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="p-3 bg-cyan-950/40 border border-cyan-800/40 rounded-xl flex items-center gap-2.5 text-cyan-300 text-xs">
+                  <KeyRound className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span>Enter your registered email address to receive a password reset link.</span>
+                </div>
 
-            {forgotStep === 1 && (
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-bold flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-cyan-400" />
-                  Registered Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="kalam172010@gmail.com"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs md:text-sm outline-none focus:border-cyan-500"
-                />
-              </div>
-            )}
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                    Registered Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@gmail.com"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs md:text-sm outline-none focus:border-cyan-500"
+                  />
+                </div>
 
-            {forgotStep === 2 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold">6-Digit Verification Code (OTP)</label>
+                <div className="flex items-center justify-between gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setForgotOtp(expectedOtp)}
-                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-md cursor-pointer transition flex items-center gap-1"
+                    onClick={() => {
+                      setActiveMode('login');
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs transition cursor-pointer"
                   >
-                    <span>⚡ Quick Auto-Fill:</span>
-                    <span className="font-mono text-white">{expectedOtp}</span>
+                    Back to Sign In
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Send Reset Email</span>
+                      </>
+                    )}
                   </button>
                 </div>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  value={forgotOtp}
-                  onChange={(e) => setForgotOtp(e.target.value)}
-                  placeholder={expectedOtp}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-center text-xl font-mono font-bold tracking-widest text-cyan-300 outline-none focus:border-cyan-500 shadow-inner"
-                />
-                <p className="text-[11px] text-slate-400 text-center">
-                  Check your inbox / spam folder for the Firebase reset link, or use the code above.
-                </p>
+              </form>
+            ) : (
+              <div className="space-y-4 text-center py-2">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+                  <CheckCircle className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-slate-100">Reset Email Dispatched</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                    We've sent a password reset link to <span className="text-cyan-300 font-semibold">{forgotEmail}</span>. Please check your inbox or spam folder and click the link to reset your password.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMode('login');
+                      setResetEmailSent(false);
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition cursor-pointer shadow-md"
+                  >
+                    Back to Sign In
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleResetPassword}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs transition cursor-pointer"
+                  >
+                    Resend Email
+                  </button>
+                </div>
               </div>
             )}
-
-            {forgotStep === 3 && (
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-bold">New Password</label>
-                <input
-                  type="password"
-                  required
-                  value={forgotNewPassword}
-                  onChange={(e) => setForgotNewPassword(e.target.value)}
-                  placeholder="Enter new password (min. 6 characters)"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs md:text-sm outline-none focus:border-cyan-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveMode('login');
-                  setForgotStep(1);
-                }}
-                className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs transition cursor-pointer"
-              >
-                Back to Sign In
-              </button>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {loading ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : forgotStep === 1 ? (
-                  'Send OTP Code'
-                ) : forgotStep === 2 ? (
-                  'Verify Code'
-                ) : (
-                  'Save New Password'
-                )}
-              </button>
-            </div>
-          </form>
+          </div>
         )}
       </div>
     </div>

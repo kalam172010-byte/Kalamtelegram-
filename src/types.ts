@@ -290,7 +290,7 @@ export interface InlineKeyboardButton {
   callback_data?: string;
   url?: string;
   icon_custom_emoji_id?: string;
-  style?: 'primary' | 'secondary' | 'danger' | 'success';
+  style?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning';
 }
 
 export interface ChatMessage {

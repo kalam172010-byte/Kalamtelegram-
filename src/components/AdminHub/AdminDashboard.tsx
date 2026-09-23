@@ -565,7 +565,13 @@ export const AdminDashboard: React.FC = () => {
           {/* Bot Maintenance Toggle */}
           <button
             type="button"
-            onClick={() => updateSettings({ bot_status: settings.bot_status === 'ON' ? 'OFF' : 'ON' })}
+            onClick={() => {
+              const willBeActive = settings.bot_status === 'ON';
+              updateSettings({
+                bot_status: willBeActive ? 'OFF' : 'ON',
+                maintenance_mode: willBeActive
+              });
+            }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 ${
               settings.bot_status === 'ON'
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
@@ -573,7 +579,7 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${settings.bot_status === 'ON' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-            <span>Bot: {settings.bot_status}</span>
+            <span>Bot: {settings.bot_status === 'ON' ? 'ONLINE' : 'MAINTENANCE'}</span>
           </button>
 
           {/* Referral System Toggle */}
@@ -4664,9 +4670,10 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ================= ADD PRODUCT & PLANS MODAL ================= */}
       {showAddProductModal && (
-        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2.5 sm:p-6 overflow-y-auto pt-6 sm:pt-6 pb-28 sm:pb-8">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-4 sm:p-6 space-y-4 shadow-2xl my-auto flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[92dvh] sm:max-h-[88dvh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-800 shrink-0 flex items-center justify-between">
               <div>
                 <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                   <Plus className="w-5 h-5 text-cyan-400" />
@@ -4685,7 +4692,8 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="space-y-4 text-xs">
+            {/* Scrollable Form Body */}
+            <form id="create-multi-product-form" onSubmit={handleCreateProduct} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
               {/* Top Row: Category & Panel Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
                 <div>
@@ -4851,7 +4859,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {/* Plan Rows */}
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+                <div className="space-y-3">
                   {multiProdForm.plans.map((plan, pIdx) => (
                     <div
                       key={plan.id}
@@ -4950,32 +4958,40 @@ export const AdminDashboard: React.FC = () => {
                   <span>+ Add Another Duration Plan</span>
                 </button>
               </div>
+            </form>
 
-              <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-800 flex justify-end gap-2 -mx-1 px-1 mt-2">
+            {/* Always Visible Fixed Action Footer */}
+            <div className="p-3.5 sm:px-6 sm:py-3.5 bg-slate-950/90 border-t border-slate-800 shrink-0 flex items-center justify-between gap-2 z-10">
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Configuring <span className="text-cyan-300 font-bold">{multiProdForm.plans.length}</span> duration {multiProdForm.plans.length === 1 ? 'plan' : 'plans'}
+              </span>
+              <div className="flex items-center gap-2.5 ml-auto">
                 <button
                   type="button"
                   onClick={() => setShowAddProductModal(false)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer transition"
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer transition text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/30 cursor-pointer transition active:scale-95"
+                  form="create-multi-product-form"
+                  className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/30 cursor-pointer transition active:scale-95 text-xs flex items-center gap-2"
                 >
-                  Save & Create Product ({multiProdForm.plans.length} Plans)
+                  <Plus className="w-4 h-4" />
+                  <span>Save & Create Product ({multiProdForm.plans.length} Plans)</span>
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* ================= ADD SINGLE PLAN TO EXISTING PRODUCT MODAL ================= */}
       {showAddPlanToPanelModal && (
-        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2.5 sm:p-6 overflow-y-auto pt-6 sm:pt-6 pb-28 sm:pb-8">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-4 sm:p-5 space-y-4 shadow-2xl my-auto flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[92dvh] sm:max-h-[88dvh] shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Plus className="w-5 h-5 text-emerald-400" />
@@ -4997,7 +5013,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleAddPlanToExistingProductSubmit} className="space-y-3.5 text-xs">
+            <form id="add-single-plan-form" onSubmit={handleAddPlanToExistingProductSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="p-3 bg-cyan-950/20 border border-cyan-500/30 rounded-xl space-y-2">
                 <label className="text-slate-300 mb-1 block font-bold">1. Plan Duration / Display Validity</label>
                 <input
@@ -5092,31 +5108,33 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-800 flex justify-end gap-2 -mx-1 px-1 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddPlanToPanelModal(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow cursor-pointer transition"
-                >
-                  Add Duration Plan
-                </button>
-              </div>
             </form>
+
+            <div className="p-3.5 sm:px-5 sm:py-3.5 bg-slate-950/90 border-t border-slate-800 shrink-0 flex justify-end gap-2 items-center z-10">
+              <button
+                type="button"
+                onClick={() => setShowAddPlanToPanelModal(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="add-single-plan-form"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow cursor-pointer transition text-xs"
+              >
+                Add Duration Plan
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ================= EDIT PRODUCT MODAL ================= */}
       {editingProductId !== null && (
-        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-4 sm:p-5 space-y-4 shadow-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[92dvh] sm:max-h-[88dvh] shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0 flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-cyan-400" />
                 Edit Product & Duration (ID #{editingProductId})
@@ -5130,7 +5148,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateProductSubmit} className="space-y-3 text-xs">
+            <form id="edit-single-product-form" onSubmit={handleUpdateProductSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 mb-1 block">Category</label>
@@ -5389,22 +5407,24 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-800 flex justify-end gap-2 -mx-1 px-1 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingProductId(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold shadow cursor-pointer transition"
-                >
-                  Update Product
-                </button>
-              </div>
             </form>
+
+            <div className="p-3.5 sm:px-5 sm:py-3.5 bg-slate-950/90 border-t border-slate-800 shrink-0 flex justify-end gap-2 items-center z-10">
+              <button
+                type="button"
+                onClick={() => setEditingProductId(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-single-product-form"
+                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold shadow cursor-pointer transition text-xs"
+              >
+                Update Product
+              </button>
+            </div>
           </div>
         </div>
       )}
