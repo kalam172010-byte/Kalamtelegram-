@@ -689,6 +689,37 @@ class TelegramEngine {
     const isExistingUser = dbStore.getUser(fromUser.id);
     const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
 
+    if (user.is_banned === 1) {
+      await this.sendMessage(chatId, '🚫 <b>Account Suspended</b>\n\nYour account has been banned from using Kalam FF Panel. Contact support if you believe this is an error.');
+      return;
+    }
+
+    const settings = dbStore.getData().settings;
+
+    // Check Maintenance Mode (Only Master Admin can bypass)
+    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMasterAdmin = this.isAdmin(user, chatId);
+
+    if (isMaintenanceOn && !isMasterAdmin) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
+      const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
+      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Maintenance / Offline\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
+
+      const kb: any = { inline_keyboard: [] };
+      if (settings.support_telegram) {
+        kb.inline_keyboard.push([{ text: '💬 Official Support Channel', url: settings.support_telegram }]);
+      }
+      if (settings.official_channel_link) {
+        kb.inline_keyboard.push([{ text: '📢 News Channel', url: settings.official_channel_link }]);
+      }
+
+      await this.sendMessage(chatId, maintenanceNotice, kb.inline_keyboard.length > 0 ? kb : undefined);
+      return;
+    }
+
     // Check for referral code on first start e.g. /start ref_12846461 or /start 12846461
     if (!isExistingUser && text.toLowerCase().startsWith('/start')) {
       const parts = text.split(/\s+/);
@@ -752,37 +783,6 @@ class TelegramEngine {
           }
         }
       }
-    }
-
-    if (user.is_banned === 1) {
-      await this.sendMessage(chatId, '🚫 <b>Account Suspended</b>\n\nYour account has been banned from using Kalam FF Panel. Contact support if you believe this is an error.');
-      return;
-    }
-
-    const settings = dbStore.getData().settings;
-
-    // Check Maintenance Mode
-    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
-    const isMasterAdmin = this.isAdmin(user, chatId);
-
-    if (isMaintenanceOn && !isMasterAdmin) {
-      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
-      const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
-      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
-        `⏱ <b>Status:</b> Temporary Maintenance / Offline\n` +
-        `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
-
-      const kb: any = { inline_keyboard: [] };
-      if (settings.support_telegram) {
-        kb.inline_keyboard.push([{ text: '💬 Official Support Channel', url: settings.support_telegram }]);
-      }
-      if (settings.official_channel_link) {
-        kb.inline_keyboard.push([{ text: '📢 News Channel', url: settings.official_channel_link }]);
-      }
-
-      await this.sendMessage(chatId, maintenanceNotice, kb.inline_keyboard.length > 0 ? kb : undefined);
-      return;
     }
 
     if (text === '/cancel') {

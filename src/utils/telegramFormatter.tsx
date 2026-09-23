@@ -80,25 +80,29 @@ export const TgEmojiBadge: React.FC<{ emojiId: string; defaultChar?: string }> =
  * Parses Telegram HTML string (b, i, u, s, code, a, tg-emoji) into structured React nodes.
  */
 export function formatTelegramHTML(html: string): React.ReactNode {
-  if (!html) return null;
+  if (!html || typeof html !== 'string') return null;
 
-  // Split lines
-  const lines = html.split('\n');
+  try {
+    // Split lines
+    const lines = html.split('\n');
 
-  return (
-    <div className="space-y-1 text-sm md:text-[15px] leading-relaxed break-words">
-      {lines.map((line, lineIdx) => {
-        if (!line.trim()) {
-          return <div key={lineIdx} className="h-2" />;
-        }
-        return (
-          <div key={lineIdx} className="min-h-[1.25rem]">
-            {parseTelegramLine(line, lineIdx)}
-          </div>
-        );
-      })}
-    </div>
-  );
+    return (
+      <div className="space-y-1 text-sm md:text-[15px] leading-relaxed break-words">
+        {lines.map((line, lineIdx) => {
+          if (!line || !line.trim()) {
+            return <div key={lineIdx} className="h-2" />;
+          }
+          return (
+            <div key={lineIdx} className="min-h-[1.25rem]">
+              {parseTelegramLine(line, lineIdx)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  } catch {
+    return <span className="text-slate-100">{String(html)}</span>;
+  }
 }
 
 function parseTelegramLine(line: string, lineKey: number): React.ReactNode[] {

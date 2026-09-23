@@ -1725,8 +1725,26 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
   // Main Callback Query Router
   const handleCallbackQuery = async (callbackData: string, btnText?: string) => {
-    if (settings.bot_status === 'OFF' && currentUser.user_id !== 12846461) {
-      pushBotMessage("⚠️ <b>Store Maintenance</b>\n\nThe store is currently offline for updates. Please check back later!");
+    // Check Global Bot Maintenance Mode (Only Master Admin can bypass, except for admin commands)
+    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
+      (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
+      currentUser.user_id === 12846461 ||
+      (currentUser.username && settings.admin_contact && currentUser.username.replace('@', '').toLowerCase() === settings.admin_contact.replace('@', '').toLowerCase());
+
+    if (isMaintenanceOn && !isUserMasterAdmin && !callbackData.startsWith('admin_')) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
+      const customReason = settings.maintenance_reason || 'We are currently upgrading server systems and restocking new keys.';
+      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Service Downtime\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official updates channel.</i>`;
+
+      const adminKeyboard = settings.support_telegram ? [
+        [{ text: '💬 Support Channel / Contact', url: settings.support_telegram }]
+      ] : [];
+
+      pushBotMessage(maintenanceNotice, adminKeyboard);
       return;
     }
 
@@ -2500,7 +2518,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Check Global Bot Maintenance Mode (Only Master Admin can bypass)
     const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
-    const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id));
+    const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || 
+      (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id)) ||
+      currentUser.user_id === 12846461 ||
+      (currentUser.username && settings.admin_contact && currentUser.username.replace('@', '').toLowerCase() === settings.admin_contact.replace('@', '').toLowerCase());
 
     if (isMaintenanceOn && !isUserMasterAdmin) {
       const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
