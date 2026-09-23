@@ -283,10 +283,10 @@ export const AdminDashboard: React.FC = () => {
   const openTicketsCount = tickets.filter(t => t.status === 'Open').length;
 
   const filteredUsers = allUsers.filter(u =>
-    u.first_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-    String(u.user_id).includes(userSearch) ||
-    String(u.chat_id || u.user_id).includes(userSearch)
+    (u.first_name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+    (u.username || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+    String(u.user_id || '').includes(userSearch) ||
+    String(u.chat_id || u.user_id || '').includes(userSearch)
   );
 
   const filteredProducts = selectedCategory === 'ALL'
@@ -2589,7 +2589,7 @@ export const AdminDashboard: React.FC = () => {
 
                     <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
                       <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Per-Invite Reward</span>
-                      <span className="text-lg font-black text-cyan-300 mt-1 block font-mono">₹{settings.referral_reward_inr || 10}</span>
+                      <span className="text-lg font-black text-cyan-300 mt-1 block font-mono">₹{(settings.referral_reward_inr ?? 1.50).toFixed(2)}</span>
                     </div>
                   </div>
                 );
@@ -2612,7 +2612,8 @@ export const AdminDashboard: React.FC = () => {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400 font-bold text-sm">₹</span>
                     <input
                       type="number"
-                      value={settings.referral_reward_inr ?? 10}
+                      step="0.10"
+                      value={settings.referral_reward_inr ?? 1.50}
                       onChange={(e) => updateSettings({ referral_reward_inr: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-pink-300 outline-none focus:border-pink-500"
                     />
@@ -2628,7 +2629,8 @@ export const AdminDashboard: React.FC = () => {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400 font-bold text-sm">₹</span>
                     <input
                       type="number"
-                      value={settings.referral_referee_bonus_inr ?? 5}
+                      step="0.10"
+                      value={settings.referral_referee_bonus_inr ?? 1.50}
                       onChange={(e) => updateSettings({ referral_referee_bonus_inr: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-cyan-300 outline-none focus:border-cyan-500"
                     />
@@ -2915,6 +2917,118 @@ export const AdminDashboard: React.FC = () => {
                   <Bot className="w-3.5 h-3.5 text-cyan-400" />
                   View All Bots ({bots.length})
                 </button>
+              </div>
+            </div>
+
+            {/* Telegram Bot Global Maintenance Control Center */}
+            <div className={`border-2 rounded-2xl p-5 space-y-4 shadow-xl transition-all duration-200 ${
+              Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF'
+                ? 'bg-rose-950/40 border-rose-500/50 shadow-rose-950/50'
+                : 'bg-slate-900 border-slate-800'
+            }`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
+                    Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF'
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    <Wrench className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">
+                        Telegram Bot Maintenance Mode
+                      </h3>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                        Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}>
+                        {Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF' ? '🚧 UNDER MAINTENANCE' : '🟢 ONLINE / ACTIVE'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Instantly pause user operations on the Telegram bot & display a custom maintenance notice with reasoning.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Master Maintenance Mode Switch */}
+                <label className="flex items-center gap-2.5 cursor-pointer bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition">
+                  <span className="text-xs font-bold text-slate-200">
+                    {Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF' ? 'Maintenance Active' : 'Enable Maintenance'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.maintenance_mode) || settings.bot_status === 'OFF'}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      updateSettings({
+                        maintenance_mode: isChecked,
+                        bot_status: isChecked ? 'OFF' : 'ON'
+                      });
+                    }}
+                    className="w-5 h-5 rounded accent-rose-500 cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Maintenance Message & Reason Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 flex items-center justify-between">
+                    <span>Maintenance Headline / Title</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Shown as bold header</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.maintenance_message ?? '🛠 BOT UNDER MAINTENANCE'}
+                    onChange={(e) => updateSettings({ maintenance_message: e.target.value })}
+                    placeholder="e.g. 🛠 BOT UNDER MAINTENANCE or ⚡ SYSTEM UPGRADE IN PROGRESS"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-200 outline-none font-bold text-xs focus:border-rose-400"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    This main title will appear in Telegram when users send any message or press buttons.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 flex items-center justify-between">
+                    <span>Specific Issue / Reason (Custom Note)</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Shown to users</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={settings.maintenance_reason ?? 'We are upgrading server systems and restocking fresh panel keys. Will be back shortly!'}
+                    onChange={(e) => updateSettings({ maintenance_reason: e.target.value })}
+                    placeholder="e.g. Free Fire server update in progress. All key injections paused for 30 minutes."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-slate-200 outline-none text-xs focus:border-rose-400 resize-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Provide users with the exact problem explanation and estimated return time.
+                  </p>
+                </div>
+              </div>
+
+              {/* Live Preview Box */}
+              <div className="bg-slate-950/90 rounded-xl p-3.5 border border-slate-800 space-y-1.5 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  Live Telegram Notice Preview:
+                </span>
+                <div className="p-3 bg-slate-900 rounded-lg border border-rose-500/20 font-mono text-[11px] text-slate-300 space-y-1">
+                  <div className="text-rose-400 font-bold">
+                    🚧 {settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE'} 🚧
+                  </div>
+                  <div>━━━━━━━━━━━━━━━━━━━━</div>
+                  <div className="text-amber-200">
+                    ⚠️ <b>Notice:</b> {settings.maintenance_reason || 'We are upgrading server systems and restocking fresh panel keys. Will be back shortly!'}
+                  </div>
+                  <div className="text-slate-400 pt-1 text-[10px]">
+                    ⏱ <b>Status:</b> Temporary Maintenance / Offline
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -102,6 +102,7 @@ export function formatTelegramHTML(html: string): React.ReactNode {
 }
 
 function parseTelegramLine(line: string, lineKey: number): React.ReactNode[] {
+  if (!line || typeof line !== 'string') return [];
   // Regex to match Telegram HTML tags
   const tagRegex = /(<tg-emoji\s+emoji-id="([^"]+)">([^<]*)<\/tg-emoji>|<code>([\s\S]*?)<\/code>|<b>([\s\S]*?)<\/b>|<i>([\s\S]*?)<\/i>|<u>([\s\S]*?)<\/u>|<s>([\s\S]*?)<\/s>|<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>)/g;
 

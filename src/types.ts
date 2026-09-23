@@ -248,6 +248,9 @@ export interface Settings {
   referral_commission_percent?: number;
   referral_referee_bonus_inr?: number;
   bot_status: 'ON' | 'OFF';
+  maintenance_mode?: boolean;
+  maintenance_message?: string;
+  maintenance_reason?: string;
   how_to_video: string;
   fampay_api_key: string;
   fampay_upi_id: string;

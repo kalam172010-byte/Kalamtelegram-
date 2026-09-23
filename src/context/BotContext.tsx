@@ -2163,23 +2163,23 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       logActivity(currentUser.user_id, 'VIEW_REFERRALS');
       const botUsername = activeBot?.username || settings.bot_username || 'kalam_store_bot';
       const referralLink = `https://t.me/${botUsername}?start=ref_${currentUser.user_id}`;
-      const rewardAmt = settings.referral_reward_inr ?? 10;
+      const rewardAmt = Number(settings.referral_reward_inr) || 1.50;
       const commRate = settings.referral_commission_percent ?? 5;
-      const refBonus = settings.referral_referee_bonus_inr ?? 5;
+      const refBonus = Number(settings.referral_referee_bonus_inr) || 1.50;
       const refCount = currentUser.referral_count || 0;
       const refEarned = currentUser.referral_earnings || 0;
 
       const text = renderUiText('referral_menu', {
-        '{referral_reward}': rewardAmt.toFixed(0),
+        '{referral_reward}': rewardAmt.toFixed(2),
         '{referral_commission}': commRate.toFixed(0),
-        '{referee_bonus}': refBonus.toFixed(0),
+        '{referee_bonus}': refBonus.toFixed(2),
         '{referral_link}': referralLink,
         '{referral_count}': String(refCount),
         '{referral_earnings}': refEarned.toFixed(2),
         '{current_balance}': currentUser.balance.toFixed(2)
       });
 
-      const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${refBonus} free bonus: ${referralLink}`);
+      const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${refBonus.toFixed(2)} free bonus: ${referralLink}`);
       const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
 
       const kb: InlineKeyboardButton[][] = [
@@ -2219,7 +2219,7 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
       
       if (myReferees.length === 0) {
         text += `<i>You haven't invited any friends yet.</i>\n\n` +
-          `💰 Share your referral link to earn <b>₹${settings.referral_reward_inr ?? 10} instant cash</b> for each friend, plus <b>${settings.referral_commission_percent ?? 5}% lifetime commission</b> on every recharge!`;
+          `💰 Share your referral link to earn <b>₹${(Number(settings.referral_reward_inr) || 1.50).toFixed(2)} instant cash</b> for each friend, plus <b>${settings.referral_commission_percent ?? 5}% lifetime commission</b> on every recharge!`;
       } else {
         text += `Total Invited: <b>${myReferees.length} users</b>\nTotal Earned: <b>₹${(currentUser.referral_earnings || 0).toFixed(2)}</b>\n\n`;
         myReferees.slice(0, 10).forEach((r, idx) => {
@@ -2498,6 +2498,26 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     };
     setMessages(prev => [...prev, userMsg]);
 
+    // Check Global Bot Maintenance Mode (Only Master Admin can bypass)
+    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isUserMasterAdmin = currentUser.user_id === Number(settings.admin_id) || (currentUser.chat_id && currentUser.chat_id === Number(settings.admin_id));
+
+    if (isMaintenanceOn && !isUserMasterAdmin) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
+      const customReason = settings.maintenance_reason || 'We are currently upgrading server systems and restocking new keys.';
+      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Service Downtime\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official updates channel.</i>`;
+      
+      const adminKeyboard = settings.support_telegram ? [
+        [{ text: '💬 Support Channel / Contact', url: settings.support_telegram }]
+      ] : [];
+
+      pushBotMessage(maintenanceNotice, adminKeyboard);
+      return;
+    }
+
     // Handle commands
     if (trimmed.startsWith('/')) {
       const cmd = trimmed.toLowerCase().split(' ')[0];
@@ -2514,8 +2534,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           const referrerId = Number(rawRef);
 
           if (!isNaN(referrerId) && referrerId !== currentUser.user_id && !currentUser.referred_by) {
-            const rewardAmount = settings.referral_reward_inr ?? 10.0;
-            const refereeBonus = settings.referral_referee_bonus_inr ?? 5.0;
+            const rewardAmount = Number(settings.referral_reward_inr) || 1.50;
+            const refereeBonus = Number(settings.referral_referee_bonus_inr) || 1.50;
 
             // Update current user & referrer
             setUsers(prev => prev.map(u => {
@@ -3576,7 +3596,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Match by email or username
     const matched = users.find(
-      u => u.email?.toLowerCase() === cleanEmail || u.username.toLowerCase() === cleanEmail
+      u => u.email?.toLowerCase() === cleanEmail || (u.username && u.username.toLowerCase() === cleanEmail)
     );
 
     if (!matched) {

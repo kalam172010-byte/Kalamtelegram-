@@ -701,8 +701,8 @@ class TelegramEngine {
           if (referrer) {
             const settings = dbStore.getData().settings;
             user.referred_by = referrerId;
-            const refReward = Number(settings.referral_reward_inr) || 10;
-            const welcomeBonus = Number(settings.referral_referee_bonus_inr) || 5;
+            const refReward = Number(settings.referral_reward_inr) || 1.50;
+            const welcomeBonus = Number(settings.referral_referee_bonus_inr) || 1.50;
 
             // Credit referee welcome bonus
             if (welcomeBonus > 0) {
@@ -761,8 +761,27 @@ class TelegramEngine {
 
     const settings = dbStore.getData().settings;
 
-    if (settings.bot_status === 'OFF' && user.user_id !== settings.admin_id) {
-      await this.sendMessage(chatId, '🛠 <b>MAINTENANCE MODE</b>\n\nKalam FF Panel is currently undergoing scheduled maintenance. Please check back shortly!');
+    // Check Maintenance Mode
+    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMasterAdmin = this.isAdmin(user, chatId);
+
+    if (isMaintenanceOn && !isMasterAdmin) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
+      const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
+      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Maintenance / Offline\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
+
+      const kb: any = { inline_keyboard: [] };
+      if (settings.support_telegram) {
+        kb.inline_keyboard.push([{ text: '💬 Official Support Channel', url: settings.support_telegram }]);
+      }
+      if (settings.official_channel_link) {
+        kb.inline_keyboard.push([{ text: '📢 News Channel', url: settings.official_channel_link }]);
+      }
+
+      await this.sendMessage(chatId, maintenanceNotice, kb.inline_keyboard.length > 0 ? kb : undefined);
       return;
     }
 
@@ -1124,7 +1143,8 @@ class TelegramEngine {
       const parts = text.split('_');
       if (parts.length >= 3) {
         const targetUserId = Number(parts[1]);
-        const replyText = text.substring(text.indexOf(parts[2]));
+        const prefix = `/reply_${parts[1]}_`;
+        const replyText = text.startsWith(prefix) ? text.substring(prefix.length).trim() : parts.slice(2).join('_').trim();
         try {
           await this.sendMessage(
             targetUserId,
@@ -1322,7 +1342,7 @@ class TelegramEngine {
       if (lowerText.startsWith('/broadcast')) {
         const parts = text.split(/\s+/);
         if (parts.length >= 2) {
-          const bMsg = text.substring(text.indexOf(parts[1])).trim();
+          const bMsg = parts.slice(1).join(' ').trim();
           const allUsers = dbStore.getData().users;
           await this.sendMessage(chatId, `⏳ Sending broadcast to ${allUsers.length} users...`);
           const result = await this.sendBroadcast({
@@ -1390,6 +1410,16 @@ class TelegramEngine {
 
     if (user.is_banned === 1) {
       await this.answerCallback(cb.id, 'Your account is suspended.', true);
+      return;
+    }
+
+    // Check Maintenance Mode for Callback Queries
+    const isMaintenanceOn = settings.bot_status === 'OFF' || Boolean(settings.maintenance_mode);
+    const isMasterAdmin = this.isAdmin(user, chatId);
+
+    if (isMaintenanceOn && !isMasterAdmin && !data.startsWith('admin_')) {
+      const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
+      await this.answerCallback(cb.id, `🛠 Bot is under maintenance: ${customReason.substring(0, 150)}`, true);
       return;
     }
 
@@ -2317,9 +2347,9 @@ class TelegramEngine {
     const botUsername = settings.bot_username || 'kalam_ff_bot';
     const cleanBotUsername = botUsername.replace(/^@/, '');
     const refLink = `https://t.me/${cleanBotUsername}?start=ref_${user.user_id}`;
-    const refReward = Number(settings.referral_reward_inr) || 10;
+    const refReward = Number(settings.referral_reward_inr) || 1.50;
     const commPercent = Number(settings.referral_commission_percent) || 5;
-    const refereeBonus = Number(settings.referral_referee_bonus_inr) || 5;
+    const refereeBonus = Number(settings.referral_referee_bonus_inr) || 1.50;
 
     const text = `🎁 <b><u>REFER & EARN REWARDS PROGRAM</u></b> 👥\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2427,8 +2457,7 @@ class TelegramEngine {
       `• <code>/deduct &lt;user_id&gt; &lt;amount&gt;</code> - Deduct wallet\n` +
       `• <code>/users</code> - View active users & balances\n` +
       `• <code>/stock</code> - View product stock\n` +
-      `• <code>/broadcast &lt;message&gt;</code> - Message all users\n` +
-      `• <code>/setadmin ${chatId}</code> - Bind current Chat ID\n\n` +
+      `• <code>/broadcast &lt;message&gt;</code> - Message all users\n\n` +
       `👇 <i>Use the interactive buttons below or launch the Full Web Admin Hub:</i>`;
 
     const keyboard = {

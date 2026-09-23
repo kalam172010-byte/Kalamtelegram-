@@ -692,7 +692,9 @@ export const UserDashboard: React.FC = () => {
           {(() => {
             const botUser = activeBot?.username || settings.bot_username || 'kalam_store_bot';
             const referralLink = `https://t.me/${botUser}?start=ref_${currentUser.user_id}`;
-            const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${settings.referral_referee_bonus_inr || 5} free bonus: ${referralLink}`);
+            const refereeBonus = Number(settings.referral_referee_bonus_inr ?? 1.50);
+            const refReward = Number(settings.referral_reward_inr ?? 1.50);
+            const shareText = encodeURIComponent(`🔥 Join Kalam FF Panel Bot for instant cheats, bypass keys & high speed panels! Register now and get ₹${refereeBonus.toFixed(2)} free bonus: ${referralLink}`);
             const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`;
 
             return (
@@ -703,7 +705,7 @@ export const UserDashboard: React.FC = () => {
                     Your Personal Telegram Referral Link:
                   </span>
                   <span className="text-[11px] text-pink-300 font-semibold">
-                    Give ₹{settings.referral_referee_bonus_inr || 5} • Get ₹{settings.referral_reward_inr || 10} + {settings.referral_commission_percent || 5}%
+                    Give ₹{refereeBonus.toFixed(2)} • Get ₹{refReward.toFixed(2)} + {settings.referral_commission_percent || 5}%
                   </span>
                 </div>
 
@@ -744,7 +746,7 @@ export const UserDashboard: React.FC = () => {
             <div className="liquid-glass-pill p-4 rounded-2xl border border-pink-500/20 flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-pink-400">Step 1 • Instant Bonus</span>
-                <h4 className="text-sm font-extrabold text-white mt-1">₹{settings.referral_reward_inr || 10} Per Friend</h4>
+                <h4 className="text-sm font-extrabold text-white mt-1">₹{(settings.referral_reward_inr ?? 1.50).toFixed(2)} Per Friend</h4>
                 <p className="text-xs text-slate-300 mt-1">
                   Credited directly to your wallet balance the instant your friend opens your link and presses Start!
                 </p>
@@ -772,7 +774,7 @@ export const UserDashboard: React.FC = () => {
             <div className="liquid-glass-pill p-4 rounded-2xl border border-cyan-500/20 flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Step 3 • Welcome Bonus</span>
-                <h4 className="text-sm font-extrabold text-white mt-1">₹{settings.referral_referee_bonus_inr || 5} Free for Friends</h4>
+                <h4 className="text-sm font-extrabold text-white mt-1">₹{(settings.referral_referee_bonus_inr ?? 1.50).toFixed(2)} Free for Friends</h4>
                 <p className="text-xs text-slate-300 mt-1">
                   Your friends get free wallet cash to test out panels immediately upon clicking your invite link.
                 </p>
