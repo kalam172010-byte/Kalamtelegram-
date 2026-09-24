@@ -322,4 +322,4 @@ export interface ChatMessage {
 
 export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
-export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code' | 'botcommands' | 'bot_engine';
+export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'gateways' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine';

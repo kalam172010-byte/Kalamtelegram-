@@ -1222,6 +1222,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const statusVal = settings.bot_status;
     const refSysVal = settings.referral_system_status || 'ON';
     return [
+      [{ text: "🌐 Open Full Web Admin Panel", callback_data: "open_web_admin", style: "success" }],
       [{ text: "📊 Bot Statistics", callback_data: "admin_view_stats", style: "primary" }],
       [{ text: "👥 User Control Panel", callback_data: "admin_user_control_start", style: "primary" }],
       [
@@ -1274,6 +1275,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           callback_data: "admin_toggle_ref_sys",
           style: refSysVal === 'ON' ? "success" : "danger"
         }
+      ],
+      [
+        { text: "🔙 Return to Main Menu", callback_data: "back_main", style: "danger" }
       ]
     ];
   }, [settings]);
@@ -2656,11 +2660,107 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       return;
     }
 
-    // 19. Admin Callbacks
-    if (callbackData === 'admin_panel_back') {
+    // 19. Admin Callbacks & Master Admin Terminal
+    if (
+      callbackData === 'menu_admin' ||
+      callbackData === 'admin_panel' ||
+      callbackData === 'admin_panel_back' ||
+      callbackData === 'admin' ||
+      callbackData === 'admin_terminal'
+    ) {
+      if (!isAdmin) {
+        pushBotMessage(
+          `⛔ <b>MASTER ADMIN ACCESS RESTRICTED</b>\n\n` +
+          `👤 Your Name: <b>${currentUser.first_name}</b> (@${currentUser.username || 'none'})\n` +
+          `🆔 Your User ID: <code>${currentUser.user_id}</code>\n\n` +
+          `🔒 <i>This terminal requires Master Administrator authorization.</i>\n\n` +
+          `👉 <b>How to activate Admin Access:</b>\n` +
+          `1️⃣ Open your Web Admin Hub ➔ Settings\n` +
+          `2️⃣ Set <b>Master Admin ID</b> to <code>${currentUser.user_id}</code> and click Save.`
+        );
+        return;
+      }
       setCurrentFsmState(null);
       setFsmData({});
-      editLastBotMessage("⚙️ <b>Advanced Admin Terminal</b>\n<i>Authorized Access Granted.</i>", getAdminKeyboard());
+      const adminText =
+        `⚙️ <b><u>— MASTER ADMIN TERMINAL —</u></b> ⚙️\n` +
+        `<i>Authorized Access Granted. Select an administrative control node below or open the full Web Panel:</i>`;
+      editLastBotMessage(adminText, getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'open_web_admin') {
+      setActiveTab('admin');
+      pushBotMessage("🚀 <b>Opening Web Admin Dashboard...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_add_prod') {
+      openAddProductModal();
+      setActiveTab('admin');
+      pushBotMessage("➕ <b>Opening Product Creation Form in Web Admin Hub...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_user_control_start') {
+      setAdminTab('users');
+      setActiveTab('admin');
+      pushBotMessage("👥 <b>Opening User Management Panel...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_reseller_menu') {
+      setAdminTab('resellers');
+      setActiveTab('admin');
+      pushBotMessage("👑 <b>Opening Reseller Management Hub...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_create_coupon') {
+      setAdminTab('coupons');
+      setActiveTab('admin');
+      pushBotMessage("🎟 <b>Opening Promo Coupon Generator...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_broadcast_btn') {
+      setAdminTab('broadcast');
+      setActiveTab('admin');
+      pushBotMessage("📢 <b>Opening Broadcast Engine...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_view_tickets') {
+      setAdminTab('support');
+      setActiveTab('admin');
+      pushBotMessage("🎫 <b>Opening Support Tickets Portal...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_edit_emojis' || callbackData === 'admin_set_category_emojis' || callbackData === 'admin_set_panel_emojis') {
+      setAdminTab('emojis');
+      setActiveTab('admin');
+      pushBotMessage("🎨 <b>Opening Custom Emoji Manager...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (callbackData === 'admin_setup_fampay') {
+      setActiveTab('gateways');
+      pushBotMessage("⚙️ <b>Opening Payment Gateway Settings...</b>", getAdminKeyboard());
+      return;
+    }
+
+    if (
+      callbackData === 'admin_edit_ui_menu' ||
+      callbackData === 'admin_edit_reseller_price' ||
+      callbackData === 'admin_set_reseller_fee' ||
+      callbackData === 'admin_set_reseller_min' ||
+      callbackData === 'admin_set_support_links' ||
+      callbackData === 'admin_set_video'
+    ) {
+      setAdminTab('settings');
+      setActiveTab('admin');
+      pushBotMessage("⚙️ <b>Opening Settings & Configurations...</b>", getAdminKeyboard());
       return;
     }
 
