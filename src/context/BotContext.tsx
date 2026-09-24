@@ -1971,8 +1971,24 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       }
 
       const kb: InlineKeyboardButton[][] = availablePanels.map(panel => {
-        const firstProd = products.find(p => p.category.toLowerCase() === category.toLowerCase() && p.panel_name.toLowerCase() === panel.toLowerCase() && p.is_active === 1);
+        const panelProds = products.filter(p =>
+          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
+          (p.panel_name || p.name).toLowerCase().trim() === panel.toLowerCase().trim() &&
+          p.is_active === 1
+        );
+        const firstProd = panelProds[0];
+        const isAllMaint = panelProds.length > 0 && panelProds.every(p => Boolean(p.is_maintenance));
         const refId = firstProd ? firstProd.id : 0;
+
+        if (isAllMaint) {
+          return [{
+            text: `🛠️ ${panel} (Under Maintenance)`,
+            callback_data: `maint_pnl_${refId || encodeURIComponent(panel)}`,
+            icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
+            style: 'danger' as const
+          }];
+        }
+
         return [{
           text: `📦 ${panel}`,
           callback_data: refId ? `pnl_${refId}` : `pnl_${category}_${panel}`,
@@ -2029,6 +2045,19 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       if (prods.length === 0) {
         pushBotMessage("No products found for this panel.", getBackKeyboard('menu_shop'));
+        return;
+      }
+
+      const isAllMaint = prods.length > 0 && prods.every(p => Boolean(p.is_maintenance));
+      if (isAllMaint) {
+        const maintNote = prods[0]?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.';
+        pushBotMessage(
+          `🛠 <b>PANEL UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `📦 <b>Panel:</b> ${panelName}\n\n` +
+          `⚠️ <b>Notice:</b> <i>${maintNote}</i>\n\n` +
+          `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this panel is under maintenance. Please choose another active panel!`,
+          getBackKeyboard(`cat_${category}`)
+        );
         return;
       }
 
@@ -2097,6 +2126,17 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         return;
       }
 
+      if (prod.is_maintenance) {
+        pushBotMessage(
+          `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `📦 <b>Panel:</b> ${prod.panel_name} (${prod.name})\n\n` +
+          `⚠️ <b>Notice:</b> <i>${prod.maintenance_note || 'This product is temporarily paused for updates and security patch.'}</i>\n\n` +
+          `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this product is in maintenance mode. Please choose another active product.`,
+          getBackKeyboard(`cat_${prod.category}`)
+        );
+        return;
+      }
+
       const isReseller = Boolean(currentUser.is_reseller);
       const normalPrice = prod.price_inr;
       const finalPrice = isReseller ? (prod.reseller_price ?? prod.reseller_price_inr ?? normalPrice) : (currentUser.is_vip ? Math.round(normalPrice * 0.85) : normalPrice);
@@ -2145,7 +2185,24 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       return;
     }
 
-    // 4b. Product Maintenance Notice Click
+    // 4b. Entire Panel Maintenance Notice Click
+    if (callbackData.startsWith('maint_pnl_')) {
+      const rawPayload = callbackData.replace('maint_pnl_', '');
+      const refProd = products.find(p => String(p.id) === String(rawPayload));
+      const pName = refProd?.panel_name || refProd?.name || decodeURIComponent(rawPayload);
+      const cat = refProd?.category || 'Panels';
+      const maintNote = refProd?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.';
+      pushBotMessage(
+        `🛠 <b>PANEL UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Panel:</b> ${pName}\n\n` +
+        `⚠️ <b>Notice:</b> <i>${maintNote}</i>\n\n` +
+        `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this panel is under maintenance. Please select another active panel!`,
+        getBackKeyboard(`cat_${cat}`)
+      );
+      return;
+    }
+
+    // 4c. Product Maintenance Notice Click
     if (callbackData.startsWith('maint_')) {
       const rawProdId = callbackData.replace('maint_', '');
       const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
@@ -2153,7 +2210,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
         `📦 <b>Panel:</b> ${prod?.panel_name || 'Product'} (${prod?.name || ''})\n\n` +
         `⚠️ <b>Notice:</b> <i>${prod?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.'}</i>\n\n` +
-        `💡 <i>Purchases for this specific item will resume as soon as the patch is verified! All other catalog products are fully working.</i>`,
+        `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this product is in maintenance mode. All other catalog products are fully working.`,
         getBackKeyboard('menu_shop')
       );
       return;

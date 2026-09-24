@@ -69,11 +69,25 @@ export async function loadStateFromFirestore(): Promise<any | null> {
       return data;
     }
   } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+    const msg = String(err?.message || err?.code || err);
+    if (
+      msg.includes('RESOURCE_EXHAUSTED') ||
+      msg.includes('Quota limit exceeded') ||
+      err?.code === 'resource-exhausted' ||
+      msg.includes('8 RESOURCE_EXHAUSTED')
+    ) {
       isQuotaExhausted = true;
       quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
       console.warn('⚡ Firestore: Daily quota limit reached on cloud project. Operating securely with local high-speed disk database.');
+    } else if (
+      msg.includes('NOT_FOUND') ||
+      msg.includes('Code: 5') ||
+      err?.code === 'not-found' ||
+      msg.includes('5 NOT_FOUND')
+    ) {
+      isQuotaExhausted = true;
+      quotaExhaustedUntil = Date.now() + 30 * 60 * 1000;
+      console.warn('⚡ Firestore: Remote cloud database instance not found. Seamlessly operating on local high-speed disk store.');
     } else {
       console.warn('⚡ Firestore load notice:', msg);
     }
@@ -104,11 +118,25 @@ async function performActualFirestoreSave(data: any): Promise<void> {
     // Clear any previous error flag on success
     isQuotaExhausted = false;
   } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted' || msg.includes('8 RESOURCE_EXHAUSTED')) {
+    const msg = String(err?.message || err?.code || err);
+    if (
+      msg.includes('RESOURCE_EXHAUSTED') ||
+      msg.includes('Quota limit exceeded') ||
+      err?.code === 'resource-exhausted' ||
+      msg.includes('8 RESOURCE_EXHAUSTED')
+    ) {
       isQuotaExhausted = true;
       quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
       console.warn('⚡ Firestore Notice: Cloud write quota limit reached. Local disk database is 100% active and maintaining all state.');
+    } else if (
+      msg.includes('NOT_FOUND') ||
+      msg.includes('Code: 5') ||
+      err?.code === 'not-found' ||
+      msg.includes('5 NOT_FOUND')
+    ) {
+      isQuotaExhausted = true;
+      quotaExhaustedUntil = Date.now() + 30 * 60 * 1000;
+      console.warn('⚡ Firestore Notice: Remote cloud database not found. Local disk database is 100% active and maintaining all state.');
     } else {
       console.warn('⚡ Firestore save notice:', msg);
     }

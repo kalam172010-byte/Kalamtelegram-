@@ -2100,11 +2100,21 @@ class TelegramEngine {
       for (const [pName, plans] of panelMap.entries()) {
         const sortedPlans = sortProductsByDuration(plans);
         const firstProd = sortedPlans[0];
-        buttons.push([{
-          text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
-          callback_data: `pnl_${firstProd.id}`,
-          style: 'primary'
-        }]);
+        const isAllMaint = sortedPlans.every(p => Boolean(p.is_maintenance));
+
+        if (isAllMaint) {
+          buttons.push([{
+            text: `🛠️ ${pName} (Under Maintenance)`,
+            callback_data: `maint_pnl_${firstProd.id}`,
+            style: 'danger'
+          }]);
+        } else {
+          buttons.push([{
+            text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
+            callback_data: `pnl_${firstProd.id}`,
+            style: 'primary'
+          }]);
+        }
       }
 
       buttons.push([
@@ -2168,6 +2178,25 @@ class TelegramEngine {
         catCode = 'cat_pc';
       } else {
         catCode = `cat_${targetCategory}`;
+      }
+
+      const isAllMaint = panelPlans.length > 0 && panelPlans.every(p => Boolean(p.is_maintenance));
+      if (isAllMaint) {
+        const maintNote = panelPlans[0]?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.';
+        await this.answerCallback(cb.id, `🛠️ Panel Under Maintenance: Orders Paused`, true);
+        const text = `🛠 <b>PANEL UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `📦 <b>Panel:</b> ${targetPanelName}\n\n` +
+          `⚠️ <b>Notice:</b> <i>${maintNote}</i>\n\n` +
+          `🚫 <b>Orders Blocked:</b> You cannot proceed to select plans or checkout while this panel is under maintenance.\n\n` +
+          `✅ <i>Please check back soon or explore our other active panels!</i>`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode, style: 'danger' }],
+            [{ text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
       }
 
       let text = `📦 <b><u>${targetPanelName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2329,11 +2358,49 @@ class TelegramEngine {
       return;
     }
 
+    if (data.startsWith('maint_pnl_')) {
+      const rawPayload = data.replace('maint_pnl_', '');
+      let refProduct = dbStore.getProduct(rawPayload);
+      if (!refProduct) {
+        refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawPayload) || Number(p.id) === Number(rawPayload));
+      }
+      const pName = refProduct?.panel_name || refProduct?.name || decodeURIComponent(rawPayload);
+      const cat = refProduct?.category || 'Panels';
+      const note = refProduct?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.';
+      await this.answerCallback(cb.id, `🛠️ Panel Under Maintenance: Orders Paused`, true);
+      const text = `🛠 <b>PANEL UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Panel:</b> ${pName}\n\n` +
+        `⚠️ <b>Notice:</b> <i>${note}</i>\n\n` +
+        `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this panel is under maintenance.\n\n` +
+        `✅ <i>Please check back soon or explore our other active panels!</i>`;
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' }],
+          [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+        ]
+      };
+      await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
     if (data.startsWith('maint_')) {
       const prodId = Number(data.replace('maint_', ''));
       const product = dbStore.getProduct(prodId);
-      const note = product?.maintenance_note || 'This product is updating. Please try another product!';
+      const pName = product?.panel_name || product?.name || 'Product';
+      const note = product?.maintenance_note || 'We are currently updating this package to the newest Free Fire version.';
       await this.answerCallback(cb.id, `🛠️ Product Under Maintenance: ${note}`, true);
+      const text = `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Panel:</b> ${pName} (${product?.name || ''})\n\n` +
+        `⚠️ <b>Notice:</b> <i>${note}</i>\n\n` +
+        `🚫 <b>Orders Blocked:</b> You cannot proceed to the next step while this product is in maintenance mode.\n\n` +
+        `✅ <i>All other catalog products are fully working and available for instant order!</i>`;
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🛒 Explore Other Products', callback_data: 'shop_categories', style: 'primary' }],
+          [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+        ]
+      };
+      await this.editMessageText(chatId, messageId, text, keyboard);
       return;
     }
 

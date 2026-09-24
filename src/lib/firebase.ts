@@ -66,11 +66,13 @@ function initFirestore(): Firestore {
 
 export const db: Firestore = initFirestore();
 
-// Quota circuit breaker on client
+// Quota & Unavailable circuit breaker on client
 let clientQuotaExhausted = false;
 let clientQuotaExhaustedUntil = 0;
+let clientDbUnavailable = false;
 
-function isClientQuotaExhausted(): boolean {
+function isClientFirestoreDisabled(): boolean {
+  if (clientDbUnavailable) return true;
   if (clientQuotaExhausted && Date.now() > clientQuotaExhaustedUntil) {
     clientQuotaExhausted = false;
     clientQuotaExhaustedUntil = 0;
@@ -78,9 +80,33 @@ function isClientQuotaExhausted(): boolean {
   return clientQuotaExhausted;
 }
 
-// Resilient wrapper around setDoc that catches quota exhaustion gracefully
+function handleFirestoreWriteError(err: any) {
+  const msg = String(err?.message || err?.code || err);
+  if (
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('Quota limit exceeded') ||
+    err?.code === 'resource-exhausted' ||
+    msg.includes('8 RESOURCE_EXHAUSTED')
+  ) {
+    clientQuotaExhausted = true;
+    clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+    console.warn('Firestore notice: Write quota reached. Operating seamlessly with local high-speed state cache.');
+  } else if (
+    msg.includes('NOT_FOUND') ||
+    msg.includes('Code: 5') ||
+    err?.code === 'not-found' ||
+    msg.includes('5 NOT_FOUND')
+  ) {
+    clientDbUnavailable = true;
+    console.warn('Firestore notice: Custom database instance is not available. Seamlessly persisting via local disk and high-speed cache.');
+  } else {
+    console.warn('Firestore operation notice:', msg);
+  }
+}
+
+// Resilient wrapper around setDoc that catches quota and not-found errors gracefully
 export async function setDoc<T>(documentRef: DocumentReference<T, any>, data: any, options?: SetOptions): Promise<void> {
-  if (isClientQuotaExhausted()) return;
+  if (isClientFirestoreDisabled()) return;
   try {
     if (options) {
       await rawSetDoc(documentRef as any, data, options);
@@ -88,40 +114,27 @@ export async function setDoc<T>(documentRef: DocumentReference<T, any>, data: an
       await rawSetDoc(documentRef as any, data);
     }
   } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
-      clientQuotaExhausted = true;
-      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
-      console.warn('Firestore notice: Write quota reached. Data safely persisted to local cache.');
-    }
+    handleFirestoreWriteError(err);
   }
 }
 
 // Resilient wrapper around updateDoc
 export async function updateDoc<T extends Record<string, any>>(documentRef: DocumentReference<T, any>, data: UpdateData<T>): Promise<void> {
-  if (isClientQuotaExhausted()) return;
+  if (isClientFirestoreDisabled()) return;
   try {
     await rawUpdateDoc(documentRef as any, data as any);
   } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
-      clientQuotaExhausted = true;
-      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
-    }
+    handleFirestoreWriteError(err);
   }
 }
 
 // Resilient wrapper around deleteDoc
 export async function deleteDoc(documentRef: DocumentReference<any, any>): Promise<void> {
-  if (isClientQuotaExhausted()) return;
+  if (isClientFirestoreDisabled()) return;
   try {
     await rawDeleteDoc(documentRef);
   } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
-      clientQuotaExhausted = true;
-      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
-    }
+    handleFirestoreWriteError(err);
   }
 }
 
@@ -129,8 +142,11 @@ export async function deleteDoc(documentRef: DocumentReference<any, any>): Promi
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, '_connection_test', 'ping'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+  } catch (error: any) {
+    const msg = String(error?.message || error?.code || error);
+    if (msg.includes('NOT_FOUND') || msg.includes('Code: 5') || error?.code === 'not-found') {
+      clientDbUnavailable = true;
+    } else if (msg.includes('the client is offline')) {
       console.warn("Firestore: Client is operating in offline mode.");
     }
   }

@@ -191,6 +191,7 @@ export const ProductCatalog: React.FC = () => {
                     <div className="grid grid-cols-2 gap-1.5">
                       {panel.plans.map(plan => {
                         const isSelected = String(plan.id) === String(activePlan.id);
+                        const isPlanMaint = Boolean(plan.is_maintenance);
                         const planPrice = isReseller
                           ? (plan.reseller_price ?? plan.reseller_price_inr ?? plan.price_inr)
                           : (currentUser.is_vip ? Math.round(plan.price_inr * 0.85) : plan.price_inr);
@@ -202,15 +203,23 @@ export const ProductCatalog: React.FC = () => {
                             onClick={() => handleSelectDuration(panel.panelKey, plan)}
                             className={`p-2 rounded-xl text-left transition flex flex-col justify-between border cursor-pointer active:scale-95 ${
                               isSelected
-                                ? 'bg-cyan-500/20 border-cyan-400/80 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400/50'
+                                ? isPlanMaint
+                                  ? 'bg-amber-500/20 border-amber-400/80 text-white shadow-md shadow-amber-500/20 ring-1 ring-amber-400/50'
+                                  : 'bg-cyan-500/20 border-cyan-400/80 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400/50'
+                                : isPlanMaint
+                                ? 'bg-amber-950/20 border-amber-800/50 text-amber-300 hover:bg-amber-900/30'
                                 : 'bg-slate-950/60 border-slate-800/80 text-slate-300 hover:bg-slate-800/60 hover:border-slate-700'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-1">
                               <span className="text-xs font-bold font-mono truncate">{plan.name}</span>
-                              {isSelected && <Check className="w-3 h-3 text-cyan-300 shrink-0" />}
+                              {isPlanMaint ? (
+                                <span className="text-[10px] text-amber-400 font-bold shrink-0">🛠️</span>
+                              ) : isSelected ? (
+                                <Check className="w-3 h-3 text-cyan-300 shrink-0" />
+                              ) : null}
                             </div>
-                            <span className="text-[11px] font-black text-emerald-400 font-mono mt-0.5">
+                            <span className={`text-[11px] font-black font-mono mt-0.5 ${isPlanMaint ? 'text-amber-400 line-through opacity-80' : 'text-emerald-400'}`}>
                               ₹{planPrice}
                             </span>
                           </button>
