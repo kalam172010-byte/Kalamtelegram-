@@ -1861,13 +1861,33 @@ class TelegramEngine {
     const isMasterAdmin = this.isAdmin(user, chatId);
 
     if (isMaintenanceOn && !data.startsWith('admin_')) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
       const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
-      if (!isMasterAdmin) {
-        await this.answerCallback(cb.id, `🛠 Bot is under maintenance: ${customReason.substring(0, 150)}`, true);
-        return;
-      } else {
-        await this.answerCallback(cb.id, `⚠️ Maintenance Mode Active: Ordinary users cannot access this!`, false);
+      const maintenanceNotice = `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Service Downtime / Maintenance Mode Active\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
+
+      const kb: any = { inline_keyboard: [] };
+      if (settings.support_telegram) {
+        kb.inline_keyboard.push([{ text: '💬 Official Support Channel', url: settings.support_telegram }]);
       }
+      if (settings.official_channel_link) {
+        kb.inline_keyboard.push([{ text: '📢 News Channel', url: settings.official_channel_link }]);
+      }
+      if (isMasterAdmin) {
+        kb.inline_keyboard.push([
+          { text: '⚙️ Master Admin Terminal (Bypass)', callback_data: 'admin_panel' }
+        ]);
+      }
+
+      await this.answerCallback(cb.id, `🛠 Bot is under maintenance`);
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, maintenanceNotice, kb.inline_keyboard.length > 0 ? kb : undefined).catch(() => {});
+      } else {
+        await this.sendMessage(chatId, maintenanceNotice, kb.inline_keyboard.length > 0 ? kb : undefined).catch(() => {});
+      }
+      return;
     }
 
     await this.answerCallback(cb.id);
@@ -2765,6 +2785,16 @@ class TelegramEngine {
   }
 
   private getWelcomeText(user: User): string {
+    const settings = dbStore.getData().settings;
+    if (this.isMaintenanceModeActive() && !this.isAdmin(user, user.user_id)) {
+      const customTitle = settings.maintenance_message || '🛠 BOT UNDER MAINTENANCE';
+      const customReason = settings.maintenance_reason || 'We are currently fixing technical issues & upgrading server infrastructure.';
+      return `🚧 <b><u>${customTitle.toUpperCase()}</u></b> 🚧\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ <b>Notice:</b> ${customReason}\n\n` +
+        `⏱ <b>Status:</b> Temporary Service Downtime / Maintenance Mode Active\n` +
+        `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
+    }
+
     const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Member';
 
     return `⚡ <b>WELCOME TO KALAM FF PANEL STORE</b> ⚡\n\n` +
@@ -2781,6 +2811,18 @@ class TelegramEngine {
   }
 
   private getMainMenuKeyboard(user: User) {
+    const settings = dbStore.getData().settings;
+    if (this.isMaintenanceModeActive() && !this.isAdmin(user, user.user_id)) {
+      const kb: any[] = [];
+      if (settings.support_telegram) {
+        kb.push([{ text: '💬 Official Support Channel', url: settings.support_telegram }]);
+      }
+      if (settings.official_channel_link) {
+        kb.push([{ text: '📢 News Channel', url: settings.official_channel_link }]);
+      }
+      return { inline_keyboard: kb };
+    }
+
     const buttons: any[] = [
       [
         { text: '🛒 Buy Now', callback_data: 'shop_categories', style: 'danger' }
@@ -2839,6 +2881,26 @@ class TelegramEngine {
     await this.sendMessage(chatId, text, keyboard);
   }
 
+  public async getUserProfilePhotoUrl(userId: number): Promise<string | null> {
+    try {
+      const photosRes = await this.callApi('getUserProfilePhotos', { user_id: userId, limit: 1 });
+      if (photosRes && photosRes.photos && photosRes.photos.length > 0) {
+        const photos = photosRes.photos[0];
+        const largestPhoto = photos[photos.length - 1];
+        if (largestPhoto && largestPhoto.file_id) {
+          const fileRes = await this.callApi('getFile', { file_id: largestPhoto.file_id });
+          if (fileRes && fileRes.file_path) {
+            const token = this.getValidTokenFromStore();
+            return `https://api.telegram.org/file/bot${token}/${fileRes.file_path}`;
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
   private async sendProfileMessage(chatId: number, user: User, messageId?: number) {
     const orders = dbStore.getData().orders.filter(o => o.user_id === user.user_id);
     const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Customer';
@@ -2851,7 +2913,16 @@ class TelegramEngine {
       keysText = `\n\n<i>You have not purchased any keys yet. Visit the Product Store to get started!</i>`;
     }
 
-    const text = `👤 <b>USER ACCOUNT PROFILE</b>\n\n` +
+    // Attempt to fetch real Telegram Profile Photo
+    let realPhotoUrl = await this.getUserProfilePhotoUrl(user.user_id).catch(() => null);
+    if (realPhotoUrl) {
+      user.avatar_url = realPhotoUrl;
+      dbStore.updateUser(user.user_id, { avatar_url: realPhotoUrl });
+    }
+
+    const avatarUrl = user.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.username || user.first_name || String(user.user_id))}`;
+
+    const text = `<a href="${avatarUrl}">&#8203;</a>👤 <b>USER ACCOUNT PROFILE</b>\n\n` +
       `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
       `📛 <b>Name:</b> ${user.first_name} (@${user.username || 'none'})\n` +
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +

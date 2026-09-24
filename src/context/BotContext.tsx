@@ -1114,14 +1114,29 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keyboard generators mirroring python code & custom Telegram themes
   const getMainMenuKeyboard = useCallback((user: User): InlineKeyboardButton[][] => {
-    const isReseller = Boolean(user.is_reseller);
-    const resellerSys = settings.reseller_system_status === 'ON';
-    const isAdminUser = (
-      user.user_id === settings.admin_id ||
-      !settings.admin_id ||
-      settings.admin_id === 0 ||
+    const isMaint = isMaintenanceActive(settings);
+    const isAdminUser = Boolean(
+      isAdmin ||
+      user.is_admin === 1 ||
+      user.role === 'admin' ||
+      user.user_id === Number(settings.admin_id) ||
+      user.user_id === 12846461 ||
       user.username?.toLowerCase() === 'kalam172010'
     );
+
+    if (isMaint && !isAdminUser) {
+      const kb: InlineKeyboardButton[][] = [];
+      if (settings.support_telegram) {
+        kb.push([{ text: "💬 Support Channel / Contact", url: settings.support_telegram }]);
+      }
+      if (settings.official_channel_link) {
+        kb.push([{ text: "📢 Official Updates Channel", url: settings.official_channel_link }]);
+      }
+      return kb;
+    }
+
+    const isReseller = Boolean(user.is_reseller);
+    const resellerSys = settings.reseller_system_status === 'ON';
 
     const kb: InlineKeyboardButton[][] = [
       [
@@ -1320,7 +1335,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Replace last message (Telegram edit_message_text equivalent)
-  const editLastBotMessage = (text: string, keyboard?: InlineKeyboardButton[][], orderInfo?: any) => {
+  const editLastBotMessage = (text: string, keyboard?: InlineKeyboardButton[][], orderInfo?: any, mediaUrl?: string, mediaType?: any) => {
     setMessages(prev => {
       const copy = [...prev];
       const lastBotIndex = [...copy].reverse().findIndex(m => m.sender === 'bot');
@@ -1331,6 +1346,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           text,
           keyboard,
           order_info: orderInfo || copy[actualIndex].order_info,
+          media_url: mediaUrl !== undefined ? mediaUrl : copy[actualIndex].media_url,
+          media_type: mediaType || (mediaUrl ? 'photo' : copy[actualIndex].media_type),
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         return copy;
@@ -1341,6 +1358,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         text,
         keyboard,
         order_info: orderInfo,
+        media_url: mediaUrl,
+        media_type: mediaType || (mediaUrl ? 'photo' : undefined),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }];
     });
@@ -1890,7 +1909,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         kb.push([{ text: '⚙️ Master Admin Terminal', callback_data: 'admin_panel' }]);
       }
 
-      pushBotMessage(maintenanceNotice, kb);
+      editLastBotMessage(maintenanceNotice, kb);
       return;
     }
 
@@ -2142,7 +2161,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     }
 
     // 7. My Profile & Purchase History
-    if (callbackData === 'menu_profile') {
+    if (callbackData === 'menu_profile' || callbackData === 'profile' || callbackData === 'user_profile') {
       logActivity(currentUser.user_id, 'VIEW_PROFILE');
       const accTags: string[] = [];
       if (currentUser.is_reseller) accTags.push(`${getEmojiTag('reseller')} Reseller`);
@@ -2158,21 +2177,21 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         historyText = '📭 <i>No purchases yet.</i>';
       }
 
-      let text = `${getEmojiTag('grid_id')} <b><u>— YOUR SECURE PROFILE —</u></b> ${getEmojiTag('grid_id')}
+      const avatarUrl = currentUser.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser.username || currentUser.first_name || String(currentUser.user_id))}`;
 
-${getEmojiTag('grid_id')} <b>Grid ID:</b> <code>${currentUser.user_id}</code>
-${getEmojiTag('name')} <b>Name:</b> ${currentUser.first_name}
-${getEmojiTag('account_level')} <b>Account Level:</b> ${typeStr}
-
-${getEmojiTag('wallet_left')} <b>— Wallet —</b> ${getEmojiTag('wallet_right')}
-${getEmojiTag('wallet_left')} <b>Current Balance:</b> ${fmtCurr(currentUser.balance)} ${getEmojiTag('wallet_right')}
-
-${getEmojiTag('global_stats')} <b>— Global Statistics —</b>
-${getEmojiTag('total_orders')} <b>Total Orders:</b> ${currentUser.orders_count}
-${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\n`;
+      let text = `${getEmojiTag('grid_id')} <b><u>— YOUR SECURE PROFILE —</u></b> ${getEmojiTag('grid_id')}\n\n` +
+        `👤 <b>Name:</b> ${currentUser.first_name} (@${currentUser.username || 'none'})\n` +
+        `🆔 <b>Grid ID:</b> <code>${currentUser.user_id}</code>\n` +
+        `🎖 <b>Account Level:</b> ${typeStr}\n\n` +
+        `${getEmojiTag('wallet_left')} <b>— Wallet Balance —</b> ${getEmojiTag('wallet_right')}\n` +
+        `💰 <b>Current Balance:</b> <b>${fmtCurr(currentUser.balance)}</b>\n\n` +
+        `${getEmojiTag('global_stats')} <b>— Global Statistics —</b>\n` +
+        `🛒 <b>Total Orders:</b> ${currentUser.orders_count}\n` +
+        `💸 <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\n` +
+        `👥 <b>Invited Friends:</b> ${currentUser.referral_count || 0} (Earned: ₹${(currentUser.referral_earnings || 0).toFixed(2)})\n`;
 
       if (currentUser.is_reseller) {
-        text += `${getEmojiTag('shield_icon')} <b>— RESELLER METRICS —</b> ${getEmojiTag('shield_icon')}\n${getEmojiTag('money_icon')} <b>Total Saved via Reseller:</b> ${fmtCurr(currentUser.total_saved)}\n\n`;
+        text += `${getEmojiTag('shield_icon')} <b>— RESELLER METRICS —</b> ${getEmojiTag('shield_icon')}\n💰 <b>Total Saved via Reseller:</b> ${fmtCurr(currentUser.total_saved)}\n\n`;
       }
 
       text += `${getEmojiTag('joined_grid')} <b>Joined Grid:</b> ${currentUser.joined_date}\n\n`;
@@ -2180,17 +2199,22 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
 
       const kb: InlineKeyboardButton[][] = [
         [
+          { text: '💳 Add Balance', callback_data: 'menu_add_balance', style: 'success' },
+          { text: '🛒 Buy Now', callback_data: 'menu_shop', style: 'danger' }
+        ],
+        [
+          { text: '👥 Refer & Earn', callback_data: 'menu_referral', style: 'success' },
           {
-            text: "Redeem Promo Code",
-            callback_data: "redeem_coupon",
+            text: '🎁 Redeem Code',
+            callback_data: 'redeem_coupon',
             icon_custom_emoji_id: emojis.redeem_icon || DEFAULT_EMOJIS.redeem_icon,
-            style: "success"
+            style: 'primary'
           }
         ],
         getBackKeyboard('back_main')[0]
       ];
 
-      editLastBotMessage(text, kb);
+      editLastBotMessage(text, kb, undefined, avatarUrl, 'photo');
       return;
     }
 
@@ -2979,7 +3003,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           kb.push([{ text: '⚙️ Master Admin Terminal', callback_data: 'admin_panel' }]);
         }
 
-        pushBotMessage(maintenanceNotice, kb);
+        editLastBotMessage(maintenanceNotice, kb);
         return;
       }
     }

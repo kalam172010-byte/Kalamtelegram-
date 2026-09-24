@@ -281,8 +281,42 @@ export const TelegramBotView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Optional Media Image Banner */}
-                {msg.media_url && (
+                {/* Profile Photo Avatar Header Card */}
+                {(msg.text?.includes('PROFILE') || msg.text?.includes('Profile') || msg.media_type === 'photo') && (
+                  <div className="mb-3.5 p-3.5 bg-gradient-to-r from-slate-900 via-cyan-950/40 to-slate-900 border border-cyan-500/40 rounded-2xl flex items-center gap-3.5 shadow-xl ring-1 ring-cyan-500/20">
+                    <div className="relative shrink-0">
+                      <img
+                        src={
+                          msg.media_url ||
+                          currentUser.avatar_url ||
+                          `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser.username || currentUser.first_name || String(currentUser.user_id))}`
+                        }
+                        alt="User Profile Photo"
+                        className="w-14 h-14 rounded-full border-2 border-cyan-400 shadow-lg object-cover bg-slate-800 ring-2 ring-cyan-500/30"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.first_name)}&background=0D8ABC&color=fff&bold=true`;
+                        }}
+                      />
+                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-900 rounded-full shadow-sm" title="Active Account" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-white text-sm sm:text-base truncate">{currentUser.first_name}</h3>
+                        {currentUser.is_vip === 1 && (
+                          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10px] font-bold uppercase tracking-wider shrink-0">VIP</span>
+                        )}
+                        {currentUser.is_reseller === 1 && (
+                          <span className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded text-[10px] font-bold uppercase tracking-wider shrink-0">Reseller</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-cyan-400 font-mono font-medium">@{currentUser.username || 'user'}</p>
+                      <p className="text-[11px] text-slate-400 font-mono">User ID: <span className="text-slate-200 font-bold">{currentUser.user_id}</span></p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Optional Media Image Banner for non-profile broadcasts/photos */}
+                {msg.media_url && !msg.text?.includes('PROFILE') && !msg.text?.includes('Profile') && (
                   <div className="mb-3 rounded-xl overflow-hidden border border-slate-700 max-h-72 bg-black/40 flex items-center justify-center">
                     <img
                       src={msg.media_url}
