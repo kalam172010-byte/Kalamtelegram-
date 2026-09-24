@@ -117,6 +117,7 @@ export const AdminDashboard: React.FC = () => {
     deleteProduct,
     deleteProducts,
     deletePanel,
+    togglePanelMaintenance,
     injectProductKeys,
     deleteProductKey,
     updateUserBalance,
@@ -812,6 +813,15 @@ export const AdminDashboard: React.FC = () => {
       provider_duration: editProdForm.provider_duration || editProdForm.validity || editProdForm.name,
       requires_android_id: Boolean(editProdForm.requires_android_id)
     });
+
+    if (editProdForm.category && editProdForm.panel_name) {
+      togglePanelMaintenance(
+        editProdForm.category,
+        editProdForm.panel_name,
+        Boolean(editProdForm.is_maintenance),
+        editProdForm.maintenance_note
+      );
+    }
 
     setEditingProductId(null);
   };

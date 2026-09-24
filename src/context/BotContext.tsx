@@ -3728,6 +3728,58 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .catch(err => console.warn('Failed to sync panel deletion to server:', err));
   };
 
+  const togglePanelMaintenance = (category: string, panelName: string, isMaintenance: boolean, note?: string) => {
+    const maintVal = isMaintenance ? 1 : 0;
+    const matchedIds: string[] = [];
+
+    setProducts(prev => {
+      const updated = prev.map(p => {
+        const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
+        const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+        if (matchCat && matchName) {
+          matchedIds.push(String(p.id));
+          return {
+            ...p,
+            is_maintenance: maintVal,
+            ...(note !== undefined ? { maintenance_note: note } : {})
+          };
+        }
+        return p;
+      });
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+
+    logActivity(12846461, 'ADMIN_PANEL_MAINTENANCE', `Panel ${panelName} (${category}) maintenance set to ${isMaintenance ? 'ON' : 'OFF'}`);
+
+    // Sync to Firestore
+    matchedIds.forEach(id => {
+      updateDoc(doc(db, 'products', id), {
+        is_maintenance: maintVal,
+        ...(note !== undefined ? { maintenance_note: note } : {})
+      }).catch(() => {});
+    });
+
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'toggle_panel_maint',
+        category,
+        panelName,
+        isMaintenance,
+        note
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      }
+    })
+    .catch(err => console.warn('Failed to sync panel maintenance to server:', err));
+  };
+
   const removeProduct = (id: number | string) => {
     deleteProduct(id);
   };
@@ -4691,6 +4743,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         deleteProduct,
         deleteProducts,
         deletePanel,
+        togglePanelMaintenance,
         removeProduct,
         injectProductKeys,
         deleteProductKey,

@@ -2140,17 +2140,15 @@ class TelegramEngine {
       if (!refProduct) {
         refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       }
-      if (!refProduct) {
-        refProduct = dbStore.getData().products.find(p => p.is_active !== 0);
-      }
 
-      if (!refProduct) {
+      if (!refProduct || refProduct.is_active === 0) {
         console.warn(`[TelegramEngine] [TRACE] Panel refProduct not found for rawProdId=${rawProdId}`);
-        await this.answerCallback(cb.id, '❌ Product panel no longer available.', true);
-        const text = `⚠️ <b>PANEL UNAVAILABLE</b>\n\nThis panel is no longer listed.`;
+        await this.answerCallback(cb.id, '❌ Product panel is no longer available or was removed.', true);
+        const text = `⚠️ <b>PANEL UNAVAILABLE</b>\n\nThis product or panel has been removed from the store catalog.`;
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }]
+            [{ text: '🛒 Return to Store', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);

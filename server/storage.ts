@@ -210,9 +210,7 @@ export class DatabaseStore {
 
       // 3. Merge Products & Keys with strict ID uniqueness
       if (Array.isArray(remote.products) && remote.products.length > 0) {
-        const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
         this.data.products = remote.products
-          .filter((p: any) => !demoPanelNames.includes(p.panel_name || ''))
           .map((p: any, idx: number) => ({
             ...p,
             id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -431,6 +429,29 @@ export class DatabaseStore {
     this.data.products[idx] = { ...this.data.products[idx], ...updates };
     this.saveData();
     return this.data.products[idx];
+  }
+
+  public updatePanel(category: string, panelName: string, updates: Partial<Product>): number {
+    let updatedCount = 0;
+    this.data.products = this.data.products.map(p => {
+      const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
+      const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+      if (matchCat && matchName) {
+        updatedCount++;
+        return { ...p, ...updates };
+      }
+      return p;
+    });
+    this.saveData();
+    return updatedCount;
+  }
+
+  public setPanelMaintenance(category: string, panelName: string, isMaintenance: boolean, note?: string): number {
+    const maintVal = isMaintenance ? 1 : 0;
+    return this.updatePanel(category, panelName, {
+      is_maintenance: maintVal,
+      ...(note !== undefined ? { maintenance_note: note } : {})
+    });
   }
 
   public deleteProduct(id: number | string): boolean {

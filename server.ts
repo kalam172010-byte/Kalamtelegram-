@@ -250,6 +250,14 @@ async function startServer() {
       } else if (action === 'delete_panel') {
         const count = dbStore.deletePanel(category, panelName);
         dbStore.logActivity(12846461, 'DELETE_PANEL', `Deleted panel ${panelName} (${count} plans removed)`);
+      } else if (action === 'toggle_panel_maint') {
+        const { isMaintenance, note } = req.body;
+        const count = dbStore.setPanelMaintenance(category, panelName, isMaintenance, note);
+        dbStore.logActivity(12846461, 'TOGGLE_PANEL_MAINT', `Panel ${panelName} (${category}) maintenance set to ${isMaintenance ? 'ON' : 'OFF'} (${count} plans)`);
+      } else if (action === 'update_panel') {
+        const { updates } = req.body;
+        const count = dbStore.updatePanel(category, panelName, updates || {});
+        dbStore.logActivity(12846461, 'UPDATE_PANEL', `Panel ${panelName} updated (${count} plans)`);
       } else if (action === 'add_keys') {
         const id = Number(productId);
         dbStore.injectProductKeys(id, keys || []);
