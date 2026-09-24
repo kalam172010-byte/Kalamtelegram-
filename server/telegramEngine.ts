@@ -1909,9 +1909,29 @@ class TelegramEngine {
 
     await this.answerCallback(cb.id);
 
-    if (data === 'main_menu') {
+    if (
+      data === 'main_menu' ||
+      data === 'back_main' ||
+      data === 'menu_main' ||
+      data === 'start' ||
+      data === 'back_to_main' ||
+      data === 'main' ||
+      data === 'back'
+    ) {
+      dbStore.setFsmState(user.user_id, '');
       const welcomeText = this.getWelcomeText(user);
-      await this.editMessageText(chatId, messageId, welcomeText, this.getMainMenuKeyboard(user));
+      const mainKb = this.getMainMenuKeyboard(user);
+      if (messageId) {
+        try {
+          await this.editMessageText(chatId, messageId, welcomeText, mainKb);
+        } catch (e) {
+          // If editing fails (e.g. previous message was photo or deleted), delete and send fresh message
+          await this.deleteMessage(chatId, messageId).catch(() => {});
+          await this.sendMessage(chatId, welcomeText, mainKb);
+        }
+      } else {
+        await this.sendMessage(chatId, welcomeText, mainKb);
+      }
       return;
     }
 

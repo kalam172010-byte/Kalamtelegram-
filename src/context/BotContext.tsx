@@ -1920,11 +1920,19 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     }
 
     // 1. Back to main
-    if (callbackData === 'back_main') {
+    if (
+      callbackData === 'back_main' ||
+      callbackData === 'main_menu' ||
+      callbackData === 'menu_main' ||
+      callbackData === 'start' ||
+      callbackData === 'back_to_main' ||
+      callbackData === 'main' ||
+      callbackData === 'back'
+    ) {
       setCurrentFsmState(null);
       setFsmData({});
       logActivity(currentUser.user_id, 'RETURN_MAIN_MENU');
-      editLastBotMessage(renderUiText('start_menu'), getMainMenuKeyboard(currentUser));
+      editLastBotMessage(renderUiText('start_menu'), getMainMenuKeyboard(currentUser), undefined, '', undefined);
       return;
     }
 
