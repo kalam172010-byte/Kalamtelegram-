@@ -360,12 +360,13 @@ export class DatabaseStore {
     return this.data.emojis;
   }
 
-  public getProduct(id: number): Product | undefined {
-    return this.data.products.find(p => p.id === id);
+  public getProduct(id: number | string): Product | undefined {
+    return this.data.products.find(p => String(p.id) === String(id) || Number(p.id) === Number(id));
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
-    const newId = this.data.products.length > 0 ? Math.max(...this.data.products.map(p => p.id)) + 1 : 1;
+    const numericIds = this.data.products.map(p => Number(p.id)).filter(n => !isNaN(n));
+    const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
     const finalProduct: Product = {
       ...product,
       id: product.id || newId
@@ -390,18 +391,18 @@ export class DatabaseStore {
     return finalProduct;
   }
 
-  public updateProduct(id: number, updates: Partial<Product>): Product | null {
-    const idx = this.data.products.findIndex(p => p.id === id);
+  public updateProduct(id: number | string, updates: Partial<Product>): Product | null {
+    const idx = this.data.products.findIndex(p => String(p.id) === String(id) || Number(p.id) === Number(id));
     if (idx === -1) return null;
     this.data.products[idx] = { ...this.data.products[idx], ...updates };
     this.saveData();
     return this.data.products[idx];
   }
 
-  public deleteProduct(id: number): boolean {
+  public deleteProduct(id: number | string): boolean {
     const initialLen = this.data.products.length;
-    this.data.products = this.data.products.filter(p => p.id !== id);
-    this.data.productKeys = this.data.productKeys.filter(k => k.product_id !== id);
+    this.data.products = this.data.products.filter(p => String(p.id) !== String(id) && Number(p.id) !== Number(id));
+    this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id) && Number(k.product_id) !== Number(id));
     this.saveData();
     return this.data.products.length < initialLen;
   }

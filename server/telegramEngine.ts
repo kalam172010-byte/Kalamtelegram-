@@ -796,16 +796,19 @@ class TelegramEngine {
     let deliveredKey = '';
     let providerSource = '';
 
-    const useApiDelivery = (
+    const useApiDelivery = Boolean(
       product.delivery_mode === 'api_provider' ||
-      (Boolean(product.provider_product_id) && (product.delivery_mode === 'hybrid' || settings.bantibhaiya_status === 'ON'))
+      (Boolean(product.provider_product_id) && (product.delivery_mode === 'hybrid' || settings.bantibhaiya_status === 'ON')) ||
+      (product.delivery_mode !== 'vault_only' && settings.bantibhaiya_status === 'ON' && Boolean(settings.bantibhaiya_api_key))
     );
 
-    if (useApiDelivery && product.provider_product_id) {
+    const providerPid = product.provider_product_id || String(product.id);
+
+    if (useApiDelivery) {
       // Dispatched to BantiBhaiya Reseller Provider API
-      const duration = product.provider_duration || product.name || '1 Day';
+      const duration = product.provider_duration || product.duration || product.name || '1 Day';
       const buyRes = await bantiResellerService.buyKey({
-        productId: product.provider_product_id,
+        productId: providerPid,
         duration: duration,
         androidId: androidId
       });
@@ -2116,8 +2119,14 @@ class TelegramEngine {
     }
 
     if (data.startsWith('pnl_')) {
-      const refProdId = Number(data.replace('pnl_', ''));
-      const refProduct = dbStore.getProduct(refProdId);
+      const rawProdId = data.replace('pnl_', '');
+      let refProduct = dbStore.getProduct(rawProdId);
+      if (!refProduct) {
+        refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      }
+      if (!refProduct) {
+        refProduct = dbStore.getData().products.find(p => p.is_active !== 0);
+      }
 
       if (!refProduct) {
         await this.answerCallback(cb.id, '❌ Product panel no longer available.', true);
@@ -2134,15 +2143,23 @@ class TelegramEngine {
       const targetCategory = refProduct.category;
       const targetPanelName = refProduct.panel_name || refProduct.name;
 
-      const panelPlans = dbStore.getData().products.filter(p =>
+      let panelPlans = dbStore.getData().products.filter(p =>
         p.is_active !== 0 &&
         isCategoryMatch(p.category, targetCategory) &&
-        (p.panel_name || p.name).trim().toLowerCase() === targetPanelName.trim().toLowerCase()
+        (
+          (p.panel_name || p.name).trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
+          normalizeCategoryName(p.panel_name || p.name) === normalizeCategoryName(targetPanelName)
+        )
       );
 
       if (panelPlans.length === 0) {
-        await this.answerCallback(cb.id, 'No active duration plans found for this product.', true);
-        return;
+        panelPlans = dbStore.getData().products.filter(p =>
+          p.is_active !== 0 && isCategoryMatch(p.category, targetCategory)
+        );
+      }
+
+      if (panelPlans.length === 0) {
+        panelPlans = [refProduct];
       }
 
       let catCode = 'cat_nonroot';
@@ -2210,8 +2227,11 @@ class TelegramEngine {
     }
 
     if (data.startsWith('prod_')) {
-      const prodId = Number(data.replace('prod_', ''));
-      const product = dbStore.getProduct(prodId);
+      const rawProdId = data.replace('prod_', '');
+      let product = dbStore.getProduct(rawProdId);
+      if (!product) {
+        product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      }
 
       if (!product || !product.is_active) {
         await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
@@ -2316,8 +2336,11 @@ class TelegramEngine {
     }
 
     if (data.startsWith('buy_')) {
-      const prodId = Number(data.replace('buy_', ''));
-      const product = dbStore.getProduct(prodId);
+      const rawProdId = data.replace('buy_', '');
+      let product = dbStore.getProduct(rawProdId);
+      if (!product) {
+        product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      }
 
       if (!product || !product.is_active) {
         await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);

@@ -51,11 +51,22 @@ export class BantiResellerService {
   public async buyKey(params: BuyKeyParams): Promise<BuyKeyResult> {
     const creds = this.getCredentials(params);
 
+    // Normalize duration e.g. "1 Day Pass" or "24 Hours" -> "1 Day", "7 Days Pass" -> "7 Days", "30 Days Pass" -> "30 Days"
+    let cleanDuration = (params.duration || '').trim();
+    const durLower = cleanDuration.toLowerCase();
+    if (durLower.includes('1 day') || durLower.includes('24 hour') || durLower.includes('1day')) {
+      cleanDuration = '1 Day';
+    } else if (durLower.includes('7 day') || durLower.includes('week') || durLower.includes('7days')) {
+      cleanDuration = '7 Days';
+    } else if (durLower.includes('30 day') || durLower.includes('month') || durLower.includes('30days')) {
+      cleanDuration = '30 Days';
+    }
+
     const postData: Record<string, string> = {
       api_key: creds.apiKey,
       action: 'buy',
       product_id: params.productId,
-      duration: params.duration
+      duration: cleanDuration
     };
 
     if (params.androidId && params.androidId.trim()) {
@@ -66,7 +77,7 @@ export class BantiResellerService {
 
     console.log(`🔑 Dispatched BantiBhaiya Key Purchase Request to ${creds.url}:`, {
       product_id: params.productId,
-      duration: params.duration,
+      duration: cleanDuration,
       has_android_id: Boolean(params.androidId)
     });
 
@@ -114,8 +125,8 @@ export class BantiResellerService {
       }
 
       // If status is failed or error message is returned
-      if (data && (data.status === 'error' || data.success === false || data.error)) {
-        const errorMsg = data.message || data.error || data.msg || 'API returned an error';
+      if (data && (data.status === 'error' || data.success === false || data.error || data.message)) {
+        const errorMsg = data.message || data.error || data.msg || data.reason || 'API returned an error';
         console.warn('⚠️ BantiBhaiya API error response:', errorMsg);
         return {
           success: false,
@@ -139,7 +150,7 @@ export class BantiResellerService {
       // In sandbox/preview environments where external DNS or domain might be unreachable or testing
       // Generate a simulated provider key if test/sandbox mode is preferred
       const hex = Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      const simKey = `BANTI-${params.productId}-${params.duration.replace(/\s+/g, '').toUpperCase()}-${hex}`;
+      const simKey = `BANTI-${params.productId}-${cleanDuration.replace(/\s+/g, '').toUpperCase()}-${hex}`;
 
       return {
         success: true,
@@ -158,32 +169,29 @@ export class BantiResellerService {
   private extractKeyFromResponse(data: any, rawText: string): string | null {
     if (!data) return null;
 
-    if (typeof data.key === 'string' && data.key.trim().length > 3) {
-      return data.key.trim();
-    }
-    if (typeof data.license === 'string' && data.license.trim().length > 3) {
-      return data.license.trim();
-    }
-    if (typeof data.serial === 'string' && data.serial.trim().length > 3) {
-      return data.serial.trim();
-    }
-    if (typeof data.license_key === 'string' && data.license_key.trim().length > 3) {
-      return data.license_key.trim();
-    }
-    if (typeof data.product_key === 'string' && data.product_key.trim().length > 3) {
-      return data.product_key.trim();
-    }
-    if (typeof data.code === 'string' && data.code.trim().length > 3) {
-      return data.code.trim();
-    }
-    if (data.data && typeof data.data.key === 'string') {
-      return data.data.key.trim();
-    }
-    if (data.data && typeof data.data.license === 'string') {
-      return data.data.license.trim();
+    if (typeof data.key === 'string' && data.key.trim().length > 3) return data.key.trim();
+    if (typeof data.license === 'string' && data.license.trim().length > 3) return data.license.trim();
+    if (typeof data.serial === 'string' && data.serial.trim().length > 3) return data.serial.trim();
+    if (typeof data.license_key === 'string' && data.license_key.trim().length > 3) return data.license_key.trim();
+    if (typeof data.product_key === 'string' && data.product_key.trim().length > 3) return data.product_key.trim();
+    if (typeof data.code === 'string' && data.code.trim().length > 3) return data.code.trim();
+    if (typeof data.key_text === 'string' && data.key_text.trim().length > 3) return data.key_text.trim();
+    if (typeof data.key_string === 'string' && data.key_string.trim().length > 3) return data.key_string.trim();
+
+    if (data.data) {
+      if (typeof data.data.key === 'string') return data.data.key.trim();
+      if (typeof data.data.license === 'string') return data.data.license.trim();
+      if (typeof data.data.license_key === 'string') return data.data.license_key.trim();
+      if (typeof data.data.code === 'string') return data.data.code.trim();
+      if (typeof data.data === 'string' && data.data.trim().length > 3 && !data.data.includes('<')) return data.data.trim();
     }
 
-    // Check if plain text looks like a key (e.g. 8-64 alphanumeric chars with hyphens, not HTML)
+    if (data.result) {
+      if (typeof data.result.key === 'string') return data.result.key.trim();
+      if (typeof data.result.license === 'string') return data.result.license.trim();
+    }
+
+    // Check if plain text looks like a key (e.g. 8-80 alphanumeric chars with hyphens, not HTML)
     const trimmed = rawText.trim();
     if (
       trimmed.length >= 8 &&
