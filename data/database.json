@@ -111,103 +111,7 @@
       "role": "Regular"
     }
   ],
-  "products": [
-    {
-      "is_maintenance": 0,
-      "reseller_price": 230,
-      "stock": 0,
-      "panel_name": "DRIP CLIENT FF NONROOT APKMOD",
-      "validity": "30 day",
-      "requires_android_id": false,
-      "maintenance_note": "",
-      "name": "30 day",
-      "category": "ANDROID NON ROOT PANEL",
-      "price_inr": 260,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "api_provider",
-      "apk_link": "",
-      "id": 1,
-      "provider_duration": "30 DaYS NONROOT",
-      "provider_product_id": "62"
-    },
-    {
-      "requires_android_id": false,
-      "stock": 0,
-      "device_limit": "1 Device HWID",
-      "reseller_price": 110,
-      "id": 1790246534264,
-      "validity": "7 days",
-      "delivery_mode": "api_provider",
-      "is_maintenance": 0,
-      "provider_product_id": "62",
-      "panel_name": "DRIP CLIENT FF NONROOT APKMOD",
-      "provider_duration": "7 DaYS NONROOT",
-      "category": "ANDROID NON ROOT PANEL",
-      "maintenance_note": "",
-      "apk_link": "",
-      "price_inr": 140,
-      "is_active": 1,
-      "name": "7 days"
-    },
-    {
-      "device_limit": "1 Device HWID",
-      "reseller_price": 180,
-      "delivery_mode": "api_provider",
-      "is_maintenance": 0,
-      "requires_android_id": false,
-      "apk_link": "",
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "DRIP CLIENT FF NONROOT APKMOD",
-      "id": 1790246531712,
-      "stock": 0,
-      "name": "15 Days",
-      "price_inr": 200,
-      "is_active": 1,
-      "validity": "15 Days",
-      "provider_product_id": "62",
-      "maintenance_note": "",
-      "provider_duration": "15 DaYS NONROOT"
-    },
-    {
-      "requires_android_id": false,
-      "stock": 0,
-      "is_active": 1,
-      "price_inr": 100,
-      "validity": "3 day",
-      "is_maintenance": 0,
-      "device_limit": "1 Device HWID",
-      "name": "3 day",
-      "reseller_price": 75,
-      "provider_product_id": "62",
-      "apk_link": "",
-      "id": 1790246531104,
-      "delivery_mode": "api_provider",
-      "maintenance_note": "",
-      "provider_duration": "3 DaYS NONROOT",
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "DRIP CLIENT FF NONROOT APKMOD"
-    },
-    {
-      "validity": "1 day",
-      "provider_product_id": "62",
-      "provider_duration": "1 DaYS NONROOT",
-      "is_active": 1,
-      "stock": 0,
-      "price_inr": 30,
-      "id": 1790246531120,
-      "requires_android_id": false,
-      "apk_link": "",
-      "name": "1 day",
-      "delivery_mode": "api_provider",
-      "device_limit": "1 Device HWID",
-      "is_maintenance": 0,
-      "maintenance_note": "",
-      "panel_name": "DRIP CLIENT FF NONROOT APKMOD",
-      "category": "ANDROID NON ROOT PANEL",
-      "reseller_price": 20
-    }
-  ],
+  "products": [],
   "productKeys": [],
   "orders": [],
   "tickets": [],
@@ -255,6 +159,265 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790256615775,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:30:15"
+    },
+    {
+      "id": 1790256531142,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:28:51"
+    },
+    {
+      "id": 1790256515737,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:28:35"
+    },
+    {
+      "id": 1790256506456,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:28:26"
+    },
+    {
+      "id": 1790256450362,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:27:30"
+    },
+    {
+      "id": 1790255664779,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 Day",
+      "timestamp": "2026-09-24 13:14:24"
+    },
+    {
+      "id": 1790255656686,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 Day",
+      "timestamp": "2026-09-24 13:14:16"
+    },
+    {
+      "id": 1790255619671,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:13:39"
+    },
+    {
+      "id": 1790255615085,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:13:35"
+    },
+    {
+      "id": 1790255395623,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:09:55"
+    },
+    {
+      "id": 1790255391108,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:09:51"
+    },
+    {
+      "id": 1790255327964,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790255340552",
+      "timestamp": "2026-09-24 13:08:47"
+    },
+    {
+      "id": 1790255309579,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 Day",
+      "timestamp": "2026-09-24 13:08:29"
+    },
+    {
+      "id": 1790255304883,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 Day",
+      "timestamp": "2026-09-24 13:08:24"
+    },
+    {
+      "id": 1790255303426,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 Day",
+      "timestamp": "2026-09-24 13:08:23"
+    },
+    {
+      "id": 1790255297073,
+      "user_id": 12846461,
+      "action": "CREATE_PRODUCT",
+      "details": "Created product: Lifetime",
+      "timestamp": "2026-09-24 13:08:17"
+    },
+    {
+      "id": 1790255297068,
+      "user_id": 12846461,
+      "action": "CREATE_PRODUCT",
+      "details": "Created product: 30 Days",
+      "timestamp": "2026-09-24 13:08:17"
+    },
+    {
+      "id": 1790255297036,
+      "user_id": 12846461,
+      "action": "CREATE_PRODUCT",
+      "details": "Created product: 7 Days",
+      "timestamp": "2026-09-24 13:08:17"
+    },
+    {
+      "id": 1790255296879,
+      "user_id": 12846461,
+      "action": "CREATE_PRODUCT",
+      "details": "Created product: 1 Day",
+      "timestamp": "2026-09-24 13:08:16"
+    },
+    {
+      "id": 1790255201353,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 13:06:41"
+    },
+    {
+      "id": 1790254709927,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:58:29"
+    },
+    {
+      "id": 1790254429026,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:53:49"
+    },
+    {
+      "id": 1790254157590,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:49:17"
+    },
+    {
+      "id": 1790254153223,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:49:13"
+    },
+    {
+      "id": 1790254078240,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1",
+      "timestamp": "2026-09-24 12:47:58"
+    },
+    {
+      "id": 1790254078002,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1",
+      "timestamp": "2026-09-24 12:47:58"
+    },
+    {
+      "id": 1790254077757,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1",
+      "timestamp": "2026-09-24 12:47:57"
+    },
+    {
+      "id": 1790254077630,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790246531712",
+      "timestamp": "2026-09-24 12:47:57"
+    },
+    {
+      "id": 1790254077158,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790246531712",
+      "timestamp": "2026-09-24 12:47:57"
+    },
+    {
+      "id": 1790254076958,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790246534264",
+      "timestamp": "2026-09-24 12:47:56"
+    },
+    {
+      "id": 1790254076724,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790246531104",
+      "timestamp": "2026-09-24 12:47:56"
+    },
+    {
+      "id": 1790254075595,
+      "user_id": 12846461,
+      "action": "DELETE_PRODUCT",
+      "details": "Deleted product ID: 1790246531120",
+      "timestamp": "2026-09-24 12:47:55"
+    },
+    {
+      "id": 1790254069028,
+      "user_id": 12846461,
+      "action": "UPDATE_PRODUCT",
+      "details": "Updated product: 1 day",
+      "timestamp": "2026-09-24 12:47:49"
+    },
+    {
+      "id": 1790253995432,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:46:35"
+    },
+    {
+      "id": 1790253800260,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:43:20"
+    },
+    {
+      "id": 1790253729570,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:42:09"
+    },
+    {
+      "id": 1790253714750,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-24 12:41:54"
+    },
     {
       "id": 1790246386005,
       "user_id": 12846461,

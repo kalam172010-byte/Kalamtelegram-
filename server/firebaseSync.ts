@@ -113,10 +113,16 @@ async function performActualFirestoreSave(data: any): Promise<void> {
   try {
     // Sanitize data for Firestore (JSON stringifiable)
     const cleanData = JSON.parse(JSON.stringify(data));
+    if (Array.isArray(cleanData.products)) {
+      cleanData.products = cleanData.products.filter((p: any) => {
+        const name = ((p.panel_name || p.name || '') + '').toLowerCase();
+        return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
+      });
+    }
     await setDoc(STORE_DOC, {
       ...cleanData,
       last_synced_at: new Date().toISOString()
-    }, { merge: true });
+    });
     // Clear any previous error flag on success
     isQuotaExhausted = false;
   } catch (err: any) {

@@ -64,9 +64,12 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        let products: Product[] = Array.isArray(parsed.products) && parsed.products.length > 0 
-          ? parsed.products 
-          : INITIAL_PRODUCTS;
+        let products: Product[] = Array.isArray(parsed.products)
+          ? parsed.products.filter((p: any) => {
+              const name = ((p.panel_name || p.name || '') + '').toLowerCase();
+              return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
+            })
+          : [];
         let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
 
         // Deduplicate and assign strictly unique IDs to all duration plans
@@ -109,13 +112,6 @@ export class DatabaseStore {
           fsmStates: parsed.fsmStates || {},
           bots: Array.isArray(parsed.bots) ? parsed.bots : []
         };
-
-        // If products were empty, persist initial catalog to disk
-        if (parsed.products && parsed.products.length === 0) {
-          try {
-            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-          } catch (e) {}
-        }
 
         return data;
       }
@@ -208,9 +204,13 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Merge Products & Keys with strict ID uniqueness
-      if (Array.isArray(remote.products) && remote.products.length > 0) {
+      // 3. Merge Products & Keys with strict ID uniqueness & demo filter
+      if (Array.isArray(remote.products)) {
         this.data.products = remote.products
+          .filter((p: any) => {
+            const name = ((p.panel_name || p.name || '') + '').toLowerCase();
+            return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
+          })
           .map((p: any, idx: number) => ({
             ...p,
             id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),

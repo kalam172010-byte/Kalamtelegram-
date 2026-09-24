@@ -250,10 +250,13 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // If it contains legacy hardcoded demo IDs and user never added custom ones, start clean
-        const isLegacyDemo = Array.isArray(parsed) && parsed.some(p => p.panel_name === 'MST PANEL' || p.panel_name === 'DRIP PANEL');
-        if (!isLegacyDemo && Array.isArray(parsed)) {
-          return parsed.map((p, idx) => ({
+        if (Array.isArray(parsed)) {
+          // Filter out legacy dummy demo panels
+          const clean = parsed.filter(p => {
+            const pName = (p.panel_name || p.name || '').toLowerCase();
+            return !pName.includes('drip client') && !pName.includes('mst panel') && !pName.includes('drip panel');
+          });
+          return clean.map((p, idx) => ({
             ...p,
             id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
             reseller_price: p.reseller_price ?? p.price_inr,
@@ -264,7 +267,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Error parsing products', e);
       }
     }
-    return INITIAL_PRODUCTS;
+    return [];
   });
 
   const [productKeys, setProductKeys] = useState<ProductKey[]>(() => {
