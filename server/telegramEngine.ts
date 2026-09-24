@@ -253,22 +253,35 @@ class TelegramEngine {
       return;
     }
 
-    const conn = await this.testConnection();
-    if (!conn.success) {
-      console.log('Telegram Bot Token not valid or not set. Running in standby mode.');
-      return;
+    // Auto-heal missing settings token from bots storage if available
+    let currentToken = dbStore.getData().settings.bot_token;
+    if (!currentToken || currentToken.includes('exampleToken')) {
+      const storedBots = dbStore.getBots();
+      const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
+      if (validBot) {
+        dbStore.updateSettings({
+          bot_token: validBot.bot_token,
+          bot_username: validBot.username,
+          admin_id: validBot.admin_id || validBot.admin_chat_id || dbStore.getData().settings.admin_id
+        });
+      }
     }
 
     this.isRunning = true;
     this.pollingAbortController = new AbortController();
 
-    try {
-      await this.callApi('deleteWebhook', { drop_pending_updates: false });
-    } catch (e) {
-      // ignore
+    const conn = await this.testConnection();
+    if (!conn.success) {
+      console.log('Telegram Bot Token standby mode: Waiting for token configuration...');
+    } else {
+      try {
+        await this.callApi('deleteWebhook', { drop_pending_updates: false });
+      } catch (e) {
+        // ignore
+      }
+      console.log(`⚡ Telegram Bot Polling Engine started for @${this.botInfo?.username}`);
     }
 
-    console.log(`⚡ Telegram Bot Polling Engine started for @${this.botInfo?.username}`);
     this.pollLoop();
   }
 
@@ -299,10 +312,23 @@ class TelegramEngine {
   private async pollLoop() {
     while (this.isRunning) {
       try {
-        const token = dbStore.getData().settings.bot_token;
+        let token = dbStore.getData().settings.bot_token;
         if (!token || token.includes('exampleToken')) {
-          this.isRunning = false;
-          break;
+          // Check stored bots fallback
+          const storedBots = dbStore.getBots();
+          const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
+          if (validBot) {
+            token = validBot.bot_token;
+            dbStore.updateSettings({
+              bot_token: validBot.bot_token,
+              bot_username: validBot.username
+            });
+          } else {
+            // Standby mode - wait 3 seconds and check again
+            this.isConnected = false;
+            await new Promise(r => setTimeout(r, 3000));
+            continue;
+          }
         }
 
         const url = `https://api.telegram.org/bot${token}/getUpdates`;
@@ -1743,13 +1769,15 @@ class TelegramEngine {
 
         if (isMaint) {
           buttons.push([{
-            text: `🛠️ ${plan.name} - Under Maintenance`,
-            callback_data: `maint_${plan.id}`
+            text: `🛠️ ${targetPanelName} (${plan.name}) - Under Maintenance 🛠️`,
+            callback_data: `maint_${plan.id}`,
+            style: 'danger'
           }]);
         } else {
           buttons.push([{
-            text: `⚡ ${plan.name} - ₹${userPrice} ${stockTag}`,
-            callback_data: `prod_${plan.id}`
+            text: `⚡ ${targetPanelName} - ${plan.name} (₹${userPrice}) ${stockTag}`,
+            callback_data: `prod_${plan.id}`,
+            style: 'primary'
           }]);
         }
       }

@@ -407,6 +407,11 @@ export const TelegramBotView: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
             {quickCommands.map((q, idx) => {
               const IconComp = q.icon;
+              let btnStyle = "bg-[#1d6fa5] hover:bg-[#2282c2] border-[#3498db]/40";
+              if (q.cmd === '/balance') btnStyle = "bg-[#157934] hover:bg-[#198f3d] border-[#2ecc71]/40";
+              else if (q.cmd === '/profile' || q.cmd === '/reseller' || q.cmd === '/vip') btnStyle = "bg-[#6b21a8] hover:bg-[#7e22ce] border-[#a855f7]/40";
+              else if (q.cmd === '/admin') btnStyle = "bg-[#9b2828] hover:bg-[#b32e2e] border-[#e74c3c]/40";
+
               return (
                 <button
                   key={idx}
@@ -415,12 +420,12 @@ export const TelegramBotView: React.FC = () => {
                     sendUserMessage(q.cmd);
                     setShowCommandsMenu(false);
                   }}
-                  className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-left text-xs font-medium text-slate-200 transition active:scale-[0.98] border border-slate-700/60 cursor-pointer shadow-sm"
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl text-left text-xs font-medium text-white transition active:scale-[0.98] border cursor-pointer shadow-md ${btnStyle}`}
                 >
-                  <IconComp className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <IconComp className="w-4 h-4 text-white shrink-0" />
                   <div className="truncate">
                     <span className="block text-white font-bold text-xs">{q.label}</span>
-                    <span className="text-[11px] text-cyan-300/80 font-mono">{q.cmd}</span>
+                    <span className="text-[11px] text-white/90 font-mono">{q.cmd}</span>
                   </div>
                 </button>
               );

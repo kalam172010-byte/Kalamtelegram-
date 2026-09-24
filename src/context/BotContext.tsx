@@ -474,7 +474,18 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setCoupons(serverData.coupons);
             }
             if (Array.isArray(serverData.bots)) {
-              setBots(serverData.bots);
+              if (serverData.bots.length > 0) {
+                setBots(prev => {
+                  const botMap = new Map<string, BotInstance>();
+                  prev.forEach(b => botMap.set(b.id, b));
+                  serverData.bots.forEach((sb: BotInstance) => {
+                    if (sb && sb.id) {
+                      botMap.set(sb.id, { ...(botMap.get(sb.id) || {}), ...sb });
+                    }
+                  });
+                  return Array.from(botMap.values());
+                });
+              }
             }
             if (serverData.settings) {
               setSettings(prev => ({ ...prev, ...serverData.settings }));
@@ -525,11 +536,21 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Firestore Sync for Bots
     const unsubBots = onSnapshot(collection(db, 'bots'), (snapshot) => {
-      const cloudBots: BotInstance[] = [];
-      snapshot.forEach((docSnap) => {
-        cloudBots.push(docSnap.data() as BotInstance);
-      });
-      setBots(cloudBots);
+      if (!snapshot.empty) {
+        const cloudBots: BotInstance[] = [];
+        snapshot.forEach((docSnap) => {
+          const b = docSnap.data() as BotInstance;
+          if (b && b.id) cloudBots.push(b);
+        });
+        if (cloudBots.length > 0) {
+          setBots(prev => {
+            const map = new Map<string, BotInstance>();
+            prev.forEach(b => map.set(b.id, b));
+            cloudBots.forEach(cb => map.set(cb.id, { ...(map.get(cb.id) || {}), ...cb }));
+            return Array.from(map.values());
+          });
+        }
+      }
     }, (err) => {
       console.warn('Firestore bots sync notice:', err.message);
     });
@@ -1894,12 +1915,16 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         }
       }
 
-      const kb: InlineKeyboardButton[][] = availablePanels.map(panel => ([{
-        text: panel,
-        callback_data: `pnl_${category}_${panel}`,
-        icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
-        style: 'primary' as const
-      }]));
+      const kb: InlineKeyboardButton[][] = availablePanels.map(panel => {
+        const firstProd = products.find(p => p.category.toLowerCase() === category.toLowerCase() && p.panel_name.toLowerCase() === panel.toLowerCase() && p.is_active === 1);
+        const refId = firstProd ? firstProd.id : 0;
+        return [{
+          text: `📦 ${panel}`,
+          callback_data: refId ? `pnl_${refId}` : `pnl_${category}_${panel}`,
+          icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
+          style: 'primary' as const
+        }];
+      });
 
       kb.push([
         {
@@ -1910,22 +1935,42 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         }
       ]);
 
-      const text = `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()} PANELS</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a panel name:</b>`;
+      const text = `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()} PANELS</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a panel to view its duration plans:</b>`;
       editLastBotMessage(text, kb);
       return;
     }
 
     // 4. Panel Selected: View Packages & Pricing
     if (callbackData.startsWith('pnl_')) {
-      const parts = callbackData.replace('pnl_', '').split('_');
-      const category = parts[0];
-      const panelName = parts.slice(1).join('_');
+      const rawPayload = callbackData.replace('pnl_', '');
+      let prods: Product[] = [];
+      let category = '';
+      let panelName = '';
 
-      const prods = products.filter(p =>
-        p.category.toLowerCase() === category.toLowerCase() &&
-        p.panel_name.toLowerCase() === panelName.toLowerCase() &&
-        p.is_active === 1
-      );
+      const numericId = Number(rawPayload);
+      if (!isNaN(numericId) && numericId > 0) {
+        const refProd = products.find(p => p.id === numericId);
+        if (refProd) {
+          category = refProd.category;
+          panelName = refProd.panel_name || refProd.name;
+          prods = products.filter(p =>
+            p.category.toLowerCase() === category.toLowerCase() &&
+            (p.panel_name || p.name).toLowerCase() === panelName.toLowerCase() &&
+            p.is_active === 1
+          );
+        }
+      }
+
+      if (prods.length === 0) {
+        const parts = rawPayload.split('_');
+        category = parts[0];
+        panelName = parts.slice(1).join('_');
+        prods = products.filter(p =>
+          p.category.toLowerCase() === category.toLowerCase() &&
+          p.panel_name.toLowerCase() === panelName.toLowerCase() &&
+          p.is_active === 1
+        );
+      }
 
       if (prods.length === 0) {
         pushBotMessage("No products found for this panel.", getBackKeyboard('menu_shop'));
@@ -1944,10 +1989,12 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         const isMaint = Boolean(p.is_maintenance);
         const stockStatus = isMaint ? '🛠️ Under Maintenance' : (p.stock > 0 ? `✅ In Stock (${p.stock})` : "❌ Out of Stock");
 
-        text += `${getEmojiTag('product_store')} ⏱ <b>Validity: ${p.name}</b>\n`;
+        text += `${getEmojiTag('product_store')} ⏱ <b>Plan: ${p.name}</b>\n`;
         if (isReseller) {
           text += `💰 Regular Price: <s>${fmtCurr(normalPrice)}</s>\n`;
           text += `👑 <b>Wholesale Reseller Price: ${fmtCurr(finalPrice)}</b>\n`;
+        } else if (currentUser.is_vip) {
+          text += `💎 <b>VIP 15% OFF Price: ${fmtCurr(finalPrice)}</b> (Regular: ${fmtCurr(normalPrice)})\n`;
         } else {
           text += `💰 Price: ${fmtCurr(normalPrice)}\n`;
         }
@@ -1955,33 +2002,80 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
         if (isMaint) {
           kb.push([{
-            text: `🛠️ ${p.name} (Under Maintenance)`,
+            text: `🛠️ ${panelName} (${p.name}) - Under Maintenance 🛠️`,
             callback_data: `maint_${p.id}`,
             style: "danger"
           }]);
-        } else if (p.stock > 0) {
-          kb.push([{
-            text: `Buy ${p.name} - ${fmtCurr(finalPrice)}`,
-            callback_data: `buy_${p.id}`,
-            icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
-            style: "success"
-          }]);
         } else {
           kb.push([{
-            text: `❌ ${p.name} (Out of Stock)`,
-            callback_data: "ignore_stock_click",
-            style: "danger"
+            text: `⚡ ${panelName} - ${p.name} (${fmtCurr(finalPrice)})`,
+            callback_data: `prod_${p.id}`,
+            icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
+            style: "primary"
           }]);
         }
       });
 
-      text += `${getEmojiTag('point_down')} <b>Select package below to instantly purchase:</b>`;
+      text += `${getEmojiTag('point_down')} <b>Select any plan above to view full details & purchase:</b>`;
       kb.push([{
         text: "BACK TO PANELS",
         callback_data: `cat_${category}`,
         icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
         style: "danger"
       }]);
+
+      editLastBotMessage(text, kb);
+      return;
+    }
+
+    // 4a. Single Product Plan View
+    if (callbackData.startsWith('prod_')) {
+      const prodId = Number(callbackData.replace('prod_', ''));
+      const prod = products.find(p => p.id === prodId);
+
+      if (!prod || !prod.is_active) {
+        pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
+        return;
+      }
+
+      const isReseller = Boolean(currentUser.is_reseller);
+      const normalPrice = prod.price_inr;
+      const finalPrice = isReseller ? prod.reseller_price : (currentUser.is_vip ? Math.round(normalPrice * 0.85) : normalPrice);
+      const isMaint = Boolean(prod.is_maintenance);
+
+      let text = `📦 <b>${prod.panel_name}</b>\n` +
+        `⏱ <b>Duration Plan:</b> ${prod.name}\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📂 <b>Category:</b> ${prod.category}\n` +
+        `⏳ <b>Validity:</b> ${prod.validity}\n` +
+        `🔒 <b>Device Limit:</b> ${prod.device_limit}\n` +
+        `💰 <b>Price:</b> <b>${fmtCurr(finalPrice)}</b>\n` +
+        `📦 <b>Stock Status:</b> ${isMaint ? '🛠 Under Maintenance' : (prod.stock > 0 ? `✅ In Stock (${prod.stock})` : '❌ Out of Stock')}\n` +
+        `💳 <b>Your Wallet Balance:</b> ${fmtCurr(currentUser.balance)}\n`;
+
+      if (prod.apk_link && prod.apk_link.startsWith('http')) {
+        text += `📥 <b>APK Download Link:</b> <a href="${prod.apk_link}">Click Here</a>\n`;
+      }
+
+      text += `━━━━━━━━━━━━━━━━━━━━\n` +
+        `<i>Keys are delivered immediately upon checkout directly to this chat!</i>`;
+
+      const kb: InlineKeyboardButton[][] = [];
+
+      if (isMaint) {
+        kb.push([{ text: `🛠️ Under Maintenance`, callback_data: `maint_${prod.id}`, style: "warning" }]);
+      } else if (prod.stock > 0) {
+        kb.push([{ text: `🛒 CONFIRM & BUY NOW (${fmtCurr(finalPrice)})`, callback_data: `buy_${prod.id}`, style: "danger" }]);
+      } else {
+        kb.push([{ text: `❌ Out of Stock`, callback_data: "ignore_stock_click", style: "danger" }]);
+      }
+
+      kb.push([
+        { text: "💳 Add Balance", callback_data: "menu_add_balance", style: "success" }
+      ]);
+      kb.push([
+        { text: "🔙 Back to Plans", callback_data: `pnl_${prod.id}`, style: "secondary" },
+        { text: "🛒 Store Catalog", callback_data: "menu_shop", style: "primary" }
+      ]);
 
       editLastBotMessage(text, kb);
       return;
