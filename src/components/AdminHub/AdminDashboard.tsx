@@ -450,10 +450,10 @@ export const AdminDashboard: React.FC = () => {
 
   // Multi-Plan Product Creation Form State
   const [multiProdForm, setMultiProdForm] = useState({
-    category: 'ANDROID NON ROOT PANEL',
+    category: '',
     panel_name: '',
     apk_link: '',
-    device_limit: '1 Device HWID',
+    device_limit: '',
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
     provider_product_id: '',
     requires_android_id: 0,
@@ -675,42 +675,12 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
-
-    multiProdForm.plans.forEach((plan, planIdx) => {
-      const keysArray = plan.keys.split('\n').map(k => k.trim()).filter(Boolean);
-      const uniquePlanId = Date.now() + planIdx + Math.floor(Math.random() * 100000);
-      addProduct(
-        {
-          id: uniquePlanId,
-          category: multiProdForm.category,
-          panel_name: multiProdForm.panel_name.trim(),
-          name: plan.name.trim() || plan.validity.trim(),
-          price_inr: Number(plan.price_inr),
-          reseller_price: Number(plan.reseller_price),
-          validity: plan.validity.trim() || plan.name.trim(),
-          device_limit: multiProdForm.device_limit || '1 Device HWID',
-          apk_link: multiProdForm.apk_link,
-          is_active: 1,
-          is_maintenance: plan.is_maintenance ? 1 : 0,
-          maintenance_note: '',
-          delivery_mode: multiProdForm.delivery_mode,
-          provider_product_id: multiProdForm.provider_product_id,
-          provider_duration: plan.provider_duration?.trim() || plan.validity?.trim() || plan.name?.trim(),
-          requires_android_id: Boolean(multiProdForm.requires_android_id)
-        },
-        keysArray
-      );
-    });
-
-    setShowAddProductModal(false);
+  const resetAddProductState = () => {
     setMultiProdForm({
-      category: 'ANDROID NON ROOT PANEL',
+      category: '',
       panel_name: '',
       apk_link: '',
-      device_limit: '1 Device HWID',
+      device_limit: '',
       delivery_mode: 'api_provider',
       provider_product_id: '',
       requires_android_id: 0,
@@ -719,6 +689,48 @@ export const AdminDashboard: React.FC = () => {
       ]
     });
   };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
+
+    try {
+      const dbPromises = multiProdForm.plans.map((plan, planIdx) => {
+        const keysArray = plan.keys.split('\n').map(k => k.trim()).filter(Boolean);
+        const uniquePlanId = Date.now() + planIdx + Math.floor(Math.random() * 100000);
+        return addProduct(
+          {
+            id: uniquePlanId,
+            category: multiProdForm.category,
+            panel_name: multiProdForm.panel_name.trim(),
+            name: plan.name.trim() || plan.validity.trim(),
+            price_inr: Number(plan.price_inr),
+            reseller_price: Number(plan.reseller_price),
+            validity: plan.validity.trim() || plan.name.trim(),
+            device_limit: multiProdForm.device_limit || '1 Device HWID',
+            apk_link: multiProdForm.apk_link,
+            is_active: 1,
+            is_maintenance: plan.is_maintenance ? 1 : 0,
+            maintenance_note: '',
+            delivery_mode: multiProdForm.delivery_mode,
+            provider_product_id: multiProdForm.provider_product_id,
+            provider_duration: plan.provider_duration?.trim() || plan.validity?.trim() || plan.name?.trim(),
+            requires_android_id: Boolean(multiProdForm.requires_android_id)
+          },
+          keysArray
+        );
+      });
+
+      await Promise.all(dbPromises);
+      setShowAddProductModal(false);
+    } catch (err) {
+      console.error('Error in database submission for new product:', err);
+    } finally {
+      resetAddProductState();
+    }
+  };
+
+  const handleCreateProduct = handleAddProduct;
 
   const handleAddPlanToExistingProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();

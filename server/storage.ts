@@ -24,6 +24,25 @@ import {
   INITIAL_BOTS
 } from '../src/data/defaultData';
 
+function matchCategoryFlexible(c1Str: string, c2Str: string): boolean {
+  if (!c1Str || !c2Str) return false;
+  const c1 = (c1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const c2 = (c2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!c1 || !c2) return false;
+  if (c1 === c2 || c1.includes(c2) || c2.includes(c1)) return true;
+  if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
+  if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
+  if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
+  return false;
+}
+
+function matchNameFlexible(n1Str: string, n2Str: string): boolean {
+  if (!n1Str || !n2Str) return false;
+  const n1 = (n1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const n2 = (n2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+}
+
 export interface DatabaseSchema {
   users: User[];
   products: Product[];
@@ -205,18 +224,21 @@ export class DatabaseStore {
       }
 
       // 3. Merge Products & Keys with strict ID uniqueness & demo filter
-      if (Array.isArray(remote.products)) {
-        this.data.products = remote.products
-          .filter((p: any) => {
-            const name = ((p.panel_name || p.name || '') + '').toLowerCase();
-            return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
-          })
-          .map((p: any, idx: number) => ({
-            ...p,
-            id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
-            reseller_price: p.reseller_price ?? p.price_inr,
-            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
-          }));
+      if (Array.isArray(remote.products) && remote.products.length > 0) {
+        // Only populate remote products if local disk product store is uninitialized
+        if (!fs.existsSync(DB_FILE) || this.data.products.length === 0) {
+          this.data.products = remote.products
+            .filter((p: any) => {
+              const name = ((p.panel_name || p.name || '') + '').toLowerCase();
+              return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
+            })
+            .map((p: any, idx: number) => ({
+              ...p,
+              id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+              reseller_price: p.reseller_price ?? p.price_inr,
+              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+            }));
+        }
       }
       if (Array.isArray(remote.productKeys)) {
         this.data.productKeys = remote.productKeys.filter((k: any) => this.data.products.some(p => String(p.id) === String(k.product_id)));
@@ -434,8 +456,8 @@ export class DatabaseStore {
   public updatePanel(category: string, panelName: string, updates: Partial<Product>): number {
     let updatedCount = 0;
     this.data.products = this.data.products.map(p => {
-      const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
-      const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+      const matchCat = matchCategoryFlexible(p.category, category);
+      const matchName = matchNameFlexible(p.panel_name || p.name, panelName);
       if (matchCat && matchName) {
         updatedCount++;
         return { ...p, ...updates };
@@ -476,8 +498,8 @@ export class DatabaseStore {
     const deletedProductIds = new Set<string>();
     
     this.data.products = this.data.products.filter(p => {
-      const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
-      const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+      const matchCat = matchCategoryFlexible(p.category, category);
+      const matchName = matchNameFlexible(p.panel_name || p.name, panelName);
       if (matchCat && matchName) {
         deletedProductIds.add(String(p.id));
         return false;

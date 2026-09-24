@@ -2092,6 +2092,7 @@ class TelegramEngine {
       let pIdx = 1;
       for (const [pName, plans] of panelMap.entries()) {
         const sortedPlans = sortProductsByDuration(plans);
+        if (!sortedPlans || sortedPlans.length === 0) continue;
         const isUnderMaint = sortedPlans.some(p => Boolean(p.is_maintenance));
         const lowestPrice = Math.min(...plans.map(p => this.getUserPrice(user, p)));
 
@@ -2106,7 +2107,9 @@ class TelegramEngine {
       const buttons: any[] = [];
       for (const [pName, plans] of panelMap.entries()) {
         const sortedPlans = sortProductsByDuration(plans);
-        const firstProd = sortedPlans[0];
+        const firstProd = sortedPlans && sortedPlans.length > 0 ? sortedPlans[0] : null;
+        if (!firstProd || firstProd.id === undefined) continue;
+
         const isUnderMaint = sortedPlans.some(p => Boolean(p.is_maintenance));
 
         if (isUnderMaint) {

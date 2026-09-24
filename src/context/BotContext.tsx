@@ -182,7 +182,7 @@ export interface BotContextType {
   }) => Promise<{ success: boolean; recipientCount: number; message: string }>;
 
   // Admin DB Direct Manipulations
-  addProduct: (prod: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => void;
+  addProduct: (prod: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => Promise<void>;
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number | string) => void;
   deleteProducts: (ids: (number | string)[]) => void;
@@ -3458,7 +3458,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   // Direct Admin Database Actions
-  const addProduct = (prodData: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => {
+  const addProduct = async (prodData: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]): Promise<void> => {
     const newId = prodData.id || (Date.now() + Math.floor(Math.random() * 100000));
     const cleanKeys = keys.map(k => k.trim()).filter(Boolean);
     const newProduct: Product = {
@@ -3497,10 +3497,12 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     logActivity(12846461, 'ADMIN_ADD_PRODUCT', `Added ${newProduct.name} (${cleanKeys.length} keys)`);
 
     // Sync in Real-Time to Cloud Firestore
-    setDoc(doc(db, 'products', String(newId)), newProduct).catch(() => {});
+    const firestorePromise = setDoc(doc(db, 'products', String(newId)), newProduct).catch((err) => {
+      console.warn('Firestore sync failed for new product:', err);
+    });
 
     // Sync in Real-Time to Backend Server (Live Telegram Engine Storage)
-    fetch('/api/products', {
+    const apiPromise = fetch('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3516,6 +3518,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       }
     })
     .catch(err => console.warn('Failed to sync new product to server:', err));
+
+    await Promise.allSettled([firestorePromise, apiPromise]);
   };
 
   const updateProduct = (id: number, fields: Partial<Product>) => {
@@ -3686,10 +3690,22 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const deletePanel = (category: string, panelName: string) => {
     const deletedIds: string[] = [];
+    
+    const catNorm = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const nameNorm = (panelName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     setProducts(prev => {
       const updated = prev.filter(p => {
-        const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
-        const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+        const pCatNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const pNameNorm = (p.panel_name || p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const matchCat = pCatNorm === catNorm || pCatNorm.includes(catNorm) || catNorm.includes(pCatNorm) ||
+          (pCatNorm.includes('nonroot') && catNorm.includes('nonroot')) ||
+          (!pCatNorm.includes('non') && pCatNorm.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
+          ((pCatNorm.includes('pc') || pCatNorm.includes('emulator')) && (catNorm.includes('pc') || catNorm.includes('emulator')));
+
+        const matchName = pNameNorm === nameNorm || pNameNorm.includes(nameNorm) || nameNorm.includes(pNameNorm);
+
         if (matchCat && matchName) {
           deletedIds.push(String(p.id));
           return false;
@@ -3707,11 +3723,18 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       return updated;
     });
 
-    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);
-
-    deletedIds.forEach(id => {
-      deleteDoc(doc(db, 'products', id)).catch(() => {});
+    setBots(prev => {
+      const deletedSet = new Set(deletedIds);
+      const updated = prev.map(b => ({
+        ...b,
+        products: (b.products || []).filter(p => !deletedSet.has(String(p.id))),
+        productKeys: (b.productKeys || []).filter(k => !deletedSet.has(String(k.product_id)))
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
     });
+
+    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);
 
     fetch('/api/products', {
       method: 'POST',
