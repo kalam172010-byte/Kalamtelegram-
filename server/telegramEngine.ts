@@ -668,6 +668,23 @@ class TelegramEngine {
     return await this.callApi('editMessageText', payload);
   }
 
+  public async editMessageMedia(chatId: number, messageId: number, photoUrlOrFileId: string, caption?: string, replyMarkup?: any): Promise<any> {
+    const payload: any = {
+      chat_id: chatId,
+      message_id: messageId,
+      media: {
+        type: 'photo',
+        media: photoUrlOrFileId,
+        caption: caption ? (caption.length > 1024 ? caption.substring(0, 1020) + '...' : caption) : '',
+        parse_mode: 'HTML'
+      }
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
+    return await this.callApi('editMessageMedia', payload);
+  }
+
   public async answerCallback(callbackQueryId: string, text?: string, showAlert: boolean = false): Promise<any> {
     const payload: any = {
       callback_query_id: callbackQueryId,
@@ -2881,6 +2898,22 @@ class TelegramEngine {
     await this.sendMessage(chatId, text, keyboard);
   }
 
+  public async getUserProfilePhotoFileId(userId: number): Promise<string | null> {
+    try {
+      const photosRes = await this.callApi('getUserProfilePhotos', { user_id: userId, limit: 1 });
+      if (photosRes && photosRes.photos && photosRes.photos.length > 0) {
+        const photos = photosRes.photos[0];
+        const largestPhoto = photos[photos.length - 1];
+        if (largestPhoto && largestPhoto.file_id) {
+          return largestPhoto.file_id;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
   public async getUserProfilePhotoUrl(userId: number): Promise<string | null> {
     try {
       const photosRes = await this.callApi('getUserProfilePhotos', { user_id: userId, limit: 1 });
@@ -2913,16 +2946,21 @@ class TelegramEngine {
       keysText = `\n\n<i>You have not purchased any keys yet. Visit the Product Store to get started!</i>`;
     }
 
-    // Attempt to fetch real Telegram Profile Photo
-    let realPhotoUrl = await this.getUserProfilePhotoUrl(user.user_id).catch(() => null);
-    if (realPhotoUrl) {
-      user.avatar_url = realPhotoUrl;
-      dbStore.updateUser(user.user_id, { avatar_url: realPhotoUrl });
+    // Try getting user's direct Telegram profile photo file_id or profile photo URL
+    let photoSource: string | null = await this.getUserProfilePhotoFileId(user.user_id).catch(() => null);
+
+    if (!photoSource) {
+      photoSource = await this.getUserProfilePhotoUrl(user.user_id).catch(() => null);
     }
 
-    const avatarUrl = user.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.username || user.first_name || String(user.user_id))}`;
+    if (!photoSource) {
+      photoSource = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.first_name)}&background=0D8ABC&color=fff&size=512&bold=true`;
+    } else {
+      user.avatar_url = photoSource;
+      dbStore.updateUser(user.user_id, { avatar_url: photoSource });
+    }
 
-    const text = `<a href="${avatarUrl}">&#8203;</a>👤 <b>USER ACCOUNT PROFILE</b>\n\n` +
+    const text = `👤 <b>USER ACCOUNT PROFILE</b>\n\n` +
       `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
       `📛 <b>Name:</b> ${user.first_name} (@${user.username || 'none'})\n` +
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
@@ -2948,10 +2986,16 @@ class TelegramEngine {
     };
 
     if (messageId) {
-      await this.editMessageText(chatId, messageId, text, keyboard);
-    } else {
-      await this.sendMessage(chatId, text, keyboard);
+      try {
+        await this.editMessageMedia(chatId, messageId, photoSource, text, keyboard);
+        return;
+      } catch (e) {
+        // Fallback: If Telegram cannot convert text msg into media msg in-place, delete text msg & send photo msg
+        await this.deleteMessage(chatId, messageId).catch(() => {});
+      }
     }
+
+    await this.sendPhoto(chatId, photoSource, text, keyboard);
   }
 
   private async sendAddBalanceMenu(chatId: number, user: User, messageId?: number) {
