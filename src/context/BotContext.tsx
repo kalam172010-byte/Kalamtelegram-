@@ -189,6 +189,7 @@ export interface BotContextType {
   replyToTicket: (ticketId: number, replyText: string) => void;
   closeTicket: (ticketId: number) => void;
   updateSettings: (newSettings: Partial<Settings>) => void;
+  toggleMaintenanceMode: (forceState?: boolean) => Promise<void>;
   updateEmojiSlot: (slot: string, emojiId: string) => void;
   updateUserProfile: (updates: Partial<User>) => void;
   resetDatabaseToDefaults: () => void;
@@ -2402,6 +2403,7 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
 
     // Check Update
     if (callbackData === 'check_update') {
+      const apkUrl = settings.apk_download_url || settings.official_channel_link || 'https://t.me/KalamFFPanelAPKs';
       const text =
         `⚡ <b>KALAM FF PANEL - SYSTEM STATUS & UPDATES</b> ⚡\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2409,11 +2411,13 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
         `🛡 <b>Bypass Status:</b> 100% Anti-Ban Active & Safe\n` +
         `🎮 <b>Free Fire Version:</b> OB48 & FF MAX Supported\n` +
         `⚡ <b>Server Ping:</b> <code>14ms [Ultra Fast]</code>\n` +
+        `📥 <b>Latest APK Link:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
         `💳 <b>Auto UPI Gateway:</b> FamGateway Online (Instant Credit)\n` +
         `🔑 <b>Key Dispenser:</b> 100% Automated Instant Delivery\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `<i>All modules are operating smoothly with 99.9% uptime.</i>`;
       const kb: InlineKeyboardButton[][] = [
+        [{ text: "📥 Download Latest APK", url: apkUrl, style: "primary" }],
         [{ text: "🛒 Buy Now", callback_data: "menu_shop", style: "danger" }],
         getBackKeyboard('back_main')[0]
       ];
@@ -2437,7 +2441,10 @@ ${getEmojiTag('total_spent')} <b>Total Spent:</b> ${fmtCurr(currentUser.spent)}\
         return;
       }
 
-      const reward = 3.0; // ₹3.00 bonus
+      // Random small reward between ₹0.05 and ₹1.00
+      const possibleAmounts = [0.05, 0.10, 0.15, 0.20, 0.25, 0.35, 0.45, 0.50, 0.70, 0.85, 0.90, 0.97, 1.00];
+      const reward = possibleAmounts[Math.floor(Math.random() * possibleAmounts.length)];
+
       setUsers(prev => prev.map(u => u.user_id === currentUser.user_id ? { ...u, balance: u.balance + reward } : u));
       logActivity(currentUser.user_id, 'DAILY_GIFT', `Claimed daily reward bonus of ₹${reward.toFixed(2)}`);
       confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
@@ -3750,6 +3757,38 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
   };
 
+  const toggleMaintenanceMode = async (forceState?: boolean) => {
+    const nextMaintenance = forceState !== undefined ? forceState : !settings.maintenance_mode;
+    const nextBotStatus = nextMaintenance ? 'OFF' : 'ON';
+
+    const updates = {
+      maintenance_mode: nextMaintenance,
+      bot_status: nextBotStatus
+    };
+
+    setSettings(prev => {
+      const updated = { ...prev, ...updates };
+      localStorage.setItem('kalam_bot_settings', JSON.stringify(updated));
+      return updated;
+    });
+
+    setDoc(doc(db, 'settings', 'global'), updates, { merge: true }).catch(() => {});
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status) setBotStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Error toggling maintenance mode:', err);
+    }
+  };
+
   const updateEmojiSlot = (slot: string, emojiId: string) => {
     setEmojis(prev => ({ ...prev, [slot]: emojiId }));
   };
@@ -3757,12 +3796,20 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   const sendBroadcastMessage = async (params: {
     targetAudience: 'all' | 'referrers' | 'reseller' | 'non_reseller' | 'vip';
     text: string;
+    mediaType?: 'text' | 'photo' | 'video' | 'voice' | 'audio';
     imageUrl?: string;
+    videoUrl?: string;
+    voiceUrl?: string;
+    audioUrl?: string;
+    mediaUrl?: string;
+    mediaBase64?: string;
+    mediaFilename?: string;
+    mediaMimeType?: string;
     buttonText?: string;
     buttonUrl?: string;
     pinMessage?: boolean;
   }) => {
-    const { targetAudience, text, imageUrl, buttonText, buttonUrl, pinMessage } = params;
+    const { targetAudience, text, mediaType, imageUrl, videoUrl, voiceUrl, audioUrl, mediaUrl, mediaBase64, mediaFilename, mediaMimeType, buttonText, buttonUrl, pinMessage } = params;
 
     // Filter recipients
     let recipients = users;
@@ -3792,6 +3839,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           ]
         : undefined;
 
+    // Determine active media URL and type for preview
+    const activeMediaUrl = videoUrl || voiceUrl || audioUrl || imageUrl || mediaUrl;
+    const activeMediaType = mediaType || (videoUrl ? 'video' : voiceUrl ? 'voice' : audioUrl ? 'audio' : imageUrl || mediaUrl ? 'photo' : undefined);
+
     // Check if currently simulated user belongs to target audience
     const isCurrentInAudience =
       targetAudience === 'all' ||
@@ -3807,8 +3858,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         sender_name: '📢 KALAM FF BROADCAST',
         text: text,
         timestamp,
-        media_url: imageUrl?.trim() ? imageUrl.trim() : undefined,
-        media_type: imageUrl?.trim() ? 'photo' : undefined,
+        media_url: activeMediaUrl?.trim() ? activeMediaUrl.trim() : undefined,
+        media_type: activeMediaType as any,
         keyboard,
         is_broadcast: true
       };
@@ -3822,7 +3873,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       id: Date.now(),
       user_id: 12846461,
       action: 'ADMIN_BROADCAST',
-      details: `Broadcast sent to ${recipients.length} users (${targetAudience}): "${text.slice(0, 45)}..."`,
+      details: `Broadcast (${activeMediaType || 'text'}) sent to ${recipients.length} users (${targetAudience}): "${text.slice(0, 45)}..."`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
     };
 
@@ -4329,6 +4380,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         replyToTicket,
         closeTicket,
         updateSettings,
+        toggleMaintenanceMode,
         updateEmojiSlot,
         updateUserProfile,
         resetDatabaseToDefaults

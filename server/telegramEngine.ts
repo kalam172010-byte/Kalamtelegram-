@@ -53,27 +53,51 @@ class TelegramEngine {
     this.startWatchdog();
   }
 
+  private getValidTokenFromStore(): string {
+    const settings = dbStore.getData().settings;
+    if (settings.bot_token && !settings.bot_token.includes('exampleToken')) {
+      return settings.bot_token;
+    }
+    const storedBots = dbStore.getBots();
+    const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
+    if (validBot) {
+      dbStore.updateSettings({
+        bot_token: validBot.bot_token,
+        bot_username: validBot.username,
+        admin_id: validBot.admin_id || validBot.admin_chat_id || settings.admin_id
+      });
+      return validBot.bot_token;
+    }
+    return '';
+  }
+
   private startWatchdog() {
     if (this.watchdogTimer) {
       clearInterval(this.watchdogTimer);
     }
-    // Auto-reconnect watchdog runs every 8 seconds
+    // High-frequency 24/7 Watchdog runs every 5 seconds
     this.watchdogTimer = setInterval(async () => {
       try {
-        const token = dbStore.getData().settings.bot_token;
-        if (!token || token.includes('exampleToken')) {
+        const token = this.getValidTokenFromStore();
+        if (!token) {
           return;
         }
-        if (!this.isRunning) {
-          console.log('🔄 Telegram Watchdog: Auto-reconnecting bot engine...');
-          await this.start().catch((err: any) => {
-            console.warn('Telegram Watchdog reconnect notice:', err.message);
+
+        const now = Date.now();
+        const lastPollMs = this.lastPollTimestamp ? new Date(this.lastPollTimestamp).getTime() : 0;
+        const timeSinceLastPollSec = lastPollMs > 0 ? (now - lastPollMs) / 1000 : 999;
+
+        // Auto-heal if engine is stopped OR if last successful poll heartbeat was over 25 seconds ago
+        if (!this.isRunning || timeSinceLastPollSec > 25) {
+          console.log(`⚡ Telegram 24/7 Watchdog: Heartbeat missing or engine stopped [isRunning=${this.isRunning}, lastPoll=${Math.round(timeSinceLastPollSec)}s ago]. Auto-restarting Telegram Engine...`);
+          await this.restart().catch((err: any) => {
+            console.warn('Telegram Watchdog restart warning:', err.message);
           });
         }
       } catch (e: any) {
-        console.warn('Telegram Watchdog loop notice:', e.message);
+        console.warn('Telegram Watchdog loop tick warning:', e.message);
       }
-    }, 8000);
+    }, 5000);
   }
 
   public getStatus(): BotStatus {
@@ -112,7 +136,7 @@ class TelegramEngine {
     if (process.env.APP_URL && process.env.APP_URL.trim().startsWith('http')) {
       return process.env.APP_URL.trim();
     }
-    return 'https://ais-dev-4t7cgnx5jf2wmsgau33wmd-128464619421.asia-east1.run.app';
+    return '';
   }
 
   public isAdmin(user: User, chatId?: number): boolean {
@@ -307,80 +331,78 @@ class TelegramEngine {
   }
 
   /**
-   * Continuous long polling loop
+   * Continuous long polling loop with 24/7 resilience & auto-recovery
    */
   private async pollLoop() {
-    while (this.isRunning) {
-      try {
-        let token = dbStore.getData().settings.bot_token;
-        if (!token || token.includes('exampleToken')) {
-          // Check stored bots fallback
-          const storedBots = dbStore.getBots();
-          const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
-          if (validBot) {
-            token = validBot.bot_token;
-            dbStore.updateSettings({
-              bot_token: validBot.bot_token,
-              bot_username: validBot.username
-            });
-          } else {
-            // Standby mode - wait 3 seconds and check again
+    try {
+      while (this.isRunning) {
+        try {
+          const token = this.getValidTokenFromStore();
+          if (!token) {
             this.isConnected = false;
-            await new Promise(r => setTimeout(r, 3000));
+            await new Promise(r => setTimeout(r, 2000));
             continue;
           }
-        }
 
-        const url = `https://api.telegram.org/bot${token}/getUpdates`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            offset: this.updateOffset,
-            timeout: 20,
-            allowed_updates: ['message', 'callback_query']
-          }),
-          signal: this.pollingAbortController?.signal
-        });
+          const url = `https://api.telegram.org/bot${token}/getUpdates`;
+          
+          // Use 20s hard timeout per poll request so fetch can never hang infinitely
+          const pollSignal = AbortSignal.timeout(20000);
 
-        if (response.status === 409) {
-          // Conflict: e.g. previous webhook or getUpdates still active on Telegram's side
-          try {
-            await this.callApi('deleteWebhook', { drop_pending_updates: false });
-          } catch {}
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        }
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              offset: this.updateOffset,
+              timeout: 12, // 12 seconds Telegram long polling window
+              allowed_updates: ['message', 'callback_query']
+            }),
+            signal: pollSignal
+          });
 
-        if (!response.ok) {
-          const errBody = await response.text();
-          this.lastError = `HTTP ${response.status}: ${errBody || response.statusText}`;
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        }
-
-        const data = await response.json();
-        if (data.ok && Array.isArray(data.result)) {
-          this.lastPollTimestamp = new Date().toISOString();
-          this.isConnected = true;
-          this.lastError = null;
-          for (const update of data.result) {
-            this.updateOffset = update.update_id + 1;
-            this.updatesProcessed++;
-            await this.handleUpdate(update);
+          if (response.status === 409) {
+            // Conflict resolution: delete any lingering Telegram webhooks
+            try {
+              await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
+            } catch {}
+            await new Promise(r => setTimeout(r, 1500));
+            continue;
           }
-        } else if (!data.ok) {
-          this.lastError = data.description || 'Telegram API returned false status';
-          await new Promise(r => setTimeout(r, 2500));
+
+          if (!response.ok) {
+            const errBody = await response.text();
+            this.lastError = `HTTP ${response.status}: ${errBody || response.statusText}`;
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+
+          const data = await response.json();
+          if (data.ok && Array.isArray(data.result)) {
+            this.lastPollTimestamp = new Date().toISOString();
+            this.isConnected = true;
+            this.lastError = null;
+            for (const update of data.result) {
+              this.updateOffset = update.update_id + 1;
+              this.updatesProcessed++;
+              await this.handleUpdate(update);
+            }
+          } else if (!data.ok) {
+            this.lastError = data.description || 'Telegram API returned false status';
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        } catch (err: any) {
+          if (!this.isRunning) {
+            break;
+          }
+          this.lastError = err.message || 'Polling request interrupted';
+          // Seamless retry on network fluctuation or timeout
+          await new Promise(r => setTimeout(r, 1000));
         }
-      } catch (err: any) {
-        if (err.name === 'AbortError' || !this.isRunning) {
-          break;
-        }
-        this.lastError = err.message;
-        // Don't crash out of the polling loop on intermittent network errors - retry seamlessly
-        await new Promise(r => setTimeout(r, 2500));
       }
+    } finally {
+      this.isRunning = false;
+      this.isConnected = false;
+      console.warn('⚠️ Telegram pollLoop exited. 24/7 Watchdog will auto-heal in 5s if active token exists.');
     }
   }
 
@@ -1032,19 +1054,38 @@ class TelegramEngine {
       dbStore.setFsmState(user.user_id, 'idle');
       if (!this.isAdmin(user, chatId)) return;
 
-      const broadcastMsg = text.trim();
+      const captionText = (msg.caption || text || '').trim();
+      let mediaType: 'text' | 'photo' | 'video' | 'voice' | 'audio' = 'text';
+      let mediaFileId: string | undefined = undefined;
+
+      if (msg.photo && msg.photo.length > 0) {
+        mediaType = 'photo';
+        mediaFileId = msg.photo[msg.photo.length - 1].file_id;
+      } else if (msg.video) {
+        mediaType = 'video';
+        mediaFileId = msg.video.file_id;
+      } else if (msg.voice) {
+        mediaType = 'voice';
+        mediaFileId = msg.voice.file_id;
+      } else if (msg.audio) {
+        mediaType = 'audio';
+        mediaFileId = msg.audio.file_id;
+      }
+
       const allUsers = dbStore.getData().users;
-      await this.sendMessage(chatId, `⏳ Sending broadcast to ${allUsers.length} users...`);
+      await this.sendMessage(chatId, `⏳ Sending ${mediaType.toUpperCase()} broadcast to ${allUsers.length} users...`);
 
       const result = await this.sendBroadcast({
         targetAudience: 'ALL_USERS',
-        text: broadcastMsg,
+        text: captionText,
+        mediaType,
+        mediaFileId,
         recipients: allUsers
       });
 
       await this.sendMessage(
         chatId,
-        `📢 <b>BROADCAST COMPLETED!</b>\n\n` +
+        `📢 <b>${mediaType.toUpperCase()} BROADCAST COMPLETED!</b>\n\n` +
         `✅ Successfully Delivered: <b>${result.sent}</b>\n` +
         `❌ Failed / Inactive: <b>${result.failed}</b>`,
         { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
@@ -1334,6 +1375,120 @@ class TelegramEngine {
 
     // Admin Quick Commands
     if (this.isAdmin(user, chatId)) {
+      if (lowerText.startsWith('/addproduct') || lowerText.startsWith('/addprod')) {
+        const line = text.replace(/^\/(addproduct|addprod)\s*/i, '').trim();
+        if (line.includes('|')) {
+          const parts = line.split('|').map(s => s.trim());
+          if (parts.length >= 4) {
+            const category = parts[0] || 'Android Non-Root';
+            const panelName = parts[1] || 'NEW PANEL';
+            const planName = parts[2] || '1 Day Plan';
+            const price = parseFloat(parts[3]) || 50;
+            const resellerPrice = parts[4] ? parseFloat(parts[4]) : Math.round(price * 0.7);
+            const validity = parts[5] || '24 Hours';
+
+            const newId = Date.now();
+            const newProd: Product = {
+              id: newId,
+              name: planName,
+              panel_name: panelName,
+              category: category,
+              description: `${panelName} ${planName} key`,
+              price_inr: price,
+              reseller_price: resellerPrice,
+              validity: validity,
+              device_limit: '1 Device',
+              stock: 0,
+              delivery_mode: 'vault',
+              is_active: 1,
+              is_maintenance: 0,
+              requires_android_id: 0
+            };
+
+            const currentProds = dbStore.getData().products;
+            currentProds.push(newProd);
+            dbStore.saveData();
+
+            await this.sendMessage(
+              chatId,
+              `🎉 <b>NEW PRODUCT ADDED SUCCESSFULLY!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+              `🆔 <b>Product ID:</b> <code>${newId}</code>\n` +
+              `📂 <b>Category:</b> ${category}\n` +
+              `📦 <b>Panel Name:</b> ${panelName}\n` +
+              `⏱ <b>Duration Plan:</b> ${planName}\n` +
+              `💰 <b>Price:</b> ₹${price}\n` +
+              `👑 <b>Reseller Price:</b> ₹${resellerPrice}\n` +
+              `⏳ <b>Validity:</b> ${validity}\n\n` +
+              `<i>It is now live in the Telegram Bot Store! You can add keys via <code>/addkey ${newId} | YOUR_KEY</code></i>`,
+              { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]] }
+            );
+            return;
+          }
+        }
+
+        await this.sendMessage(
+          chatId,
+          `➕ <b>ADD PRODUCT COMMAND USAGE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `Format:\n<code>/addproduct &lt;Category&gt; | &lt;Panel Name&gt; | &lt;Plan Name&gt; | &lt;Price&gt; | &lt;Reseller Price&gt; | &lt;Validity&gt;</code>\n\n` +
+          `📌 <b>Example:</b>\n` +
+          `<code>/addproduct Android Non-Root | MST PANEL | 1 Day Plan | 50 | 35 | 24 Hours</code>\n\n` +
+          `<i>Or launch the Mini App for full visual product creation!</i>`,
+          {
+            inline_keyboard: [
+              [{ text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() }, style: 'primary' }],
+              [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+            ]
+          }
+        );
+        return;
+      }
+
+      if (lowerText.startsWith('/addkey') || lowerText.startsWith('/addkeys')) {
+        const line = text.replace(/^\/(addkey|addkeys)\s*/i, '').trim();
+        if (line.includes('|')) {
+          const parts = line.split('|').map(s => s.trim());
+          const prodId = Number(parts[0]);
+          const rawKeys = parts[1] || '';
+          if (prodId && rawKeys) {
+            const keysList = rawKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+            const data = dbStore.getData();
+            const prod = data.products.find(p => p.id === prodId);
+            if (prod) {
+              keysList.forEach(kText => {
+                data.productKeys.push({
+                  id: Date.now() + Math.floor(Math.random() * 1000),
+                  product_id: prodId,
+                  key_text: kText,
+                  is_used: 0,
+                  added_date: new Date().toISOString().replace('T', ' ').substring(0, 19)
+                });
+              });
+              prod.stock = data.productKeys.filter(k => k.product_id === prodId && k.is_used === 0).length;
+              dbStore.saveData();
+
+              await this.sendMessage(
+                chatId,
+                `✅ <b>SUCCESSFULLY ADDED ${keysList.length} KEYS!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+                `📦 <b>Product:</b> ${prod.panel_name} (${prod.name})\n` +
+                `📊 <b>Updated Vault Stock:</b> ${prod.stock} keys ready`,
+                { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]] }
+              );
+              return;
+            }
+          }
+        }
+
+        await this.sendMessage(
+          chatId,
+          `🔑 <b>ADD KEYS COMMAND USAGE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `Format:\n<code>/addkey &lt;Product_ID&gt; | &lt;KEY1, KEY2, KEY3&gt;</code>\n\n` +
+          `📌 <b>Example:</b>\n` +
+          `<code>/addkey 101 | KALAM-ABC1234, KALAM-XYZ5678</code>`,
+          { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]] }
+        );
+        return;
+      }
+
       if (lowerText.startsWith('/addbalance') || lowerText.startsWith('/credit')) {
         const parts = text.split(/\s+/);
         if (parts.length >= 3) {
@@ -1556,6 +1711,7 @@ class TelegramEngine {
     }
 
     if (data === 'check_update') {
+      const apkUrl = settings.apk_download_url || settings.official_channel_link || 'https://t.me/KalamFFPanelAPKs';
       const text =
         `⚡ <b>KALAM FF PANEL - SYSTEM STATUS & UPDATES</b> ⚡\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -1563,12 +1719,14 @@ class TelegramEngine {
         `🛡 <b>Bypass Status:</b> 100% Anti-Ban Active & Safe\n` +
         `🎮 <b>Free Fire Version:</b> OB48 & FF MAX Supported\n` +
         `⚡ <b>Server Ping:</b> <code>14ms [Ultra Fast]</code>\n` +
+        `📥 <b>Latest APK Link:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
         `💳 <b>Auto UPI Gateway:</b> FamGateway Online (Instant Credit)\n` +
         `🔑 <b>Key Dispenser:</b> 100% Automated Instant Delivery\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `<i>All modules are operating smoothly with 99.9% uptime.</i>`;
       const keyboard = {
         inline_keyboard: [
+          [{ text: '📥 Download Latest APK', url: apkUrl, style: 'primary' }],
           [{ text: '🛒 Buy Now', callback_data: 'shop_categories', style: 'danger' }],
           [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
         ]
@@ -1589,7 +1747,10 @@ class TelegramEngine {
         return;
       }
 
-      const reward = 3.0; // ₹3.00 bonus
+      // Random small reward between ₹0.05 and ₹1.00
+      const possibleAmounts = [0.05, 0.10, 0.15, 0.20, 0.25, 0.35, 0.45, 0.50, 0.70, 0.85, 0.90, 0.97, 1.00];
+      const reward = possibleAmounts[Math.floor(Math.random() * possibleAmounts.length)];
+
       dbStore.updateUser(user.user_id, { balance: (user.balance || 0) + reward });
       dbStore.logActivity(user.user_id, 'DAILY_GIFT', `Claimed daily reward bonus of ₹${reward.toFixed(2)}`);
 
@@ -1654,8 +1815,8 @@ class TelegramEngine {
         text += `<i>❌ No products currently available in this category. Check back soon!</i>`;
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🔙 Back to Categories', callback_data: 'shop_categories' }],
-            [{ text: '🏠 Main Menu', callback_data: 'main_menu' }]
+            [{ text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);
@@ -1686,13 +1847,14 @@ class TelegramEngine {
         const firstProd = plans[0];
         buttons.push([{
           text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
-          callback_data: `pnl_${firstProd.id}`
+          callback_data: `pnl_${firstProd.id}`,
+          style: 'primary'
         }]);
       }
 
       buttons.push([
-        { text: '🔙 Back to Categories', callback_data: 'shop_categories' },
-        { text: '🏠 Main Menu', callback_data: 'main_menu' }
+        { text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' },
+        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
       ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
@@ -1785,8 +1947,8 @@ class TelegramEngine {
       text += `👇 <i>Select any duration plan above to view full details and instant key purchase:</i>`;
 
       buttons.push([
-        { text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode },
-        { text: '🛒 Store Catalog', callback_data: 'shop_categories' }
+        { text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode, style: 'danger' },
+        { text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }
       ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
@@ -1858,27 +2020,27 @@ class TelegramEngine {
 
       if (isUnderMaintenance) {
         keyboard.inline_keyboard.push([
-          { text: `🛠️ Product Under Maintenance`, callback_data: `maint_${product.id}` }
+          { text: `🛠️ Product Under Maintenance`, callback_data: `maint_${product.id}`, style: 'danger' }
         ]);
       } else if (hasStock) {
         keyboard.inline_keyboard.push([
-          { text: `⚡ CONFIRM & BUY NOW (₹${userPrice}) ⚡`, callback_data: `buy_${product.id}` }
+          { text: `⚡ CONFIRM & BUY NOW (₹${userPrice}) ⚡`, callback_data: `buy_${product.id}`, style: 'danger' }
         ]);
       } else {
         keyboard.inline_keyboard.push([
-          { text: `❌ Out of Stock`, callback_data: 'stock_empty' }
+          { text: `❌ Out of Stock`, callback_data: 'stock_empty', style: 'danger' }
         ]);
       }
 
       keyboard.inline_keyboard.push([
-        { text: '💳 Add Wallet Balance', callback_data: 'add_balance' }
+        { text: '💳 Add Wallet Balance', callback_data: 'add_balance', style: 'success' }
       ]);
       keyboard.inline_keyboard.push([
-        { text: '🔙 Back to Duration Plans', callback_data: `pnl_${product.id}` },
-        { text: '🛒 Store Catalog', callback_data: 'shop_categories' }
+        { text: '🔙 Back to Duration Plans', callback_data: `pnl_${product.id}`, style: 'danger' },
+        { text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }
       ]);
       keyboard.inline_keyboard.push([
-        { text: '🏠 Main Menu', callback_data: 'main_menu' }
+        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'secondary' }
       ]);
 
       const maintenanceBanner = isUnderMaintenance
@@ -2887,6 +3049,8 @@ class TelegramEngine {
       `• Total Orders Processed: <b>${data.orders.length}</b>\n` +
       `• Open Support Tickets: <b>${openTickets}</b>\n\n` +
       `⚡ <b>Quick Bot Slash Commands:</b>\n` +
+      `• <code>/addproduct Category | Panel | Plan | Price | ResellerPrice</code>\n` +
+      `• <code>/addkey Product_ID | Key1, Key2</code>\n` +
       `• <code>/addbalance &lt;user_id&gt; &lt;amount&gt;</code> - Credit wallet\n` +
       `• <code>/deduct &lt;user_id&gt; &lt;amount&gt;</code> - Deduct wallet\n` +
       `• <code>/users</code> - View active users & balances\n` +
@@ -2935,12 +3099,21 @@ class TelegramEngine {
   }
 
   /**
-   * Broadcast message to users via live Telegram API
+   * Broadcast message to users via live Telegram API (Supports Text, Photo, Video, Voice, Audio)
    */
   public async sendBroadcast(params: {
     targetAudience: string;
-    text: string;
+    text?: string;
+    mediaType?: 'text' | 'photo' | 'video' | 'voice' | 'audio';
+    mediaFileId?: string;
+    mediaUrl?: string;
     imageUrl?: string;
+    videoUrl?: string;
+    voiceUrl?: string;
+    audioUrl?: string;
+    mediaBase64?: string;
+    mediaFilename?: string;
+    mediaMimeType?: string;
     buttonText?: string;
     buttonUrl?: string;
     pinMessage?: boolean;
@@ -2949,33 +3122,111 @@ class TelegramEngine {
     let sent = 0;
     let failed = 0;
 
-    const formattedText = `📢 <b>OFFICIAL ANNOUNCEMENT</b>\n\n${params.text}`;
+    const rawText = (params.text || '').trim();
+    const formattedText = rawText ? `📢 <b>OFFICIAL ANNOUNCEMENT</b>\n\n${rawText}` : `📢 <b>OFFICIAL ANNOUNCEMENT</b>`;
     const keyboard: any = params.buttonText && params.buttonUrl ? {
       inline_keyboard: [[
         { text: params.buttonText, url: params.buttonUrl }
       ]]
     } : undefined;
 
+    // Detect media type
+    let mType: 'text' | 'photo' | 'video' | 'voice' | 'audio' = params.mediaType || 'text';
+    if (!params.mediaType) {
+      if (params.videoUrl || (params.mediaUrl && (params.mediaUrl.endsWith('.mp4') || params.mediaUrl.endsWith('.mov')))) {
+        mType = 'video';
+      } else if (params.voiceUrl || (params.mediaUrl && (params.mediaUrl.endsWith('.ogg') || params.mediaUrl.endsWith('.opus')))) {
+        mType = 'voice';
+      } else if (params.audioUrl || (params.mediaUrl && (params.mediaUrl.endsWith('.mp3') || params.mediaUrl.endsWith('.wav')))) {
+        mType = 'audio';
+      } else if (params.imageUrl || params.mediaUrl) {
+        mType = 'photo';
+      }
+    }
+
+    const mediaSource = params.mediaFileId || params.videoUrl || params.voiceUrl || params.audioUrl || params.imageUrl || params.mediaUrl;
+    let cachedFileId: string | undefined = params.mediaFileId;
+
     for (const u of params.recipients) {
       if (!u.user_id) continue;
       try {
         let sentMsg: any;
-        if (params.imageUrl && params.imageUrl.trim().startsWith('http')) {
-          sentMsg = await this.callApi('sendPhoto', {
-            chat_id: u.user_id,
-            photo: params.imageUrl.trim(),
-            caption: formattedText,
-            parse_mode: 'HTML',
-            reply_markup: keyboard
-          });
+
+        // Upload file directly if base64 provided and no cachedFileId yet
+        if (params.mediaBase64 && !cachedFileId && mType !== 'text') {
+          const apiMethod = mType === 'photo' ? 'sendPhoto' : mType === 'video' ? 'sendVideo' : mType === 'voice' ? 'sendVoice' : 'sendAudio';
+          const field = mType === 'photo' ? 'photo' : mType === 'video' ? 'video' : mType === 'voice' ? 'voice' : 'audio';
+
+          sentMsg = await this.callApiWithFile(
+            apiMethod,
+            {
+              chat_id: u.user_id,
+              caption: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard
+            },
+            field,
+            {
+              base64: params.mediaBase64,
+              filename: params.mediaFilename || `file_${Date.now()}`,
+              mimeType: params.mediaMimeType
+            }
+          );
+
+          // Cache the Telegram file_id for subsequent recipient broadcasts
+          if (mType === 'photo' && sentMsg && sentMsg.photo && sentMsg.photo.length > 0) {
+            cachedFileId = sentMsg.photo[sentMsg.photo.length - 1].file_id;
+          } else if (mType === 'video' && sentMsg && sentMsg.video) {
+            cachedFileId = sentMsg.video.file_id;
+          } else if (mType === 'voice' && sentMsg && sentMsg.voice) {
+            cachedFileId = sentMsg.voice.file_id;
+          } else if (mType === 'audio' && sentMsg && sentMsg.audio) {
+            cachedFileId = sentMsg.audio.file_id;
+          }
         } else {
-          sentMsg = await this.callApi('sendMessage', {
-            chat_id: u.user_id,
-            text: formattedText,
-            parse_mode: 'HTML',
-            reply_markup: keyboard,
-            disable_web_page_preview: false
-          });
+          // Send via cached file_id, media URL, or text
+          const source = cachedFileId || mediaSource;
+          if (mType === 'photo' && source) {
+            sentMsg = await this.callApi('sendPhoto', {
+              chat_id: u.user_id,
+              photo: source.trim(),
+              caption: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard
+            });
+          } else if (mType === 'video' && source) {
+            sentMsg = await this.callApi('sendVideo', {
+              chat_id: u.user_id,
+              video: source.trim(),
+              caption: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard
+            });
+          } else if (mType === 'voice' && source) {
+            sentMsg = await this.callApi('sendVoice', {
+              chat_id: u.user_id,
+              voice: source.trim(),
+              caption: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard
+            });
+          } else if (mType === 'audio' && source) {
+            sentMsg = await this.callApi('sendAudio', {
+              chat_id: u.user_id,
+              audio: source.trim(),
+              caption: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard
+            });
+          } else {
+            sentMsg = await this.callApi('sendMessage', {
+              chat_id: u.user_id,
+              text: formattedText,
+              parse_mode: 'HTML',
+              reply_markup: keyboard,
+              disable_web_page_preview: false
+            });
+          }
         }
 
         if (params.pinMessage && sentMsg && sentMsg.message_id) {
@@ -2997,6 +3248,31 @@ class TelegramEngine {
     }
 
     return { sent, failed };
+  }
+
+  /**
+   * Set Bot Commands via Telegram API
+   */
+  public async setMyCommands(commands: Array<{ command: string; description: string }>): Promise<any> {
+    const formatted = commands.map(c => ({
+      command: c.command.toLowerCase().replace(/[^a-z0-9_]/g, ''),
+      description: c.description.slice(0, 256)
+    })).filter(c => c.command.length >= 1 && c.description.length >= 1);
+    return await this.callApi('setMyCommands', { commands: formatted });
+  }
+
+  /**
+   * Delete Bot Commands from Telegram API
+   */
+  public async deleteMyCommands(): Promise<any> {
+    return await this.callApi('deleteMyCommands');
+  }
+
+  /**
+   * Get Live Bot Commands from Telegram API
+   */
+  public async getMyCommands(): Promise<any> {
+    return await this.callApi('getMyCommands');
   }
 }
 

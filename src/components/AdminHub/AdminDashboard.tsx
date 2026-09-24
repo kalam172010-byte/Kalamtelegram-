@@ -44,7 +44,10 @@ import {
   Bot,
   Wrench,
   Activity,
-  Clock
+  Clock,
+  Video,
+  Mic,
+  Volume2
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
 import { SystemHealthWidget } from './SystemHealthWidget';
@@ -99,6 +102,7 @@ export const AdminDashboard: React.FC = () => {
     testProviderConnection,
     buyProviderKeyDirect,
     sendBroadcastMessage,
+    toggleMaintenanceMode,
     adminTab,
     setAdminTab,
     showAddProductModal,
@@ -150,8 +154,12 @@ export const AdminDashboard: React.FC = () => {
   // Broadcast Message State
   const [broadcastForm, setBroadcastForm] = useState({
     targetAudience: 'all' as 'all' | 'referrers' | 'vip' | 'reseller' | 'non_reseller',
+    mediaType: 'photo' as 'text' | 'photo' | 'video' | 'voice' | 'audio',
     text: `⚡ <b>SPECIAL FLASH UPDATE</b> ⚡\n\nNew Non-Root Free Fire VIP panels are now back in stock with instant key delivery!\n\nUse code <code>KALAM50</code> for flat discount on your next recharge!`,
     imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
+    videoUrl: '',
+    voiceUrl: '',
+    audioUrl: '',
     buttonText: '🛒 Open Store & Buy',
     buttonUrl: 'https://t.me/kalam_ff_bot',
     pinMessage: true
@@ -167,6 +175,116 @@ export const AdminDashboard: React.FC = () => {
       count: 12
     }
   ]);
+
+  // Direct Media File & Live Voice Note Recording State
+  const [mediaFile, setMediaFile] = useState<{
+    file: File | null;
+    previewUrl: string;
+    base64: string;
+    filename: string;
+    mimeType: string;
+  } | null>(null);
+
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioChunksRef = React.useRef<BlobPart[]>([]);
+  const recordingTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg;codecs=opus' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setRecordedAudioUrl(audioUrl);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          setMediaFile({
+            file: null,
+            previewUrl: audioUrl,
+            base64: base64data,
+            filename: `voice_note_${Date.now()}.ogg`,
+            mimeType: 'audio/ogg'
+          });
+        };
+        reader.readAsDataURL(audioBlob);
+
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecordingVoice(true);
+      setRecordingSeconds(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(s => s + 1);
+      }, 1000);
+    } catch (err: any) {
+      alert(`Microphone Permission Error: ${err.message || 'Please grant microphone access to record live voice notes.'}`);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const clearVoiceRecording = () => {
+    if (recordedAudioUrl) {
+      URL.revokeObjectURL(recordedAudioUrl);
+    }
+    setRecordedAudioUrl(null);
+    setMediaFile(null);
+    setRecordingSeconds(0);
+  };
+
+  const handleDirectFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setMediaFile({
+        file,
+        previewUrl,
+        base64,
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream'
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const formatRecordingTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   // Live Bot Engine testing state
   const [testingToken, setTestingToken] = useState(false);
@@ -193,6 +311,94 @@ export const AdminDashboard: React.FC = () => {
     duration: '1 Day',
     androidId: '0b9b969bc2e7997b'
   });
+
+  // Telegram Bot Slash Commands Manager State
+  const [botCommands, setBotCommands] = useState<Array<{ command: string; description: string }>>([
+    { command: 'start', description: '⚡ Open Kalam FF Panel Main Store' },
+    { command: 'buy', description: '🛒 Browse & Buy Panel Keys' },
+    { command: 'check_update', description: '📥 Check Latest APK Updates & Downloads' },
+    { command: 'balance', description: '💳 Add Wallet Balance via UPI' },
+    { command: 'profile', description: '👤 View Profile & Purchased Keys' },
+    { command: 'referral', description: '🔗 Refer Friends & Earn Rewards' },
+    { command: 'support', description: '🎧 24/7 Support & Official Channels' },
+    { command: 'help', description: '📖 How to Install & Use Panels' }
+  ]);
+  const [newCmdName, setNewCmdName] = useState('');
+  const [newCmdDesc, setNewCmdDesc] = useState('');
+  const [syncingCommands, setSyncingCommands] = useState(false);
+  const [cmdStatus, setCmdStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  React.useEffect(() => {
+    fetch('/api/bot/commands')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.commands)) {
+          setBotCommands(data.commands);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSyncCommands = async (cmdsToSend = botCommands) => {
+    setSyncingCommands(true);
+    setCmdStatus(null);
+    try {
+      const res = await fetch('/api/bot/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands: cmdsToSend })
+      });
+      const data = await res.json();
+      setSyncingCommands(false);
+      if (data.success) {
+        setBotCommands(data.commands);
+        setCmdStatus({
+          type: 'success',
+          text: '✅ Telegram Bot Commands updated and synced to Telegram API successfully! Check your bot menu /Menu in Telegram.'
+        });
+      } else {
+        setCmdStatus({
+          type: 'error',
+          text: `❌ Error syncing commands: ${data.error || 'Failed'}`
+        });
+      }
+    } catch (err: any) {
+      setSyncingCommands(false);
+      setCmdStatus({
+        type: 'error',
+        text: `❌ Network Error: ${err.message}`
+      });
+    }
+  };
+
+  const handleClearCommands = async () => {
+    if (!confirm('Are you sure you want to DELETE ALL slash commands from your Telegram Bot menu?')) return;
+    setSyncingCommands(true);
+    setCmdStatus(null);
+    try {
+      const res = await fetch('/api/bot/commands', { method: 'DELETE' });
+      const data = await res.json();
+      setSyncingCommands(false);
+      if (data.success) {
+        setBotCommands([]);
+        setCmdStatus({
+          type: 'success',
+          text: '🗑️ All commands deleted from Telegram Bot API! BotFather / Telegram Menu is now completely cleared.'
+        });
+      } else {
+        setCmdStatus({
+          type: 'error',
+          text: `❌ Error clearing commands: ${data.error || 'Failed'}`
+        });
+      }
+    } catch (err: any) {
+      setSyncingCommands(false);
+      setCmdStatus({
+        type: 'error',
+        text: `❌ Network Error: ${err.message}`
+      });
+    }
+  };
 
   // Products state
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -565,21 +771,15 @@ export const AdminDashboard: React.FC = () => {
           {/* Bot Maintenance Toggle */}
           <button
             type="button"
-            onClick={() => {
-              const willBeActive = settings.bot_status === 'ON';
-              updateSettings({
-                bot_status: willBeActive ? 'OFF' : 'ON',
-                maintenance_mode: willBeActive
-              });
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 ${
-              settings.bot_status === 'ON'
+            onClick={() => toggleMaintenanceMode()}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border min-h-[38px] active:scale-95 shadow-md ${
+              !settings.maintenance_mode
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30 animate-pulse'
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${settings.bot_status === 'ON' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-            <span>Bot: {settings.bot_status === 'ON' ? 'ONLINE' : 'MAINTENANCE'}</span>
+            <span className={`w-2.5 h-2.5 rounded-full ${!settings.maintenance_mode ? 'bg-emerald-400 animate-ping' : 'bg-rose-500'}`} />
+            <span>Bot: {!settings.maintenance_mode ? 'ONLINE' : 'MAINTENANCE MODE'}</span>
           </button>
 
           {/* Referral System Toggle */}
@@ -706,11 +906,12 @@ export const AdminDashboard: React.FC = () => {
         {[
           { id: 'overview', label: '📊 Overview', icon: Zap },
           { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
+          { id: 'botcommands', label: '🤖 Bot Commands', icon: Code2 },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
           { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
           { id: 'referrals', label: '🎁 Referral Program', icon: Gift },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
-          { id: 'gateways', label: '💳 Payment & APIs', icon: CreditCard },
+          { id: 'gateways', label: '💳 Payment & Settings', icon: CreditCard },
           { id: 'health', label: '⚡ Health & Diagnostics', icon: Activity },
           { id: 'tickets', label: `🎫 Tickets (${openTicketsCount})`, icon: TicketIcon, badge: openTicketsCount > 0 },
           { id: 'coupons', label: `🏷️ Coupons (${coupons.length})`, icon: Tag },
@@ -1226,6 +1427,163 @@ export const AdminDashboard: React.FC = () => {
                       <span className="text-[10px] text-slate-500 font-mono shrink-0">{log.timestamp}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= BOT COMMANDS TAB ================= */}
+        {adminTab === 'botcommands' && (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/40 rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs bg-indigo-500/20 text-indigo-300 font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                      Telegram Bot Menu Control
+                    </span>
+                    <span className="text-xs bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                      Live setMyCommands API
+                    </span>
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                    <Bot className="w-6 h-6 text-indigo-400" />
+                    Telegram Bot Slash Commands & Menu Manager
+                  </h2>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-2xl mt-1">
+                    Manage, add, edit, or delete <code className="text-indigo-300 font-bold">/</code> slash commands registered on Telegram API (<code className="text-slate-300">/Menu</code> popup in Telegram). Commands set via API cannot be edited inside BotFather — use this tool to add or wipe them.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={syncingCommands}
+                    onClick={() => handleSyncCommands(botCommands)}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-lg shadow-indigo-600/30"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {syncingCommands ? 'Syncing Telegram API...' : '⚡ Sync Commands to Bot'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={syncingCommands}
+                    onClick={handleClearCommands}
+                    className="px-4 py-2.5 bg-rose-600/20 border border-rose-500/40 text-rose-300 hover:bg-rose-600 hover:text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>🗑️ Delete / Clear All Commands</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Notification */}
+              {cmdStatus && (
+                <div className={`p-4 rounded-xl text-xs md:text-sm font-medium flex items-center justify-between gap-2 ${
+                  cmdStatus.type === 'success'
+                    ? 'bg-emerald-950/90 border border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/90 border border-rose-500/40 text-rose-200'
+                }`}>
+                  <span>{cmdStatus.text}</span>
+                  <button type="button" onClick={() => setCmdStatus(null)} className="text-slate-400 hover:text-white cursor-pointer text-base">✕</button>
+                </div>
+              )}
+
+              {/* Active Slash Commands List */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300 px-1">
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <Code2 className="w-4 h-4 text-indigo-400" />
+                    Registered Slash Commands ({botCommands.length})
+                  </span>
+                  <span className="text-[11px] text-indigo-400 font-mono">
+                    Telegram setMyCommands API Enabled
+                  </span>
+                </div>
+
+                {botCommands.length === 0 ? (
+                  <div className="p-10 text-center bg-slate-950 rounded-2xl border border-dashed border-slate-800 text-slate-400 text-xs space-y-2">
+                    <p className="font-bold text-rose-400 text-sm">No active Telegram slash commands!</p>
+                    <p className="text-slate-400 text-xs">Click <b>"+ Add Command"</b> below or Sync to register new commands on your Telegram Bot.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {botCommands.map((cmd, idx) => (
+                      <div key={idx} className="bg-slate-950 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs transition shadow-md">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-indigo-300 bg-indigo-950/80 px-2.5 py-1 rounded-lg border border-indigo-500/40 text-xs">
+                              /{cmd.command}
+                            </span>
+                          </div>
+                          <p className="text-slate-200 text-xs truncate mt-1.5 font-medium">
+                            {cmd.description}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = botCommands.filter((_, i) => i !== idx);
+                            setBotCommands(updated);
+                            handleSyncCommands(updated);
+                          }}
+                          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-xl transition shrink-0 cursor-pointer border border-transparent hover:border-rose-500/30"
+                          title="Delete / Remove this command"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Command Form */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <span className="text-xs md:text-sm font-bold text-slate-200 block flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  Add New Slash Command to Telegram Bot Menu
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 text-xs">
+                  <div className="sm:col-span-4">
+                    <input
+                      type="text"
+                      value={newCmdName}
+                      onChange={(e) => setNewCmdName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="command (e.g. redeem)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-indigo-300 outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <input
+                      type="text"
+                      value={newCmdDesc}
+                      onChange={(e) => setNewCmdDesc(e.target.value)}
+                      placeholder="Description (e.g. 🎁 Redeem voucher key)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-200 outline-none focus:border-indigo-500 text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button
+                      type="button"
+                      disabled={!newCmdName.trim() || !newCmdDesc.trim()}
+                      onClick={() => {
+                        if (!newCmdName.trim() || !newCmdDesc.trim()) return;
+                        const updated = [...botCommands, { command: newCmdName.trim(), description: newCmdDesc.trim() }];
+                        setBotCommands(updated);
+                        setNewCmdName('');
+                        setNewCmdDesc('');
+                        handleSyncCommands(updated);
+                      }}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition cursor-pointer disabled:opacity-50 text-xs flex items-center justify-center gap-1 shadow-md shadow-emerald-600/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2447,47 +2805,250 @@ export const AdminDashboard: React.FC = () => {
                   />
                 </div>
 
-                {/* 4. Media Banner & Interactive Button Options */}
+                {/* 4. Media Type & Banner / Video / Voice / Audio & Action Button */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-sm">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                    4. Media Banner & Interactive Action Button
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                      4. Select Media Format & Attachment
+                    </span>
+                    <span className="text-[10px] text-cyan-400 font-normal">
+                      Photos • Videos • Voice Notes • Audio • Text
+                    </span>
                   </label>
 
+                  {/* Hidden Native File Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept={
+                      broadcastForm.mediaType === 'photo'
+                        ? 'image/*'
+                        : broadcastForm.mediaType === 'video'
+                        ? 'video/*'
+                        : broadcastForm.mediaType === 'audio'
+                        ? 'audio/*'
+                        : 'audio/*,image/*,video/*'
+                    }
+                    onChange={handleDirectFileUpload}
+                  />
+
+                  {/* Media Type Selector Tabs */}
+                  <div className="grid grid-cols-5 gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBroadcastForm(p => ({ ...p, mediaType: 'text' }));
+                        setMediaFile(null);
+                      }}
+                      className={`py-2 px-1 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        broadcastForm.mediaType === 'text'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Text</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastForm(p => ({ ...p, mediaType: 'photo' }))}
+                      className={`py-2 px-1 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        broadcastForm.mediaType === 'photo'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastForm(p => ({ ...p, mediaType: 'video' }))}
+                      className={`py-2 px-1 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        broadcastForm.mediaType === 'video'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Video</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastForm(p => ({ ...p, mediaType: 'voice' }))}
+                      className={`py-2 px-1 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        broadcastForm.mediaType === 'voice'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Voice</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastForm(p => ({ ...p, mediaType: 'audio' }))}
+                      className={`py-2 px-1 rounded-lg font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        broadcastForm.mediaType === 'audio'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Audio</span>
+                    </button>
+                  </div>
+
                   <div className="space-y-3 text-xs">
-                    {/* Image URL Input */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-slate-400 font-semibold flex items-center gap-1">
-                          <ImageIcon className="w-3 h-3 text-cyan-400" />
-                          Banner Photo URL (Optional)
-                        </span>
-                        <div className="flex items-center gap-1 text-[11px]">
+                    {/* Live Voice Note Recording Studio */}
+                    {broadcastForm.mediaType === 'voice' && (
+                      <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
+                            <Mic className="w-4 h-4 text-emerald-400 animate-pulse" />
+                            Live In-Browser Voice Note Studio
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Records high quality OGG/OPUS voice note
+                          </span>
+                        </div>
+
+                        {/* Voice Recording Controls */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+                          {isRecordingVoice ? (
+                            <div className="flex items-center gap-3">
+                              <span className="relative flex h-3.5 w-3.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500" />
+                              </span>
+                              <span className="font-mono font-bold text-rose-300 text-sm">
+                                Recording: {formatRecordingTime(recordingSeconds)}
+                              </span>
+                            </div>
+                          ) : recordedAudioUrl ? (
+                            <div className="flex items-center gap-2 text-emerald-300 font-medium text-xs">
+                              <CheckCircle className="w-4 h-4 text-emerald-400" />
+                              <span>Voice Note Recorded Ready ({formatRecordingTime(recordingSeconds)})</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">
+                              Click start to record your voice note live via microphone:
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            {isRecordingVoice ? (
+                              <button
+                                type="button"
+                                onClick={stopVoiceRecording}
+                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center gap-1 shadow"
+                              >
+                                ⏹️ Stop Recording
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={startVoiceRecording}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-600/30"
+                              >
+                                🎙️ {recordedAudioUrl ? 'Re-record Voice' : 'Start Recording'}
+                              </button>
+                            )}
+
+                            {recordedAudioUrl && !isRecordingVoice && (
+                              <button
+                                type="button"
+                                onClick={clearVoiceRecording}
+                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-300 font-semibold rounded-xl text-xs transition cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Audio Playback Preview */}
+                        {recordedAudioUrl && (
+                          <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                            <span className="text-[10px] text-slate-400 font-bold block">Preview Audio Note:</span>
+                            <audio controls src={recordedAudioUrl} className="w-full h-9 accent-emerald-500" />
+                          </div>
+                        )}
+
+                        <div className="text-center pt-1 border-t border-slate-900">
                           <button
                             type="button"
-                            onClick={() => setBroadcastForm(p => ({ ...p, imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80' }))}
-                            className="text-cyan-400 hover:underline cursor-pointer"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-[11px] text-indigo-400 hover:underline cursor-pointer font-medium"
                           >
-                            Gaming Banner
-                          </button>
-                          <span className="text-slate-600">•</span>
-                          <button
-                            type="button"
-                            onClick={() => setBroadcastForm(p => ({ ...p, imageUrl: '' }))}
-                            className="text-rose-400 hover:underline cursor-pointer"
-                          >
-                            Remove Image
+                            📁 Or select an existing .ogg / .mp3 audio file from your device
                           </button>
                         </div>
                       </div>
-                      <input
-                        type="text"
-                        value={broadcastForm.imageUrl}
-                        onChange={(e) => setBroadcastForm(p => ({ ...p, imageUrl: e.target.value }))}
-                        placeholder="https://example.com/banner.jpg (Leave empty for pure text message)"
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    )}
+
+                    {/* Direct File Picker for Photo / Video / Audio */}
+                    {broadcastForm.mediaType !== 'text' && broadcastForm.mediaType !== 'voice' && (
+                      <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
+                            <Download className="w-4 h-4 text-indigo-400" />
+                            Direct Device File Selector
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Select directly from phone gallery / computer files
+                          </span>
+                        </div>
+
+                        {mediaFile ? (
+                          <div className="p-3 bg-slate-900 rounded-xl border border-indigo-500/40 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-indigo-300 text-xs truncate max-w-[200px]">
+                                📄 {mediaFile.filename}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setMediaFile(null)}
+                                className="text-rose-400 hover:text-rose-300 text-xs font-bold cursor-pointer"
+                              >
+                                ✕ Remove
+                              </button>
+                            </div>
+
+                            {/* Media File Preview */}
+                            {mediaFile.mimeType.startsWith('image/') && (
+                              <img src={mediaFile.previewUrl} alt="Preview" className="h-32 object-cover rounded-lg border border-slate-800" />
+                            )}
+                            {mediaFile.mimeType.startsWith('video/') && (
+                              <video controls src={mediaFile.previewUrl} className="h-36 w-full object-cover rounded-lg border border-slate-800" />
+                            )}
+                            {mediaFile.mimeType.startsWith('audio/') && (
+                              <audio controls src={mediaFile.previewUrl} className="w-full accent-indigo-500" />
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full py-6 bg-slate-900 hover:bg-slate-800/80 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl text-slate-300 transition cursor-pointer flex flex-col items-center justify-center gap-2 group"
+                          >
+                            <Download className="w-6 h-6 text-indigo-400 group-hover:scale-110 transition" />
+                            <span className="font-bold text-xs">
+                              Click to select {broadcastForm.mediaType === 'photo' ? 'Photo' : broadcastForm.mediaType === 'video' ? 'Video' : 'Audio'} file from device
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              Supports JPG, PNG, WEBP, MP4, MOV, MP3, WAV
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Inline Button Details */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -2539,16 +3100,22 @@ export const AdminDashboard: React.FC = () => {
                 <div className="pt-2">
                   <button
                     type="button"
-                    disabled={sendingBroadcast || !broadcastForm.text.trim()}
+                    disabled={sendingBroadcast || (!broadcastForm.text.trim() && !mediaFile)}
                     onClick={async () => {
-                      if (!broadcastForm.text.trim()) return;
                       setSendingBroadcast(true);
                       setBroadcastStatusMsg(null);
                       try {
                         const res = await sendBroadcastMessage({
                           targetAudience: broadcastForm.targetAudience,
+                          mediaType: broadcastForm.mediaType,
                           text: broadcastForm.text,
-                          imageUrl: broadcastForm.imageUrl,
+                          imageUrl: broadcastForm.imageUrl || undefined,
+                          videoUrl: broadcastForm.videoUrl || undefined,
+                          voiceUrl: broadcastForm.voiceUrl || undefined,
+                          audioUrl: broadcastForm.audioUrl || undefined,
+                          mediaBase64: mediaFile?.base64 || undefined,
+                          mediaFilename: mediaFile?.filename || undefined,
+                          mediaMimeType: mediaFile?.mimeType || undefined,
                           buttonText: broadcastForm.buttonText,
                           buttonUrl: broadcastForm.buttonUrl,
                           pinMessage: broadcastForm.pinMessage
@@ -2567,7 +3134,7 @@ export const AdminDashboard: React.FC = () => {
                           {
                             id: `bcast_${Date.now()}`,
                             target: targetLabel,
-                            text: broadcastForm.text,
+                            text: `[${broadcastForm.mediaType.toUpperCase()}] ${broadcastForm.text || 'Media Message'}`,
                             time: 'Just now',
                             count: res.recipientCount
                           },
@@ -2590,7 +3157,7 @@ export const AdminDashboard: React.FC = () => {
                       }
                     }}
                     className={`w-full py-3.5 rounded-2xl text-sm font-bold shadow-xl flex items-center justify-center gap-2 transition cursor-pointer ${
-                      sendingBroadcast || !broadcastForm.text.trim()
+                      sendingBroadcast || (!broadcastForm.text.trim() && broadcastForm.mediaType === 'text')
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-indigo-600/30'
                     }`}
@@ -2604,7 +3171,7 @@ export const AdminDashboard: React.FC = () => {
                       <>
                         <Send className="w-4 h-4" />
                         <span>
-                          📢 Dispatch Broadcast (
+                          📢 Dispatch {broadcastForm.mediaType.toUpperCase()} Broadcast (
                           {broadcastForm.targetAudience === 'all'
                             ? `${allUsers.length} Users`
                             : broadcastForm.targetAudience === 'vip'
@@ -2630,8 +3197,8 @@ export const AdminDashboard: React.FC = () => {
                         Live Telegram UI Preview
                       </span>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
-                      Mobile Card View
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-indigo-300 font-mono uppercase font-bold">
+                      {broadcastForm.mediaType} Mode
                     </span>
                   </div>
 
@@ -2657,7 +3224,7 @@ export const AdminDashboard: React.FC = () => {
                       </div>
 
                       {/* Photo Banner preview */}
-                      {broadcastForm.imageUrl && broadcastForm.imageUrl.trim() && (
+                      {broadcastForm.mediaType === 'photo' && broadcastForm.imageUrl && broadcastForm.imageUrl.trim() && (
                         <div className="rounded-xl overflow-hidden border border-slate-700/60 max-h-48 bg-slate-950 flex items-center justify-center">
                           <img
                             src={broadcastForm.imageUrl}
@@ -2668,6 +3235,57 @@ export const AdminDashboard: React.FC = () => {
                               (e.target as HTMLElement).style.display = 'none';
                             }}
                           />
+                        </div>
+                      )}
+
+                      {/* Video Media Preview */}
+                      {broadcastForm.mediaType === 'video' && (
+                        <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-slate-950 p-2 space-y-1">
+                          {broadcastForm.videoUrl && broadcastForm.videoUrl.startsWith('http') ? (
+                            <video
+                              controls
+                              src={broadcastForm.videoUrl}
+                              className="w-full rounded-lg max-h-48 bg-black object-contain"
+                            />
+                          ) : (
+                            <div className="p-4 flex flex-col items-center justify-center text-purple-400 space-y-1 text-center">
+                              <Video className="w-8 h-8 animate-pulse" />
+                              <span className="text-xs font-bold">Video Attachment</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{broadcastForm.videoUrl || 'Telegram Video File'}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Voice Note Media Preview */}
+                      {broadcastForm.mediaType === 'voice' && (
+                        <div className="p-3 bg-slate-900 rounded-xl border border-slate-700/60 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                            <Mic className="w-5 h-5 animate-pulse" />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-200">
+                              <span>🎙️ Voice Message</span>
+                              <span className="text-emerald-400 font-mono">0:18</span>
+                            </div>
+                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden flex items-center gap-0.5 px-1">
+                              <div className="h-full bg-emerald-400 w-1/3 rounded-full" />
+                              <div className="h-full bg-slate-700 flex-1 rounded-full" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Audio Track Media Preview */}
+                      {broadcastForm.mediaType === 'audio' && (
+                        <div className="p-3 bg-slate-900 rounded-xl border border-slate-700/60 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/40 flex items-center justify-center shrink-0">
+                            <Volume2 className="w-5 h-5 animate-pulse" />
+                          </div>
+                          <div className="flex-1 space-y-0.5">
+                            <span className="text-xs font-bold text-white block">🎵 Audio Track Attachment</span>
+                            <span className="text-[10px] text-slate-400 block font-mono truncate">{broadcastForm.audioUrl || 'Telegram Audio Track'}</span>
+                          </div>
                         </div>
                       )}
 
@@ -4208,7 +4826,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-emerald-400" />
-                  Support Contacts, Channels & APK Downloads
+                  Support Contacts, Channels & Web App Links
                 </h3>
                 <span className="text-[11px] text-emerald-400/90 font-medium">
                   Synced directly to Telegram Bot buttons & messages
@@ -4216,21 +4834,57 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                {/* APK Download Channel */}
-                <div className="bg-slate-950 p-3 rounded-xl border border-cyan-500/30 sm:col-span-2 md:col-span-1">
+                {/* Admin Hub Mini App Web App URL */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-amber-500/40 sm:col-span-2 md:col-span-3">
+                  <label className="text-amber-300 font-bold mb-1 flex items-center gap-1.5 text-xs">
+                    <Globe className="w-4 h-4 text-amber-400" />
+                    Telegram Admin Hub Web App URL (Mini App Link)
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.webapp_url || ''}
+                    onChange={(e) => updateSettings({ webapp_url: e.target.value })}
+                    placeholder="https://your-website-domain.com or https://ais-pre-r6cejgnkl2dpbdqri7c2dv-128464619421.asia-east1.run.app"
+                    className="w-full bg-slate-900 border border-amber-500/40 rounded-lg px-3 py-2 text-amber-200 outline-none focus:border-amber-400 font-mono text-xs shadow-inner"
+                  />
+                  <p className="text-[11px] text-amber-300/80 mt-1 font-medium">
+                    This exact URL will be opened when you click <b>"🚀 Launch Admin Hub (Mini App)"</b> or <b>"🌐 Open Admin Hub in Browser"</b> in Telegram Bot.
+                  </p>
+                </div>
+
+                {/* APK Direct Download URL */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-cyan-500/30">
                   <label className="text-cyan-300 font-bold mb-1 flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5 text-cyan-400" />
-                    APK Download Channel Link
+                    APK Direct Download URL
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.apk_download_url || ''}
+                    onChange={(e) => updateSettings({ apk_download_url: e.target.value })}
+                    placeholder="https://t.me/KalamFFPanelAPKs/123 or https://example.com/panel.apk"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Direct APK download link shown on "Check Update" and key delivery.
+                  </p>
+                </div>
+
+                {/* APK Download Channel */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="text-cyan-300 font-bold mb-1 flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5 text-cyan-400" />
+                    APK Telegram Channel Link
                   </label>
                   <input
                     type="text"
                     value={settings.apk_channel_link || ''}
                     onChange={(e) => updateSettings({ apk_channel_link: e.target.value })}
-                    placeholder="https://t.me/KyunodaProAPKs"
+                    placeholder="https://t.me/KalamFFPanelAPKs"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Direct link to your APK channel (e.g., Kyunoda Pro / Panel APKs).
+                    Link to your APK updates channel on Telegram.
                   </p>
                 </div>
 
@@ -4298,6 +4952,151 @@ export const AdminDashboard: React.FC = () => {
                     placeholder="https://wa.me/919876543210"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-emerald-200 outline-none focus:border-emerald-400 font-mono text-xs"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Telegram Bot Slash Commands & API Menu Manager */}
+            <div className="bg-slate-900 border border-indigo-500/40 rounded-2xl p-5 space-y-4 shadow-xl shadow-indigo-950/20">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-indigo-400" />
+                    Telegram Bot Slash Commands Manager (Bot Menu Control)
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Manage, add, edit, or delete <code className="text-indigo-300 font-bold">/</code> slash commands registered on Telegram API (<code className="text-slate-300">/Menu</code> button popup in Telegram).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={syncingCommands}
+                    onClick={() => handleSyncCommands(botCommands)}
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md shadow-indigo-600/30"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {syncingCommands ? 'Syncing Telegram API...' : '⚡ Sync Commands to Bot'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={syncingCommands}
+                    onClick={handleClearCommands}
+                    className="px-3 py-2 bg-rose-600/20 border border-rose-500/40 text-rose-300 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>🗑️ Delete / Clear All Commands</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Notification */}
+              {cmdStatus && (
+                <div className={`p-3 rounded-xl text-xs font-medium flex items-center justify-between gap-2 ${
+                  cmdStatus.type === 'success'
+                    ? 'bg-emerald-950/90 border border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/90 border border-rose-500/40 text-rose-200'
+                }`}>
+                  <span>{cmdStatus.text}</span>
+                  <button type="button" onClick={() => setCmdStatus(null)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+                </div>
+              )}
+
+              {/* Active Slash Commands List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300 px-1">
+                  <span className="flex items-center gap-1.5">
+                    <Code2 className="w-3.5 h-3.5 text-indigo-400" />
+                    Registered Slash Commands ({botCommands.length})
+                  </span>
+                  <span className="text-[10px] text-indigo-400 font-mono">
+                    Telegram setMyCommands API Enabled
+                  </span>
+                </div>
+
+                {botCommands.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-950 rounded-xl border border-dashed border-slate-800 text-slate-400 text-xs space-y-1">
+                    <p className="font-bold text-rose-400">No active Telegram slash commands!</p>
+                    <p className="text-slate-500 text-[11px]">Click <b>"+ Add Command"</b> below or Sync to register new commands on your Telegram Bot.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {botCommands.map((cmd, idx) => (
+                      <div key={idx} className="bg-slate-950 border border-slate-800 hover:border-indigo-500/40 rounded-xl p-3 flex items-center justify-between gap-2 text-xs transition">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-500/30 text-xs">
+                              /{cmd.command}
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-[11px] truncate mt-1">
+                            {cmd.description}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = botCommands.filter((_, i) => i !== idx);
+                            setBotCommands(updated);
+                            handleSyncCommands(updated);
+                          }}
+                          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-lg transition shrink-0 cursor-pointer border border-transparent hover:border-rose-500/30"
+                          title="Delete / Remove this command"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Command Form */}
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                  Add New Slash Command to Telegram Bot Menu
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                  <div className="sm:col-span-4">
+                    <input
+                      type="text"
+                      value={newCmdName}
+                      onChange={(e) => setNewCmdName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="command (e.g. redeem)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-indigo-300 outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <input
+                      type="text"
+                      value={newCmdDesc}
+                      onChange={(e) => setNewCmdDesc(e.target.value)}
+                      placeholder="Description (e.g. 🎁 Redeem voucher key)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button
+                      type="button"
+                      disabled={!newCmdName.trim() || !newCmdDesc.trim()}
+                      onClick={() => {
+                        if (!newCmdName.trim() || !newCmdDesc.trim()) return;
+                        const updated = [...botCommands, { command: newCmdName.trim(), description: newCmdDesc.trim() }];
+                        setBotCommands(updated);
+                        setNewCmdName('');
+                        setNewCmdDesc('');
+                        handleSyncCommands(updated);
+                      }}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition cursor-pointer disabled:opacity-50 text-xs flex items-center justify-center gap-1 shadow-md shadow-emerald-600/20"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

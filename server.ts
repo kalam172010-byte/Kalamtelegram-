@@ -10,7 +10,7 @@ import { apiLogger } from './server/apiLogger';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -18,6 +18,20 @@ async function startServer() {
   // ---------------------------------------------------------------------------
   // API ROUTES
   // ---------------------------------------------------------------------------
+
+  // Render & Cloud Health Check Endpoints
+  const healthCheck = (req: express.Request, res: express.Response) => {
+    res.json({
+      status: 'ok',
+      service: 'Kalam FF Panel Server',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      telegram: telegramEngine.getStatus()
+    });
+  };
+
+  app.get('/healthz', healthCheck);
+  app.get('/api/health', healthCheck);
 
   // 1. Bot Engine Status
   app.get('/api/status', (req, res) => {
@@ -422,6 +436,140 @@ async function startServer() {
       res.sendStatus(200);
     } catch (err) {
       res.sendStatus(500);
+    }
+  });
+
+  // 13b. Send Broadcast (Text, Photo, Video, Voice, Audio)
+  app.post('/api/broadcast', async (req, res) => {
+    try {
+      const { targetAudience, text, mediaType, imageUrl, videoUrl, voiceUrl, audioUrl, mediaUrl, mediaBase64, mediaFilename, mediaMimeType, buttonText, buttonUrl, pinMessage } = req.body;
+      const data = dbStore.getData();
+      let recipients = data.users;
+
+      if (targetAudience === 'referrers') {
+        recipients = data.users.filter(u => (u.referral_count || 0) > 0);
+      } else if (targetAudience === 'vip') {
+        recipients = data.users.filter(u => u.is_vip === 1);
+      } else if (targetAudience === 'reseller') {
+        recipients = data.users.filter(u => u.is_reseller === 1);
+      } else if (targetAudience === 'non_reseller') {
+        recipients = data.users.filter(u => u.is_reseller === 0);
+      }
+
+      const result = await telegramEngine.sendBroadcast({
+        targetAudience: targetAudience || 'all',
+        text,
+        mediaType,
+        imageUrl,
+        videoUrl,
+        voiceUrl,
+        audioUrl,
+        mediaUrl,
+        mediaBase64,
+        mediaFilename,
+        mediaMimeType,
+        buttonText,
+        buttonUrl,
+        pinMessage,
+        recipients
+      });
+
+      res.json({
+        success: true,
+        sent: result.sent,
+        failed: result.failed,
+        recipientCount: recipients.length,
+        message: `Broadcast delivered to ${result.sent} users (${result.failed} failed).`
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 13c. Telegram Bot Commands Management (Get, Sync, Clear via Telegram API)
+  app.get('/api/bot/commands', async (_req, res) => {
+    try {
+      const savedCommands = dbStore.getData().settings.bot_commands || [
+        { command: 'start', description: '⚡ Open Kalam FF Panel Main Store' },
+        { command: 'buy', description: '🛒 Browse & Buy Panel Keys' },
+        { command: 'check_update', description: '📥 Check Latest APK Updates & Downloads' },
+        { command: 'balance', description: '💳 Add Wallet Balance via UPI' },
+        { command: 'profile', description: '👤 View Profile & Purchased Keys' },
+        { command: 'referral', description: '🔗 Refer Friends & Earn Rewards' },
+        { command: 'support', description: '🎧 24/7 Support & Official Channels' },
+        { command: 'help', description: '📖 How to Install & Use Panels' }
+      ];
+
+      // Try fetching live commands from Telegram API
+      let liveCommands = null;
+      try {
+        const liveRes = await telegramEngine.getMyCommands();
+        if (Array.isArray(liveRes)) {
+          liveCommands = liveRes;
+        }
+      } catch (e: any) {
+        console.warn('Could not fetch live Telegram commands:', e.message);
+      }
+
+      res.json({
+        success: true,
+        commands: savedCommands,
+        liveCommands
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/bot/commands', async (req, res) => {
+    try {
+      const { commands } = req.body;
+      if (!Array.isArray(commands)) {
+        return res.status(400).json({ success: false, error: 'Commands must be an array' });
+      }
+
+      // Save to local dbStore
+      dbStore.updateSettings({ bot_commands: commands });
+
+      // Sync to live Telegram API
+      let apiResult = null;
+      try {
+        apiResult = await telegramEngine.setMyCommands(commands);
+      } catch (e: any) {
+        console.warn('Telegram API setMyCommands notice:', e.message);
+      }
+
+      res.json({
+        success: true,
+        commands,
+        apiResult,
+        message: 'Bot commands updated and synced with Telegram API successfully!'
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/bot/commands', async (_req, res) => {
+    try {
+      // Clear from dbStore
+      dbStore.updateSettings({ bot_commands: [] });
+
+      // Delete from Telegram API
+      let apiResult = null;
+      try {
+        apiResult = await telegramEngine.deleteMyCommands();
+      } catch (e: any) {
+        console.warn('Telegram API deleteMyCommands notice:', e.message);
+      }
+
+      res.json({
+        success: true,
+        apiResult,
+        message: 'All Telegram Bot commands have been deleted successfully!'
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 
@@ -907,6 +1055,28 @@ async function startServer() {
     telegramEngine.start().catch(err => {
       console.error('Failed to start Telegram Engine on boot:', err);
     });
+
+    // 24/7 Global Keep-Alive Server Heartbeat
+    setInterval(() => {
+      const status = telegramEngine.getStatus();
+      if (!status.isRunning) {
+        console.log('⚡ Server Keep-Alive: Restarting standby Telegram Bot Engine...');
+        telegramEngine.start().catch(() => {});
+      }
+    }, 15000);
+
+    // 24/7 Render Anti-Sleep Self-Ping Loop (every 8 minutes)
+    setInterval(async () => {
+      try {
+        const pingUrl = process.env.RENDER_EXTERNAL_URL
+          ? `${process.env.RENDER_EXTERNAL_URL}/healthz`
+          : process.env.APP_URL
+          ? `${process.env.APP_URL}/healthz`
+          : `http://127.0.0.1:${PORT}/healthz`;
+
+        await fetch(pingUrl).catch(() => {});
+      } catch {}
+    }, 8 * 60 * 1000);
   });
 }
 

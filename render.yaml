@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: kalam-ff-panel-bot
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000

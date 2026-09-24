@@ -68,7 +68,9 @@ const AppContent: React.FC = () => {
     adminTab,
     setAdminTab,
     openAddProductModal,
-    products
+    products,
+    settings,
+    toggleMaintenanceMode
   } = useBot();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -142,18 +144,21 @@ const AppContent: React.FC = () => {
         <div className="absolute -bottom-32 left-1/3 w-[32rem] h-[32rem] bg-gradient-to-tl from-teal-500/15 via-emerald-600/10 to-blue-600/20 rounded-full blur-[120px] animate-blob-3 opacity-60" />
       </div>
 
+      {/* Top Glowing Ambient Border Line */}
+      <div className="h-[2px] w-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-emerald-400 z-50 shrink-0 shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
+
       {/* Top Application Navigation Bar with Liquid Glass */}
-      <header className="bg-slate-950/85 backdrop-blur-xl border-b border-white/10 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 z-40 shadow-2xl shadow-black/40 sticky top-0">
+      <header className="bg-slate-950/90 backdrop-blur-2xl border-b border-indigo-500/20 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 z-40 shadow-2xl shadow-black/60 sticky top-0">
         {/* Brand & Left Hamburger Drawer Toggle */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
           <button
             type="button"
             onClick={() => setIsSidebarOpen(true)}
-            className="p-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 border border-white/10 hover:border-cyan-400/40 transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center shrink-0"
+            className="p-2 rounded-xl bg-slate-900/90 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 border border-slate-700 hover:border-cyan-400/50 transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center shrink-0"
             title="Open Navigation Menu"
             aria-label="Open Navigation Menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-5 h-5 text-cyan-400" />
           </button>
 
           <WebsiteLogo
@@ -163,9 +168,32 @@ const AppContent: React.FC = () => {
             className="cursor-pointer hover:opacity-95 transition shrink-0"
           />
 
+          {/* Real-Time Maintenance Mode Indicator Badge */}
+          {settings.maintenance_mode ? (
+            <div className="flex items-center gap-1.5 bg-rose-950/80 border border-rose-500/60 px-2.5 py-1 rounded-full text-rose-300 text-[11px] font-bold shadow-lg animate-pulse shrink-0">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span className="hidden min-[480px]:inline">🛠️ Maintenance Mode Active</span>
+              <span className="min-[480px]:hidden">🛠️ Maintenance</span>
+              {isMasterAdmin && (
+                <button
+                  type="button"
+                  onClick={() => toggleMaintenanceMode(false)}
+                  className="ml-1 px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white text-[10px] rounded font-black cursor-pointer shadow"
+                >
+                  Turn OFF
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="hidden min-[520px]:flex items-center gap-1.5 bg-emerald-950/50 border border-emerald-500/30 px-2.5 py-1 rounded-full text-emerald-300 text-[10px] font-bold shrink-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>LIVE SERVER</span>
+            </div>
+          )}
+
           {/* Active Bot Quick Switcher on Desktop */}
-          {myBots.length > 0 ? (
-            <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl text-xs shadow-inner">
+          {myBots.length > 0 && !settings.maintenance_mode && (
+            <div className="hidden xl:flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl text-xs shadow-inner">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
               <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
               <select
@@ -180,15 +208,6 @@ const AppContent: React.FC = () => {
                 ))}
               </select>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setActiveTab('my_bots')}
-              className="hidden lg:flex items-center gap-1.5 bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span>+ Create Bot</span>
-            </button>
           )}
         </div>
 
@@ -629,7 +648,56 @@ const AppContent: React.FC = () => {
 
       {/* Main Content Area with Smooth Motion Transitions */}
       <main className="flex-1 min-h-0 relative flex flex-col z-10 w-full overflow-hidden">
-        <AnimatePresence mode="wait">
+        {settings.maintenance_mode && !isMasterAdmin ? (
+          <motion.div
+            key="maintenance_screen"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex-1 min-h-0 w-full flex items-center justify-center p-4 sm:p-6 my-auto"
+          >
+            <div className="max-w-md w-full bg-slate-900/95 border-2 border-rose-500/40 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl shadow-rose-950/60 backdrop-blur-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500 animate-pulse" />
+              
+              <div className="w-16 h-16 bg-rose-500/20 rounded-2xl border border-rose-500/40 flex items-center justify-center mx-auto text-rose-400 shadow-inner">
+                <Terminal className="w-8 h-8 animate-pulse" />
+              </div>
+
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+                  {settings.maintenance_message || '🛠️ SYSTEM MAINTENANCE IN PROGRESS'}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                  {settings.maintenance_reason || 'We are currently upgrading server database infrastructure and deploying security updates. Please check back shortly!'}
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1.5 text-left font-mono">
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-300">Status:</span>
+                  <span className="text-rose-400 font-bold">🔴 Active Maintenance</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-300">Server Time:</span>
+                  <span className="text-cyan-400 font-bold">{new Date().toLocaleTimeString()}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 space-y-2">
+                {settings.support_telegram && (
+                  <a
+                    href={settings.support_telegram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs rounded-2xl transition shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    💬 Contact Support on Telegram
+                  </a>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <AnimatePresence mode="wait">
           {activeTab === 'dashboard' ? (
             <motion.div
               key="dashboard"
@@ -698,6 +766,7 @@ const AppContent: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </main>
 
       {/* Auth Modal Overlay when opened from other screens */}
