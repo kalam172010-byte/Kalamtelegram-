@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { loadStateFromFirestore, saveStateToFirestore } from './firebaseSync';
+import {
+  loadStateFromFirestore,
+  saveStateToFirestore,
+  syncProductToFirestore,
+  deleteProductFromFirestore,
+  deleteProductsFromFirestore
+} from './firebaseSync';
 import {
   User,
   Product,
@@ -92,13 +98,12 @@ export class DatabaseStore {
           : [];
         let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
 
-        // Deduplicate and assign strictly unique IDs to all duration plans
+        // Deduplicate and ensure stable unique IDs for all duration plans
         const seenIds = new Set<string | number>();
-        let nextUniqueId = 100;
         products = products.map((p, idx) => {
           let currentId = p.id;
-          if (currentId === undefined || currentId === null || seenIds.has(currentId)) {
-            currentId = Date.now() + idx + Math.floor(Math.random() * 1000);
+          if (currentId === undefined || currentId === null || seenIds.has(currentId) || String(currentId).trim() === '') {
+            currentId = 1000 + idx;
           }
           seenIds.add(currentId);
           return {
@@ -171,7 +176,7 @@ export class DatabaseStore {
     return initial;
   }
 
-  public saveData(dataToSave?: DatabaseSchema) {
+  public saveData(dataToSave?: DatabaseSchema, forceImmediate: boolean = false) {
     try {
       this.ensureDataDir();
       const target = dataToSave || this.data;
@@ -189,7 +194,7 @@ export class DatabaseStore {
       // Async sync to Cloud Firestore to survive Render auto-deploys & restarts
       // Only push to Firestore if synced or if local disk file existed
       if (this.isFirestoreSynced || fs.existsSync(DB_FILE)) {
-        saveStateToFirestore(target).catch(err => {
+        saveStateToFirestore(target, forceImmediate).catch(err => {
           console.warn('Background Firestore save notice:', err.message);
         });
       }
@@ -204,7 +209,7 @@ export class DatabaseStore {
       if (!remote) {
         console.log('⚡ Firestore: Initializing cloud backup with current state...');
         this.isFirestoreSynced = true;
-        await saveStateToFirestore(this.data);
+        await saveStateToFirestore(this.data, true);
         return;
       }
 
@@ -241,8 +246,8 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Merge Products & Keys with strict ID uniqueness & demo filter
-      if (Array.isArray(remote.products) && remote.products.length > 0) {
+      // 3. Sync Products & Keys (Remote is source of truth for Cloud Firestore state)
+      if (Array.isArray(remote.products)) {
         const cleanRemoteProducts = remote.products
           .filter((p: any) => {
             const name = ((p.panel_name || p.name || '') + '').toLowerCase();
@@ -255,26 +260,12 @@ export class DatabaseStore {
             reseller_price_inr: p.reseller_price_inr ?? p.price_inr
           }));
 
-        if (this.data.products.length === 0) {
-          this.data.products = cleanRemoteProducts;
-        } else {
-          // Merge missing remote products into local data
-          const localProductIds = new Set(this.data.products.map(p => String(p.id)));
-          for (const rp of cleanRemoteProducts) {
-            if (!localProductIds.has(String(rp.id))) {
-              this.data.products.push(rp);
-            }
-          }
-        }
+        this.data.products = cleanRemoteProducts;
       }
 
-      if (Array.isArray(remote.productKeys) && remote.productKeys.length > 0) {
-        const localKeyIds = new Set(this.data.productKeys.map(k => String(k.id)));
-        for (const rk of remote.productKeys) {
-          if (!localKeyIds.has(String(rk.id)) && this.data.products.some(p => String(p.id) === String(rk.product_id))) {
-            this.data.productKeys.push(rk);
-          }
-        }
+      if (Array.isArray(remote.productKeys)) {
+        const validProductIds = new Set(this.data.products.map(p => String(p.id)));
+        this.data.productKeys = remote.productKeys.filter((k: any) => validProductIds.has(String(k.product_id)));
       }
 
       // 4. Merge Orders, Transactions, Tickets, Bots, Emojis, FSM States
@@ -298,10 +289,10 @@ export class DatabaseStore {
       }
 
       this.isFirestoreSynced = true;
-      // Persist merged & deduplicated state to local disk and back to Firestore
+      // Persist merged state to local disk
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-      await saveStateToFirestore(this.data).catch(() => {});
-      console.log('⚡ Firestore: Cloud state restored & product IDs deduplicated across deploy.');
+      await saveStateToFirestore(this.data, false).catch(() => {});
+      console.log('⚡ Firestore: Cloud state restored & products synced across deploy.');
     } catch (e: any) {
       console.warn('⚡ Firestore syncWithFirestore notice:', e.message);
     }
@@ -474,7 +465,8 @@ export class DatabaseStore {
       }
     }
 
-    this.saveData();
+    syncProductToFirestore(finalProduct).catch(() => {});
+    this.saveData(undefined, true);
     return finalProduct;
   }
 
@@ -482,7 +474,8 @@ export class DatabaseStore {
     const idx = this.data.products.findIndex(p => String(p.id) === String(id));
     if (idx === -1) return null;
     this.data.products[idx] = { ...this.data.products[idx], ...updates };
-    this.saveData();
+    syncProductToFirestore(this.data.products[idx]).catch(() => {});
+    this.saveData(undefined, true);
     return this.data.products[idx];
   }
 
@@ -493,11 +486,13 @@ export class DatabaseStore {
       const matchName = matchNameFlexible(p.panel_name || p.name, panelName);
       if (matchCat && matchName) {
         updatedCount++;
-        return { ...p, ...updates };
+        const updated = { ...p, ...updates };
+        syncProductToFirestore(updated).catch(() => {});
+        return updated;
       }
       return p;
     });
-    this.saveData();
+    this.saveData(undefined, true);
     return updatedCount;
   }
 
@@ -513,7 +508,8 @@ export class DatabaseStore {
     const initialLen = this.data.products.length;
     this.data.products = this.data.products.filter(p => String(p.id) !== String(id));
     this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id));
-    this.saveData();
+    deleteProductFromFirestore(id).catch(() => {});
+    this.saveData(undefined, true);
     return this.data.products.length < initialLen;
   }
 
@@ -522,7 +518,8 @@ export class DatabaseStore {
     const initialLen = this.data.products.length;
     this.data.products = this.data.products.filter(p => !strIds.has(String(p.id)));
     this.data.productKeys = this.data.productKeys.filter(k => !strIds.has(String(k.product_id)));
-    this.saveData();
+    deleteProductsFromFirestore(ids).catch(() => {});
+    this.saveData(undefined, true);
     return initialLen - this.data.products.length;
   }
 
@@ -541,7 +538,8 @@ export class DatabaseStore {
     });
 
     this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id)));
-    this.saveData();
+    deleteProductsFromFirestore(Array.from(deletedProductIds)).catch(() => {});
+    this.saveData(undefined, true);
     return initialLen - this.data.products.length;
   }
 

@@ -13,7 +13,7 @@ export interface CachedBalance {
 export const offlineStorage = {
   saveProducts: (products: Product[]) => {
     try {
-      if (Array.isArray(products) && products.length > 0) {
+      if (Array.isArray(products)) {
         localStorage.setItem(OFFLINE_PRODUCTS_KEY, JSON.stringify(products));
         localStorage.setItem(OFFLINE_SYNC_TIMESTAMP_KEY, new Date().toISOString());
       }

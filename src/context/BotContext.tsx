@@ -500,11 +500,19 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
 
             if (Array.isArray(serverData.products)) {
-              setProducts(serverData.products.map((p: Product, idx: number) => ({
+              const cleanProds = serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
                 reseller_price: p.reseller_price ?? p.price_inr,
                 reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+              }));
+              setProducts(cleanProds);
+
+              // Continuously sync bot instances' internal products list to match cleanProds
+              setBots(prev => prev.map(b => ({
+                ...b,
+                products: cleanProds,
+                productKeys: Array.isArray(serverData.productKeys) ? serverData.productKeys : b.productKeys
               })));
             }
             if (Array.isArray(serverData.productKeys)) {
@@ -3623,9 +3631,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${strId} deleted`);
 
-    // Sync deletion to Cloud Firestore
-    deleteDoc(doc(db, 'products', strId)).catch(() => {});
-
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
       method: 'POST',
@@ -3667,11 +3672,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     });
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCTS', `Batch deleted ${ids.length} products`);
-
-    // Sync deletion to Cloud Firestore
-    ids.forEach(id => {
-      deleteDoc(doc(db, 'products', String(id))).catch(() => {});
-    });
 
     fetch('/api/products', {
       method: 'POST',

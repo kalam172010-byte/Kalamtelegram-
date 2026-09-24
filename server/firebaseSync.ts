@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, initializeFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 function getFirebaseConfig() {
   try {
@@ -46,7 +46,7 @@ let saveDebounceTimer: NodeJS.Timeout | null = null;
 let pendingDataToSave: any = null;
 let isSaving = false;
 let lastSaveTime = 0;
-const MIN_SAVE_INTERVAL_MS = 20000; // Minimum 20 seconds between Firestore writes
+const MIN_SAVE_INTERVAL_MS = 15000; // Minimum interval for standard background autosave
 
 export function isFirestoreQuotaExhausted(): boolean {
   if (isQuotaExhausted && Date.now() > quotaExhaustedUntil) {
@@ -146,7 +146,6 @@ async function performActualFirestoreSave(data: any): Promise<void> {
     }
   } finally {
     isSaving = false;
-    // If new data arrived while saving, schedule next debounced save
     if (pendingDataToSave && !isFirestoreQuotaExhausted()) {
       const nextData = pendingDataToSave;
       pendingDataToSave = null;
@@ -155,20 +154,27 @@ async function performActualFirestoreSave(data: any): Promise<void> {
   }
 }
 
-export async function saveStateToFirestore(data: any): Promise<void> {
+export async function saveStateToFirestore(data: any, forceImmediate: boolean = false): Promise<void> {
   if (isFirestoreQuotaExhausted()) {
     return;
   }
 
   pendingDataToSave = data;
 
-  // Clear existing debounce timer
   if (saveDebounceTimer) {
     clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
+
+  if (forceImmediate) {
+    const dataToSave = pendingDataToSave;
+    pendingDataToSave = null;
+    await performActualFirestoreSave(dataToSave);
+    return;
   }
 
   const timeSinceLastSave = Date.now() - lastSaveTime;
-  const delay = timeSinceLastSave < MIN_SAVE_INTERVAL_MS ? (MIN_SAVE_INTERVAL_MS - timeSinceLastSave) : 2500;
+  const delay = timeSinceLastSave < MIN_SAVE_INTERVAL_MS ? (MIN_SAVE_INTERVAL_MS - timeSinceLastSave) : 1000;
 
   saveDebounceTimer = setTimeout(() => {
     saveDebounceTimer = null;
@@ -179,3 +185,35 @@ export async function saveStateToFirestore(data: any): Promise<void> {
     }
   }, delay);
 }
+
+/**
+ * Real-Time Firestore Individual Document Handlers for Products
+ */
+export async function syncProductToFirestore(product: any): Promise<void> {
+  if (isFirestoreQuotaExhausted() || !product || product.id === undefined) return;
+  try {
+    const cleanProd = JSON.parse(JSON.stringify(product));
+    await setDoc(doc(db, 'products', String(product.id)), cleanProd);
+    console.log(`⚡ Firestore: Real-time product #${product.id} synced to 'products' collection.`);
+  } catch (err: any) {
+    console.warn('⚡ Firestore notice (syncProductToFirestore):', err?.message || err);
+  }
+}
+
+export async function deleteProductFromFirestore(productId: string | number): Promise<void> {
+  if (isFirestoreQuotaExhausted() || productId === undefined) return;
+  try {
+    await deleteDoc(doc(db, 'products', String(productId)));
+    console.log(`⚡ Firestore: Real-time product #${productId} deleted from 'products' collection.`);
+  } catch (err: any) {
+    console.warn('⚡ Firestore notice (deleteProductFromFirestore):', err?.message || err);
+  }
+}
+
+export async function deleteProductsFromFirestore(productIds: (string | number)[]): Promise<void> {
+  if (isFirestoreQuotaExhausted() || !Array.isArray(productIds)) return;
+  for (const id of productIds) {
+    await deleteProductFromFirestore(id);
+  }
+}
+

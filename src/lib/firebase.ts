@@ -119,6 +119,13 @@ function handleFirestoreWriteError(err: any) {
     clientQuotaExhausted = true;
     clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
     console.warn('Firestore notice: Write quota reached. Operating seamlessly with local high-speed state cache.');
+  } else if (
+    msg.includes('NOT_FOUND') ||
+    msg.includes('Code: 5') ||
+    err?.code === 'not-found' ||
+    msg.includes('5 NOT_FOUND')
+  ) {
+    // Gracefully handle document not found errors without throwing unhandled exceptions
   } else {
     console.warn('Firestore operation notice:', msg);
   }
@@ -157,19 +164,6 @@ export async function deleteDoc(documentRef: DocumentReference<any, any>): Promi
     handleFirestoreWriteError(err);
   }
 }
-
-// Test connection on boot to verify health
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, '_connection_test', 'ping'));
-  } catch (error: any) {
-    const msg = String(error?.message || error?.code || error);
-    if (msg.includes('the client is offline')) {
-      console.warn("Firestore: Client is operating in offline mode.");
-    }
-  }
-}
-testConnection();
 
 export {
   collection,

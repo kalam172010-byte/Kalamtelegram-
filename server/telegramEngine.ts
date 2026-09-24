@@ -1828,6 +1828,70 @@ class TelegramEngine {
       }
     }
 
+    // Handle Reply Keyboard Button Clicks & Text Triggers
+    if (
+      lowerText.includes('product store') ||
+      lowerText.includes('store') ||
+      lowerText.includes('shop') ||
+      lowerText.includes('🛒') ||
+      lowerText.includes('🛍')
+    ) {
+      await this.sendShopCategories(chatId, user);
+      return;
+    }
+
+    if (
+      lowerText.includes('add balance') ||
+      lowerText.includes('deposit') ||
+      lowerText.includes('wallet') ||
+      lowerText.includes('💳') ||
+      lowerText.includes('💰')
+    ) {
+      await this.sendAddBalanceMenu(chatId, user);
+      return;
+    }
+
+    if (
+      lowerText.includes('my profile') ||
+      lowerText.includes('profile') ||
+      lowerText.includes('account') ||
+      lowerText.includes('👤')
+    ) {
+      await this.sendProfileMessage(chatId, user);
+      return;
+    }
+
+    if (
+      lowerText.includes('refer & earn') ||
+      lowerText.includes('referral') ||
+      lowerText.includes('refer') ||
+      lowerText.includes('invite') ||
+      lowerText.includes('🎁')
+    ) {
+      await this.sendReferralMenu(chatId, user);
+      return;
+    }
+
+    if (
+      lowerText.includes('reseller') ||
+      lowerText.includes('wholesale') ||
+      lowerText.includes('vip') ||
+      lowerText.includes('👑')
+    ) {
+      await this.sendResellerMenu(chatId, user);
+      return;
+    }
+
+    if (
+      lowerText.includes('support') ||
+      lowerText.includes('help') ||
+      lowerText.includes('ticket') ||
+      lowerText.includes('💬')
+    ) {
+      await this.sendSupportMenu(chatId, user);
+      return;
+    }
+
     // Admin Panel Triggers: @admin, /admin, admin, /panel, /dashboard, !admin, @admin_bot, /adminhub
     const isAdminTrigger = (
       lowerText === '@admin' ||
