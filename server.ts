@@ -1084,8 +1084,13 @@ async function startServer() {
   }
 
   // Start HTTP Server
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Kalam FF Panel Server running on http://0.0.0.0:${PORT}`);
+    
+    // 1. Sync persistent Cloud Firestore state on startup to restore bot token & user balances
+    await dbStore.syncWithFirestore();
+
+    // 2. Start Telegram Engine
     telegramEngine.start().catch(err => {
       console.error('Failed to start Telegram Engine on boot:', err);
     });

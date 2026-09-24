@@ -175,9 +175,143 @@ export const INITIAL_USERS: User[] = [
   }
 ];
 
-export const INITIAL_PRODUCTS: Product[] = [];
+export const INITIAL_PRODUCTS: Product[] = [
+  // ANDROID NON ROOT PANEL
+  {
+    id: 1,
+    category: "ANDROID NON ROOT PANEL",
+    panel_name: "KALAM NON-ROOT VIP PANEL",
+    name: "1 Day Pass",
+    duration: "1 Day",
+    price_inr: 50.0,
+    reseller_price_inr: 35.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 2,
+    category: "ANDROID NON ROOT PANEL",
+    panel_name: "KALAM NON-ROOT VIP PANEL",
+    name: "7 Days Pass",
+    duration: "7 Days",
+    price_inr: 200.0,
+    reseller_price_inr: 140.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 3,
+    category: "ANDROID NON ROOT PANEL",
+    panel_name: "KALAM NON-ROOT VIP PANEL",
+    name: "30 Days Pass",
+    duration: "30 Days",
+    price_inr: 500.0,
+    reseller_price_inr: 350.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
 
-export const INITIAL_PRODUCT_KEYS: ProductKey[] = [];
+  // ANDROID ROOT PANEL
+  {
+    id: 4,
+    category: "ANDROID ROOT PANEL",
+    panel_name: "KALAM ROOT ULTRA BYPASS PANEL",
+    name: "1 Day Pass",
+    duration: "1 Day",
+    price_inr: 80.0,
+    reseller_price_inr: 55.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 5,
+    category: "ANDROID ROOT PANEL",
+    panel_name: "KALAM ROOT ULTRA BYPASS PANEL",
+    name: "7 Days Pass",
+    duration: "7 Days",
+    price_inr: 300.0,
+    reseller_price_inr: 200.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 6,
+    category: "ANDROID ROOT PANEL",
+    panel_name: "KALAM ROOT ULTRA BYPASS PANEL",
+    name: "30 Days Pass",
+    duration: "30 Days",
+    price_inr: 750.0,
+    reseller_price_inr: 500.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+
+  // PC PANEL
+  {
+    id: 7,
+    category: "PC PANEL",
+    panel_name: "KALAM PC EMULATOR INJECTOR",
+    name: "1 Day Pass",
+    duration: "1 Day",
+    price_inr: 100.0,
+    reseller_price_inr: 70.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 8,
+    category: "PC PANEL",
+    panel_name: "KALAM PC EMULATOR INJECTOR",
+    name: "7 Days Pass",
+    duration: "7 Days",
+    price_inr: 400.0,
+    reseller_price_inr: 280.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  },
+  {
+    id: 9,
+    category: "PC PANEL",
+    panel_name: "KALAM PC EMULATOR INJECTOR",
+    name: "30 Days Pass",
+    duration: "30 Days",
+    price_inr: 900.0,
+    reseller_price_inr: 600.0,
+    is_active: 1,
+    is_maintenance: 0,
+    apk_link: "https://t.me/KalamFFPanelAPKs",
+    device_limit: "1 Device HWID"
+  }
+];
+
+export const INITIAL_PRODUCT_KEYS: ProductKey[] = [
+  { id: 'key_1_1', product_id: 1, key_string: 'KALAM-NONROOT-1DAY-9A8B7C', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_1_2', product_id: 1, key_string: 'KALAM-NONROOT-1DAY-6F5E4D', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_2_1', product_id: 2, key_string: 'KALAM-NONROOT-7DAYS-112233', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_3_1', product_id: 3, key_string: 'KALAM-NONROOT-30DAYS-445566', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_4_1', product_id: 4, key_string: 'KALAM-ROOT-1DAY-778899', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_5_1', product_id: 5, key_string: 'KALAM-ROOT-7DAYS-AABBCC', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_6_1', product_id: 6, key_string: 'KALAM-ROOT-30DAYS-DDEEFF', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_7_1', product_id: 7, key_string: 'KALAM-PC-1DAY-990011', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_8_1', product_id: 8, key_string: 'KALAM-PC-7DAYS-223344', is_used: 0, created_at: '2026-01-01' },
+  { id: 'key_9_1', product_id: 9, key_string: 'KALAM-PC-30DAYS-556677', is_used: 0, created_at: '2026-01-01' }
+];
 
 export const INITIAL_COUPONS: Coupon[] = [
   { code: 'KALAM50', amount: 50.0, uses_left: 45, total_uses: 50 },

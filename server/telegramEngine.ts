@@ -51,7 +51,8 @@ export function isCategoryMatch(prodCategory: string, targetCategory: string): b
   if (!prodCategory || !targetCategory) return false;
   const c1 = normalizeCategoryName(prodCategory);
   const c2 = normalizeCategoryName(targetCategory);
-  if (c1 === c2) return true;
+  if (!c1 || !c2) return false;
+  if (c1 === c2 || c1.includes(c2) || c2.includes(c1)) return true;
   if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
   if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
   if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
@@ -202,13 +203,23 @@ class TelegramEngine {
     const uid = Number(user.user_id);
     const cid = Number(chatId);
 
-    // Strict Website Admin ID Enforcement
+    // 1. Direct DB user role check
+    if (user.is_admin === 1 || user.role === 'admin') return true;
+
+    // 2. Website Admin ID Enforcement
     if (adminId && (uid === adminId || cid === adminId)) return true;
 
-    // Fallback if Admin Contact username matches configured setting
+    // 3. Admin Contact username fallback
     const uname = (user.username || '').toLowerCase().replace('@', '');
     const adminContact = (settings.admin_contact || '').toLowerCase().replace('@', '');
-    if (adminContact && uname === adminContact) return true;
+    if (adminContact && uname && (uname === adminContact || adminContact.includes(uname))) return true;
+
+    // 4. Auto-bind owner as Admin if settings.admin_id is unconfigured or 0
+    if (!adminId && uid > 0) {
+      dbStore.updateSettings({ admin_id: uid });
+      dbStore.updateUser(uid, { is_admin: 1, role: 'admin' });
+      return true;
+    }
 
     return false;
   }
@@ -632,8 +643,28 @@ class TelegramEngine {
   }
 
   private getUserPrice(user: User, product: Product): number {
-    if (user.is_reseller === 1) return product.reseller_price;
-    return product.price_inr;
+    if (!product) return 0;
+    const settings = dbStore.getData().settings;
+
+    // 1. Reseller tier pricing
+    if (user.is_reseller === 1) {
+      const resellerP = Number(product.reseller_price || (product as any).reseller_price_inr || 0);
+      if (resellerP > 0) return resellerP;
+    }
+
+    // 2. VIP Member tier pricing (15% discount or configurable percentage)
+    if (user.is_vip === 1) {
+      const vipPercent = Number(settings.vip_discount_percent) || 15;
+      const baseP = Number(product.price_inr) || 0;
+      if (baseP > 0) {
+        const discounted = baseP * (1 - vipPercent / 100);
+        return Math.round(discounted * 100) / 100;
+      }
+    }
+
+    // 3. Regular retail price
+    const price = Number(product.price_inr) || 0;
+    return price;
   }
 
   private getProductAvailableKeys(productId: number): string[] {
@@ -1871,20 +1902,34 @@ class TelegramEngine {
     }
 
     if (data === 'shop_categories') {
+      const allActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
+      const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
+
       const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
-        `Select your desired operating environment and panel category below:\n\n` +
+        `Select your desired operating environment or product category below:\n\n` +
         `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
         `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
         `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
 
-      const keyboard = {
+      const keyboard: { inline_keyboard: any[][] } = {
         inline_keyboard: [
           [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
           [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
-          [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }],
-          [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
+          [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
         ]
       };
+
+      // Add dynamic category buttons for custom categories added by user/admin
+      for (const cat of uniqueCats) {
+        if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
+          keyboard.inline_keyboard.push([
+            { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_${encodeURIComponent(cat)}`, style: 'primary' }
+          ]);
+        }
+      }
+
+      keyboard.inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
+
       await this.editMessageText(chatId, messageId, text, keyboard);
       return;
     }
@@ -1892,6 +1937,8 @@ class TelegramEngine {
     if (data.startsWith('cat_')) {
       let categoryName = 'ANDROID NON ROOT PANEL';
       let catCode = 'cat_nonroot';
+      const rawPayload = data.replace('cat_', '');
+
       if (data === 'cat_root') {
         categoryName = 'ANDROID ROOT PANEL';
         catCode = 'cat_root';
@@ -1902,13 +1949,26 @@ class TelegramEngine {
         categoryName = 'ANDROID NON ROOT PANEL';
         catCode = 'cat_nonroot';
       } else {
-        categoryName = data.replace('cat_', '');
+        try {
+          categoryName = decodeURIComponent(rawPayload);
+        } catch {
+          categoryName = rawPayload;
+        }
         catCode = data;
       }
 
-      const allCatProducts = dbStore.getData().products.filter(p => 
+      let allCatProducts = dbStore.getData().products.filter(p => 
         p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
+
+      // SMART FALLBACK: If specific category search yielded 0 results,
+      // check if ANY active products exist in the store and show them so the store NEVER fails!
+      if (allCatProducts.length === 0) {
+        const globalActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
+        if (globalActiveProds.length > 0) {
+          allCatProducts = globalActiveProds;
+        }
+      }
 
       let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
       if (allCatProducts.length === 0) {
@@ -2140,7 +2200,7 @@ class TelegramEngine {
         { text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }
       ]);
       keyboard.inline_keyboard.push([
-        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'secondary' }
+        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
       ]);
 
       const maintenanceBanner = isUnderMaintenance
@@ -2170,8 +2230,8 @@ class TelegramEngine {
         const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }],
-            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+            [{ text: '🛒 Return to Store', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu', style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2187,8 +2247,8 @@ class TelegramEngine {
 
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🛒 Explore Other Products', callback_data: 'shop_categories' }],
-            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+            [{ text: '🛒 Explore Other Products', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu', style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2210,8 +2270,8 @@ class TelegramEngine {
 
         const keyboard = {
           inline_keyboard: [
-            [{ text: '💳 Add Balance via FamPay UPI', callback_data: 'add_balance' }],
-            [{ text: '🔙 Back to Product', callback_data: `prod_${product.id}` }]
+            [{ text: '💳 Add Balance via FamPay UPI', callback_data: 'add_balance', style: 'success' }],
+            [{ text: '🔙 Back to Product', callback_data: `prod_${product.id}`, style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2232,7 +2292,7 @@ class TelegramEngine {
 
         const cancelKb = {
           inline_keyboard: [
-            [{ text: '❌ Cancel Purchase', callback_data: `prod_${prodId}` }]
+            [{ text: '❌ Cancel Purchase', callback_data: `prod_${prodId}`, style: 'danger' }]
           ]
         };
 
@@ -2421,7 +2481,7 @@ class TelegramEngine {
         `<i>Example: <code>KALAM50</code> or <code>FREESTORE</code></i>\n\n` +
         `Send /cancel to return to main menu.`,
         {
-          inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'main_menu' }]]
+          inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'main_menu', style: 'danger' }]]
         }
       );
       return;
@@ -2443,15 +2503,15 @@ class TelegramEngine {
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '📲 APK Channel', url: apkUrl },
-            { text: '📢 Official Channel', url: channelUrl }
+            { text: '📲 APK Channel', url: apkUrl, style: 'primary' },
+            { text: '📢 Official Channel', url: channelUrl, style: 'primary' }
           ],
           [
-            { text: '💬 Telegram Support', url: settings.support_telegram || 'https://t.me' },
-            { text: '📱 WhatsApp Support', url: settings.support_whatsapp || 'https://wa.me' }
+            { text: '💬 Telegram Support', url: settings.support_telegram || 'https://t.me', style: 'primary' },
+            { text: '📱 WhatsApp Support', url: settings.support_whatsapp || 'https://wa.me', style: 'primary' }
           ],
-          [{ text: '📩 Open Support Ticket', callback_data: 'ticket_create' }],
-          [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+          [{ text: '📩 Open Support Ticket', callback_data: 'ticket_create', style: 'success' }],
+          [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
         ]
       };
       await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2467,7 +2527,7 @@ class TelegramEngine {
         `Please type your question or issue in your next message. Our team will be notified immediately on Telegram and in the Admin Hub.\n\n` +
         `<i>Send /cancel to abort.</i>`,
         {
-          inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'main_menu' }]]
+          inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'main_menu', style: 'danger' }]]
         }
       );
       return;
@@ -2489,11 +2549,11 @@ class TelegramEngine {
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '⬇️ Open APK Channel', url: apkUrl },
-            { text: '🎥 Video Tutorial', url: tutorialUrl }
+            { text: '⬇️ Open APK Channel', url: apkUrl, style: 'primary' },
+            { text: '🎥 Video Tutorial', url: tutorialUrl, style: 'primary' }
           ],
-          [{ text: '🛒 Open Store', callback_data: 'shop_categories' }],
-          [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+          [{ text: '🛒 Open Store', callback_data: 'shop_categories', style: 'success' }],
+          [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
         ]
       };
       await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2733,10 +2793,10 @@ class TelegramEngine {
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot' }],
-        [{ text: '⚡ Android Root Panel', callback_data: 'cat_root' }],
-        [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc' }],
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+        [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
+        [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
+        [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }],
+        [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
       ]
     };
     await this.sendMessage(chatId, text, keyboard);
@@ -2771,7 +2831,7 @@ class TelegramEngine {
         ],
         [
           { text: '👥 Refer & Earn', callback_data: 'referral_menu', style: 'success' },
-          { text: '🎁 Redeem Code', callback_data: 'redeem_code', style: 'success' }
+          { text: '🎁 Redeem Code', callback_data: 'redeem_code', style: 'danger' }
         ],
         [
           { text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }
@@ -2841,30 +2901,30 @@ class TelegramEngine {
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '1', callback_data: 'kp_1' },
-          { text: '2', callback_data: 'kp_2' },
-          { text: '3', callback_data: 'kp_3' }
+          { text: '1', callback_data: 'kp_1', style: 'success' },
+          { text: '2', callback_data: 'kp_2', style: 'success' },
+          { text: '3', callback_data: 'kp_3', style: 'success' }
         ],
         [
-          { text: '4', callback_data: 'kp_4' },
-          { text: '5', callback_data: 'kp_5' },
-          { text: '6', callback_data: 'kp_6' }
+          { text: '4', callback_data: 'kp_4', style: 'success' },
+          { text: '5', callback_data: 'kp_5', style: 'success' },
+          { text: '6', callback_data: 'kp_6', style: 'success' }
         ],
         [
-          { text: '7', callback_data: 'kp_7' },
-          { text: '8', callback_data: 'kp_8' },
-          { text: '9', callback_data: 'kp_9' }
+          { text: '7', callback_data: 'kp_7', style: 'success' },
+          { text: '8', callback_data: 'kp_8', style: 'success' },
+          { text: '9', callback_data: 'kp_9', style: 'success' }
         ],
         [
-          { text: '❌ CLEAR', callback_data: 'kp_clear' },
-          { text: '0', callback_data: 'kp_0' },
-          { text: '➡️ BACK', callback_data: 'kp_back' }
+          { text: '❌ CLEAR', callback_data: 'kp_clear', style: 'danger' },
+          { text: '0', callback_data: 'kp_0', style: 'success' },
+          { text: '➡️ BACK', callback_data: 'kp_back', style: 'primary' }
         ],
         [
-          { text: 'CONFIRM AMOUNT', callback_data: 'kp_confirm' }
+          { text: '✅ CONFIRM AMOUNT', callback_data: 'kp_confirm', style: 'success' }
         ],
         [
-          { text: '➡️ Return to Quick Amounts', callback_data: 'kp_quick_amounts' }
+          { text: '🔙 Return to Quick Amounts', callback_data: 'kp_quick_amounts', style: 'danger' }
         ]
       ]
     };
@@ -3057,13 +3117,13 @@ class TelegramEngine {
 
     if (user.is_reseller === 0) {
       keyboard.inline_keyboard.push([
-        { text: `⚡ Upgrade to Reseller (₹${setupFee})`, callback_data: 'reseller_upgrade' }
+        { text: `⚡ Upgrade to Reseller (₹${setupFee})`, callback_data: 'reseller_upgrade', style: 'success' }
       ]);
     }
 
     keyboard.inline_keyboard.push([
-      { text: '💳 Add Balance', callback_data: 'add_balance' },
-      { text: '🔙 Back to Menu', callback_data: 'main_menu' }
+      { text: '💳 Add Balance', callback_data: 'add_balance', style: 'success' },
+      { text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }
     ]);
 
     if (messageId) {
@@ -3100,11 +3160,11 @@ class TelegramEngine {
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '📤 Share Link with Friends', url: shareUrl }
+          { text: '📤 Share Link with Friends', url: shareUrl, style: 'primary' }
         ],
         [
-          { text: '💳 Add Balance', callback_data: 'add_balance' },
-          { text: '🔙 Back to Menu', callback_data: 'main_menu' }
+          { text: '💳 Add Balance', callback_data: 'add_balance', style: 'success' },
+          { text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }
         ]
       ]
     };
@@ -3127,8 +3187,8 @@ class TelegramEngine {
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '📩 Open Support Ticket', callback_data: 'ticket_create' }],
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+        [{ text: '📩 Open Support Ticket', callback_data: 'ticket_create', style: 'success' }],
+        [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
       ]
     };
     if (messageId) {
@@ -3150,8 +3210,8 @@ class TelegramEngine {
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '🛒 Open Store', callback_data: 'shop_categories' }],
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+        [{ text: '🛒 Open Store', callback_data: 'shop_categories', style: 'success' }],
+        [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
       ]
     };
     if (messageId) {
@@ -3196,36 +3256,37 @@ class TelegramEngine {
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '🚀 Launch Admin Hub (Mini App)', web_app: { url: webAppUrl } }
+          { text: '🚀 Launch Admin Hub (Mini App)', web_app: { url: webAppUrl }, style: 'primary' }
         ],
         [
-          { text: '🌐 Open Admin Hub in Browser', url: webAppUrl }
+          { text: '🌐 Open Admin Hub in Browser', url: webAppUrl, style: 'primary' }
         ],
         [
-          { text: '💳 + Add Balance', callback_data: 'admin_add_bal' },
-          { text: '🔻 - Deduct Balance', callback_data: 'admin_ded_bal' }
+          { text: '💳 + Add Balance', callback_data: 'admin_add_bal', style: 'success' },
+          { text: '🔻 - Deduct Balance', callback_data: 'admin_ded_bal', style: 'danger' }
         ],
         [
-          { text: '👥 View Users', callback_data: 'admin_users' },
-          { text: '📦 Products & Vault', callback_data: 'admin_stock' }
+          { text: '👥 View Users', callback_data: 'admin_users', style: 'primary' },
+          { text: '📦 Products & Vault', callback_data: 'admin_stock', style: 'primary' }
         ],
         [
-          { text: `🎫 Tickets (${openTickets})`, callback_data: 'admin_tickets' },
-          { text: '📢 Send Broadcast', callback_data: 'admin_broadcast' }
+          { text: `🎫 Tickets (${openTickets})`, callback_data: 'admin_tickets', style: 'primary' },
+          { text: '📢 Send Broadcast', callback_data: 'admin_broadcast', style: 'primary' }
         ],
         [
           {
             text: settings.bot_status === 'ON' ? '🟢 Bot: Online (Click to Pause)' : '🔴 Bot: Maintenance (Click to Resume)',
-            callback_data: 'admin_toggle_maint'
+            callback_data: 'admin_toggle_maint',
+            style: 'danger'
           }
         ],
         [
-          { text: '🧹 Clear Bot Commands', callback_data: 'admin_delete_commands' },
-          { text: '🔄 Reset Bot Commands', callback_data: 'admin_sync_commands' }
+          { text: '🧹 Clear Bot Commands', callback_data: 'admin_delete_commands', style: 'danger' },
+          { text: '🔄 Reset Bot Commands', callback_data: 'admin_sync_commands', style: 'primary' }
         ],
         [
-          { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh' },
-          { text: '🔙 Main Menu', callback_data: 'main_menu' }
+          { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh', style: 'success' },
+          { text: '🔙 Main Menu', callback_data: 'main_menu', style: 'danger' }
         ]
       ]
     };

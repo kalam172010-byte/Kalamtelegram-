@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { loadStateFromFirestore, saveStateToFirestore } from './firebaseSync';
 import {
   User,
   Product,
@@ -62,10 +63,13 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        return {
+        const products = Array.isArray(parsed.products) && parsed.products.length > 0 ? parsed.products : INITIAL_PRODUCTS;
+        const productKeys = Array.isArray(parsed.productKeys) && parsed.productKeys.length > 0 ? parsed.productKeys : INITIAL_PRODUCT_KEYS;
+
+        const data: DatabaseSchema = {
           users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS,
-          products: Array.isArray(parsed.products) ? parsed.products : INITIAL_PRODUCTS,
-          productKeys: Array.isArray(parsed.productKeys) ? parsed.productKeys : INITIAL_PRODUCT_KEYS,
+          products,
+          productKeys,
           orders: Array.isArray(parsed.orders) ? parsed.orders : [],
           tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
           coupons: Array.isArray(parsed.coupons) ? parsed.coupons : INITIAL_COUPONS,
@@ -83,6 +87,15 @@ export class DatabaseStore {
           fsmStates: parsed.fsmStates || {},
           bots: Array.isArray(parsed.bots) ? parsed.bots : []
         };
+
+        // If products were empty, persist initial catalog to disk
+        if (parsed.products && parsed.products.length === 0) {
+          try {
+            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+          } catch (e) {}
+        }
+
+        return data;
       }
     } catch (err) {
       console.error('Failed to load database.json, initializing fresh data:', err);
@@ -117,8 +130,83 @@ export class DatabaseStore {
       this.ensureDataDir();
       const target = dataToSave || this.data;
       fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
+      
+      // Async sync to Cloud Firestore to survive Render auto-deploys & restarts
+      saveStateToFirestore(target).catch(err => {
+        console.warn('Background Firestore save notice:', err.message);
+      });
     } catch (err) {
       console.error('Failed to persist database.json:', err);
+    }
+  }
+
+  public async syncWithFirestore(): Promise<void> {
+    try {
+      const remote = await loadStateFromFirestore();
+      if (!remote) {
+        console.log('⚡ Firestore: Initializing cloud backup with current state...');
+        await saveStateToFirestore(this.data);
+        return;
+      }
+
+      console.log('⚡ Firestore: Restoring cloud backup and merging state...');
+
+      // 1. Restore & Merge Settings (Preserves bot_token, admin_id, bot_username)
+      if (remote.settings && typeof remote.settings === 'object') {
+        this.data.settings = {
+          ...this.data.settings,
+          ...remote.settings,
+          bot_token: remote.settings.bot_token || this.data.settings.bot_token,
+          bot_username: remote.settings.bot_username || this.data.settings.bot_username,
+          admin_id: remote.settings.admin_id || this.data.settings.admin_id
+        };
+      }
+
+      // 2. Preserve & Merge Users + Wallet Balances (CRITICAL: User balances must NEVER decrease or reset!)
+      if (Array.isArray(remote.users) && remote.users.length > 0) {
+        for (const remoteUser of remote.users) {
+          const localIdx = this.data.users.findIndex(u => u.user_id === remoteUser.user_id);
+          if (localIdx === -1) {
+            this.data.users.push(remoteUser);
+          } else {
+            const localUser = this.data.users[localIdx];
+            this.data.users[localIdx] = {
+              ...localUser,
+              ...remoteUser,
+              balance: Math.max(localUser.balance || 0, remoteUser.balance || 0),
+              spent: Math.max(localUser.spent || 0, remoteUser.spent || 0)
+            };
+          }
+        }
+      }
+
+      // 3. Merge Products & Keys
+      if (Array.isArray(remote.products) && remote.products.length > 0) {
+        this.data.products = remote.products;
+      }
+      if (Array.isArray(remote.productKeys) && remote.productKeys.length > 0) {
+        this.data.productKeys = remote.productKeys;
+      }
+
+      // 4. Merge Orders, Transactions, Tickets, Bots
+      if (Array.isArray(remote.orders) && remote.orders.length > 0) {
+        this.data.orders = remote.orders;
+      }
+      if (Array.isArray(remote.transactions) && remote.transactions.length > 0) {
+        this.data.transactions = remote.transactions;
+      }
+      if (Array.isArray(remote.tickets) && remote.tickets.length > 0) {
+        this.data.tickets = remote.tickets;
+      }
+      if (Array.isArray(remote.bots) && remote.bots.length > 0) {
+        this.data.bots = remote.bots;
+      }
+
+      // Persist merged state to local disk
+      this.saveData();
+      console.log('⚡ Firestore: Cloud state restored! Bot token & wallet balances preserved across deploy.');
+    } catch (e: any) {
+      console.warn('⚡ Firestore syncWithFirestore notice:', e.message);
     }
   }
 
