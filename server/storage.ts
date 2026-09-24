@@ -45,6 +45,7 @@ const DB_FILE = path.join(DATA_DIR, 'database.json');
 
 export class DatabaseStore {
   private data: DatabaseSchema;
+  private isFirestoreSynced = false;
 
   constructor() {
     this.ensureDataDir();
@@ -132,9 +133,12 @@ export class DatabaseStore {
       fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
       
       // Async sync to Cloud Firestore to survive Render auto-deploys & restarts
-      saveStateToFirestore(target).catch(err => {
-        console.warn('Background Firestore save notice:', err.message);
-      });
+      // Only push to Firestore if synced or if local disk file existed
+      if (this.isFirestoreSynced || fs.existsSync(DB_FILE)) {
+        saveStateToFirestore(target).catch(err => {
+          console.warn('Background Firestore save notice:', err.message);
+        });
+      }
     } catch (err) {
       console.error('Failed to persist database.json:', err);
     }
@@ -145,6 +149,7 @@ export class DatabaseStore {
       const remote = await loadStateFromFirestore();
       if (!remote) {
         console.log('⚡ Firestore: Initializing cloud backup with current state...');
+        this.isFirestoreSynced = true;
         await saveStateToFirestore(this.data);
         return;
       }
@@ -174,7 +179,9 @@ export class DatabaseStore {
               ...localUser,
               ...remoteUser,
               balance: Math.max(localUser.balance || 0, remoteUser.balance || 0),
-              spent: Math.max(localUser.spent || 0, remoteUser.spent || 0)
+              spent: Math.max(localUser.spent || 0, remoteUser.spent || 0),
+              is_admin: (localUser.is_admin || remoteUser.is_admin || 0) === 1 ? 1 : 0,
+              role: localUser.role === 'admin' || remoteUser.role === 'admin' ? 'admin' : (localUser.role || remoteUser.role || 'Regular')
             };
           }
         }
@@ -188,7 +195,7 @@ export class DatabaseStore {
         this.data.productKeys = remote.productKeys;
       }
 
-      // 4. Merge Orders, Transactions, Tickets, Bots
+      // 4. Merge Orders, Transactions, Tickets, Bots, Emojis, FSM States
       if (Array.isArray(remote.orders) && remote.orders.length > 0) {
         this.data.orders = remote.orders;
       }
@@ -201,10 +208,17 @@ export class DatabaseStore {
       if (Array.isArray(remote.bots) && remote.bots.length > 0) {
         this.data.bots = remote.bots;
       }
+      if (remote.fsmStates && typeof remote.fsmStates === 'object') {
+        this.data.fsmStates = { ...remote.fsmStates, ...this.data.fsmStates };
+      }
+      if (remote.emojis && typeof remote.emojis === 'object') {
+        this.data.emojis = { ...this.data.emojis, ...remote.emojis };
+      }
 
+      this.isFirestoreSynced = true;
       // Persist merged state to local disk
-      this.saveData();
-      console.log('⚡ Firestore: Cloud state restored! Bot token & wallet balances preserved across deploy.');
+      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+      console.log('⚡ Firestore: Cloud state restored! Bot token, user FSM, & wallet balances preserved across deploy.');
     } catch (e: any) {
       console.warn('⚡ Firestore syncWithFirestore notice:', e.message);
     }

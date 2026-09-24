@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 function getFirebaseConfig() {
   try {
@@ -21,7 +21,19 @@ function getFirebaseConfig() {
 
 const firebaseConfig = getFirebaseConfig();
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+function initServerFirestore() {
+  const dbId = firebaseConfig.firestoreDatabaseId;
+  try {
+    return dbId
+      ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
+      : initializeFirestore(app, { experimentalForceLongPolling: true });
+  } catch (err) {
+    return dbId ? getFirestore(app, dbId) : getFirestore(app);
+  }
+}
+
+export const db = initServerFirestore();
 
 const STORE_DOC = doc(db, 'settings', 'master_database');
 
@@ -35,7 +47,7 @@ export async function loadStateFromFirestore(): Promise<any | null> {
       return data;
     }
   } catch (err: any) {
-    console.warn('⚡ Firestore load error:', err.message);
+    console.warn('⚡ Firestore load notice:', err.message);
   }
   return null;
 }
@@ -49,6 +61,7 @@ export async function saveStateToFirestore(data: any): Promise<void> {
       last_synced_at: new Date().toISOString()
     }, { merge: true });
   } catch (err: any) {
-    console.warn('⚡ Firestore sync error:', err.message);
+    console.warn('⚡ Firestore save notice:', err.message);
   }
 }
+

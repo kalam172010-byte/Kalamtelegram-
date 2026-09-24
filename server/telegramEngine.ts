@@ -102,11 +102,13 @@ class TelegramEngine {
     return '';
   }
 
+  private lastCommandsSyncTime = 0;
+
   private startWatchdog() {
     if (this.watchdogTimer) {
       clearInterval(this.watchdogTimer);
     }
-    // High-frequency 24/7 Connection Guard Watchdog runs every 5 seconds
+    // High-frequency 24/7 Connection Guard Watchdog runs every 10 seconds
     this.watchdogTimer = setInterval(async () => {
       try {
         const token = this.getValidTokenFromStore();
@@ -121,9 +123,9 @@ class TelegramEngine {
         // Auto-Detect Connection Drop / Timeout / Stopped Loop:
         // Automatically re-initialize the bot process if:
         // 1. Engine is stopped
-        // 2. Heartbeat missing for > 18 seconds
-        // 3. Consecutive network/polling errors >= 2
-        if (!this.isRunning || timeSinceLastPollSec > 18 || this.consecutiveErrors >= 2) {
+        // 2. Heartbeat missing for > 60 seconds (Telegram long-polling takes 12-20s per cycle)
+        // 3. Consecutive network/polling errors >= 3
+        if (!this.isRunning || (this.lastPollTimestamp && timeSinceLastPollSec > 60) || this.consecutiveErrors >= 3) {
           this.autoRestartCount++;
           this.lastAutoRestartTime = new Date().toISOString();
           console.log(`⚡ Telegram 24/7 Connection Guard: Detected connection drop/stale poll [isRunning=${this.isRunning}, lastPoll=${Math.round(timeSinceLastPollSec)}s ago, errors=${this.consecutiveErrors}]. Auto-reinitializing bot process (Attempt #${this.autoRestartCount})...`);
@@ -137,7 +139,7 @@ class TelegramEngine {
       } catch (e: any) {
         console.warn('Telegram Watchdog loop tick notice:', e.message);
       }
-    }, 5000);
+    }, 10000);
   }
 
   public getStatus(): BotStatus {
@@ -204,18 +206,30 @@ class TelegramEngine {
     const cid = Number(chatId);
 
     // 1. Direct DB user role check
-    if (user.is_admin === 1 || user.role === 'admin') return true;
+    if (user.is_admin === 1 || user.role === 'admin') {
+      return true;
+    }
 
     // 2. Website Admin ID Enforcement
-    if (adminId && (uid === adminId || cid === adminId)) return true;
+    if (adminId && adminId > 0 && (uid === adminId || cid === adminId)) {
+      if (user.is_admin !== 1 || user.role !== 'admin') {
+        dbStore.updateUser(uid, { is_admin: 1, role: 'admin' });
+      }
+      return true;
+    }
 
     // 3. Admin Contact username fallback
-    const uname = (user.username || '').toLowerCase().replace('@', '');
-    const adminContact = (settings.admin_contact || '').toLowerCase().replace('@', '');
-    if (adminContact && uname && (uname === adminContact || adminContact.includes(uname))) return true;
+    const uname = (user.username || '').toLowerCase().replace('@', '').trim();
+    const adminContact = (settings.admin_contact || '').toLowerCase().replace('@', '').trim();
+    if (adminContact && uname && (uname === adminContact || adminContact.includes(uname))) {
+      if (user.is_admin !== 1 || user.role !== 'admin') {
+        dbStore.updateUser(uid, { is_admin: 1, role: 'admin' });
+      }
+      return true;
+    }
 
-    // 4. Auto-bind owner as Admin if settings.admin_id is unconfigured or 0
-    if (!adminId && uid > 0) {
+    // 4. Auto-bind owner as Admin if settings.admin_id is unconfigured or default placeholder
+    if ((!adminId || adminId === 12846461) && uid > 0) {
       dbStore.updateSettings({ admin_id: uid });
       dbStore.updateUser(uid, { is_admin: 1, role: 'admin' });
       return true;
@@ -360,11 +374,18 @@ class TelegramEngine {
     return result || { ok: true };
   }
 
-  public async syncBotCommands(): Promise<any> {
+  public async syncBotCommands(force = false): Promise<any> {
     const settings = dbStore.getData().settings;
     if (settings.bot_commands_enabled === false) {
       return await this.deleteMyCommands();
     }
+
+    const now = Date.now();
+    // Throttle setMyCommands to at most once every 5 minutes to prevent Telegram API rate limits (Too Many Requests)
+    if (!force && (now - this.lastCommandsSyncTime) < 5 * 60 * 1000) {
+      return { ok: true, cached: true };
+    }
+
     try {
       const commands = [
         { command: 'start', description: '✨ Launch Shop & Main Menu' },
@@ -376,7 +397,22 @@ class TelegramEngine {
         { command: 'help', description: '💬 24/7 Support Channel & Tickets' }
       ];
       dbStore.updateSettings({ bot_commands_enabled: true });
-      return await this.callApi('setMyCommands', { commands });
+
+      const token = dbStore.getData().settings.bot_token;
+      if (!token || token.includes('exampleToken')) return;
+
+      const res = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        this.lastCommandsSyncTime = now;
+      } else {
+        console.warn('syncBotCommands Telegram notice:', data.description || 'Rate limited');
+      }
+      return data;
     } catch (e: any) {
       console.warn('setMyCommands notice:', e.message);
     }
@@ -452,6 +488,7 @@ class TelegramEngine {
             continue;
           }
 
+          this.lastPollTimestamp = new Date().toISOString();
           const url = `https://api.telegram.org/bot${token}/getUpdates`;
           
           // Use 20s hard timeout per poll request so fetch can never hang infinitely

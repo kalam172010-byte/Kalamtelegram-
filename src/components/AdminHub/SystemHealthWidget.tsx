@@ -35,6 +35,35 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ onRefres
   const [approvingOrderId, setApprovingOrderId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const handleReconnectAndNotify = async () => {
+    setReconnecting(true);
+    setActionNotice(null);
+    try {
+      const res = await fetch('/api/bot/auto-restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifyUsers: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActionNotice({
+          type: 'success',
+          message: `🎉 Bot reconnected & instant update notice sent to ${data.broadcastResult?.sent || 0} users on Telegram!`
+        });
+        await fetchHealthData(true);
+        if (onRefreshParent) onRefreshParent();
+      } else {
+        setActionNotice({ type: 'error', message: data.error || 'Reconnect failed' });
+      }
+    } catch (e: any) {
+      setActionNotice({ type: 'error', message: e.message || 'Network error during bot reconnect' });
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
   const fetchHealthData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -276,6 +305,18 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ onRefres
               <span>API Ping Latency:</span>
               <span className="text-cyan-300 font-mono">{tgPing?.latencyMs ? `${tgPing.latencyMs}ms` : '42ms'}</span>
             </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleReconnectAndNotify}
+              disabled={reconnecting}
+              className="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 active:from-emerald-700 active:to-cyan-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${reconnecting ? 'animate-spin' : ''}`} />
+              <span>{reconnecting ? 'Reconnecting & Notifying Users...' : '🔄 Reconnect Bot & Auto-Notify Users'}</span>
+            </button>
           </div>
         </div>
 
