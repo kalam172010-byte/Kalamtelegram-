@@ -3506,30 +3506,25 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_ADD_PRODUCT', `Added ${newProduct.name} (${cleanKeys.length} keys)`);
 
-    // Sync in Real-Time to Cloud Firestore
-    const firestorePromise = setDoc(doc(db, 'products', String(newId)), newProduct).catch((err) => {
-      console.warn('Firestore sync failed for new product:', err);
-    });
-
-    // Sync in Real-Time to Backend Server (Live Telegram Engine Storage)
-    const apiPromise = fetch('/api/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'create',
-        product: newProduct,
-        keys: cleanKeys
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
+    // Sync in Real-Time to Backend Server (Live Telegram Engine Storage & Cloud Firestore)
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          product: newProduct,
+          keys: cleanKeys
+        })
+      });
+      const data = await res.json();
       if (data && Array.isArray(data.products)) {
         setProducts(data.products);
+        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
       }
-    })
-    .catch(err => console.warn('Failed to sync new product to server:', err));
-
-    await Promise.allSettled([firestorePromise, apiPromise]);
+    } catch (err) {
+      console.warn('Failed to sync new product to server:', err);
+    }
   };
 
   const updateProduct = (id: number, fields: Partial<Product>) => {
@@ -3558,10 +3553,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     logActivity(12846461, 'ADMIN_UPDATE_PRODUCT', `Product #${id} updated`);
 
     if (updatedProduct) {
-      // Sync in Real-Time to Cloud Firestore
-      setDoc(doc(db, 'products', String(id)), updatedProduct, { merge: true }).catch(() => {});
-
-      // Sync in Real-Time to Backend Server (Live Telegram Engine Storage)
+      // Sync in Real-Time to Backend Server (Live Telegram Engine Storage & Cloud Firestore)
       fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3574,6 +3566,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       .then(data => {
         if (data && Array.isArray(data.products)) {
           setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
         }
       })
       .catch(err => console.warn('Failed to sync product update to server:', err));
@@ -3644,6 +3637,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .then(data => {
       if (data && Array.isArray(data.products)) {
         setProducts(data.products);
+        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
       }
     })
     .catch(err => console.warn('Failed to sync product deletion to server:', err));
@@ -3685,6 +3679,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .then(data => {
       if (data && Array.isArray(data.products)) {
         setProducts(data.products);
+        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
       }
     })
     .catch(err => console.warn('Failed to sync batch product deletion to server:', err));

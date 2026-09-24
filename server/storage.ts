@@ -440,8 +440,9 @@ export class DatabaseStore {
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
-    const exists = product.id !== undefined && product.id !== null && this.data.products.some(p => String(p.id) === String(product.id));
-    const finalId = (product.id && !exists) ? product.id : (Date.now() + Math.floor(Math.random() * 100000));
+    const finalId = (product.id !== undefined && product.id !== null)
+      ? product.id
+      : (Date.now() + Math.floor(Math.random() * 10000));
 
     const finalProduct: Product = {
       ...product,

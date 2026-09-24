@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
   initializeFirestore,
+  setLogLevel,
   collection, 
   doc, 
   getDoc, 
@@ -18,6 +19,13 @@ import {
   type DocumentReference,
   type UpdateData
 } from 'firebase/firestore';
+
+// Suppress internal Firebase Web SDK stream retry/not-found notices in console
+try {
+  setLogLevel('silent');
+} catch (e) {
+  // ignore
+}
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -54,12 +62,14 @@ googleProvider.setCustomParameters({
 
 // Initialize Firestore with Database ID if specified
 function initFirestore(): Firestore {
-  const dbId = firebaseConfigJson.firestoreDatabaseId;
+  const dbId = firebaseConfigJson.firestoreDatabaseId || undefined;
   try {
-    return dbId ? getFirestore(app, dbId) : getFirestore(app);
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    }, dbId);
   } catch (err) {
     try {
-      return initializeFirestore(app, {}, dbId || undefined);
+      return dbId ? getFirestore(app, dbId) : getFirestore(app);
     } catch {
       return getFirestore(app);
     }
