@@ -87,9 +87,7 @@ export async function loadStateFromFirestore(): Promise<any | null> {
       err?.code === 'not-found' ||
       msg.includes('5 NOT_FOUND')
     ) {
-      isQuotaExhausted = true;
-      quotaExhaustedUntil = Date.now() + 30 * 60 * 1000;
-      console.warn('⚡ Firestore: Remote cloud database instance not found. Seamlessly operating on local high-speed disk store.');
+      console.log('⚡ Firestore: Master document does not exist yet. Local disk store is active and will create it on save.');
     } else {
       console.warn('⚡ Firestore load notice:', msg);
     }
@@ -142,9 +140,7 @@ async function performActualFirestoreSave(data: any): Promise<void> {
       err?.code === 'not-found' ||
       msg.includes('5 NOT_FOUND')
     ) {
-      isQuotaExhausted = true;
-      quotaExhaustedUntil = Date.now() + 30 * 60 * 1000;
-      console.warn('⚡ Firestore Notice: Remote cloud database not found. Local disk database is 100% active and maintaining all state.');
+      console.warn('⚡ Firestore Notice: Document location not found or created yet.');
     } else {
       console.warn('⚡ Firestore save notice:', msg);
     }

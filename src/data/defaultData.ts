@@ -134,7 +134,7 @@ export const INITIAL_USERS: User[] = [
     first_name: 'Kalam (Admin)',
     username: 'kalam2000abc',
     balance: 0,
-    account_type: 'Admin',
+    account_type: 'Reseller',
     orders_count: 0,
     spent: 0.0,
     joined_date: '2026-01-10 10:00:00',

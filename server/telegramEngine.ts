@@ -49,11 +49,13 @@ export function normalizeCategoryName(str: string): string {
 }
 
 export function isCategoryMatch(prodCategory: string, targetCategory: string): boolean {
-  if (!prodCategory || !targetCategory) return false;
+  if (!targetCategory) return true;
+  if (!prodCategory || !prodCategory.trim()) return true;
   const c1 = normalizeCategoryName(prodCategory);
   const c2 = normalizeCategoryName(targetCategory);
-  if (!c1 || !c2) return false;
+  if (!c1 || !c2) return true;
   if (c1 === c2 || c1.includes(c2) || c2.includes(c1)) return true;
+  if (c1.includes('all') || c1.includes('general')) return true;
   if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
   if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
   if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
@@ -2011,6 +2013,7 @@ class TelegramEngine {
 
       const keyboard: { inline_keyboard: any[][] } = {
         inline_keyboard: [
+          [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }],
           [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
           [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
           [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
@@ -2037,7 +2040,10 @@ class TelegramEngine {
       let catCode = 'cat_nonroot';
       const rawPayload = data.replace('cat_', '');
 
-      if (data === 'cat_root') {
+      if (data === 'cat_all') {
+        categoryName = 'ALL PRODUCTS';
+        catCode = 'cat_all';
+      } else if (data === 'cat_root') {
         categoryName = 'ANDROID ROOT PANEL';
         catCode = 'cat_root';
       } else if (data === 'cat_pc') {
@@ -2056,7 +2062,7 @@ class TelegramEngine {
       }
 
       let allCatProducts = dbStore.getData().products.filter(p => 
-        p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
+        p.is_active !== 0 && (data === 'cat_all' || isCategoryMatch(p.category, categoryName))
       );
 
       let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;

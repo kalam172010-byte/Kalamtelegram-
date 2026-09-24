@@ -29,7 +29,7 @@ function matchCategoryFlexible(c1Str: string, c2Str: string): boolean {
   const c1 = (c1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const c2 = (c2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!c1 || !c2) return false;
-  if (c1 === c2 || c1.includes(c2) || c2.includes(c1)) return true;
+  if (c1 === c2) return true;
   if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
   if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
   if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
@@ -40,7 +40,8 @@ function matchNameFlexible(n1Str: string, n2Str: string): boolean {
   if (!n1Str || !n2Str) return false;
   const n1 = (n1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const n2 = (n2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+  if (!n1 || !n2) return false;
+  return n1 === n2;
 }
 
 export interface DatabaseSchema {
@@ -110,6 +111,14 @@ export class DatabaseStore {
 
         productKeys = productKeys.filter(k => products.some(p => String(p.id) === String(k.product_id)));
 
+        // Clean up legacy demo products from bot instances to prevent deleted or nonexistent products from reappearing
+        let bots: BotInstance[] = Array.isArray(parsed.bots) ? parsed.bots : [];
+        bots = bots.map(b => ({
+          ...b,
+          products: products,
+          productKeys: productKeys
+        }));
+
         const data: DatabaseSchema = {
           users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS,
           products,
@@ -129,7 +138,7 @@ export class DatabaseStore {
           },
           emojis: parsed.emojis || DEFAULT_EMOJIS,
           fsmStates: parsed.fsmStates || {},
-          bots: Array.isArray(parsed.bots) ? parsed.bots : []
+          bots
         };
 
         return data;
@@ -166,6 +175,15 @@ export class DatabaseStore {
     try {
       this.ensureDataDir();
       const target = dataToSave || this.data;
+
+      // Always keep bot instances' products and productKeys in sync with master lists to prevent ghost/demo products
+      if (Array.isArray(target.bots)) {
+        target.bots.forEach(b => {
+          b.products = target.products || [];
+          b.productKeys = target.productKeys || [];
+        });
+      }
+
       fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
       
       // Async sync to Cloud Firestore to survive Render auto-deploys & restarts
@@ -225,23 +243,38 @@ export class DatabaseStore {
 
       // 3. Merge Products & Keys with strict ID uniqueness & demo filter
       if (Array.isArray(remote.products) && remote.products.length > 0) {
-        // Only populate remote products if local disk product store is uninitialized
-        if (!fs.existsSync(DB_FILE) || this.data.products.length === 0) {
-          this.data.products = remote.products
-            .filter((p: any) => {
-              const name = ((p.panel_name || p.name || '') + '').toLowerCase();
-              return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
-            })
-            .map((p: any, idx: number) => ({
-              ...p,
-              id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
-              reseller_price: p.reseller_price ?? p.price_inr,
-              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
-            }));
+        const cleanRemoteProducts = remote.products
+          .filter((p: any) => {
+            const name = ((p.panel_name || p.name || '') + '').toLowerCase();
+            return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
+          })
+          .map((p: any, idx: number) => ({
+            ...p,
+            id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+            reseller_price: p.reseller_price ?? p.price_inr,
+            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+          }));
+
+        if (this.data.products.length === 0) {
+          this.data.products = cleanRemoteProducts;
+        } else {
+          // Merge missing remote products into local data
+          const localProductIds = new Set(this.data.products.map(p => String(p.id)));
+          for (const rp of cleanRemoteProducts) {
+            if (!localProductIds.has(String(rp.id))) {
+              this.data.products.push(rp);
+            }
+          }
         }
       }
-      if (Array.isArray(remote.productKeys)) {
-        this.data.productKeys = remote.productKeys.filter((k: any) => this.data.products.some(p => String(p.id) === String(k.product_id)));
+
+      if (Array.isArray(remote.productKeys) && remote.productKeys.length > 0) {
+        const localKeyIds = new Set(this.data.productKeys.map(k => String(k.id)));
+        for (const rk of remote.productKeys) {
+          if (!localKeyIds.has(String(rk.id)) && this.data.products.some(p => String(p.id) === String(rk.product_id))) {
+            this.data.productKeys.push(rk);
+          }
+        }
       }
 
       // 4. Merge Orders, Transactions, Tickets, Bots, Emojis, FSM States

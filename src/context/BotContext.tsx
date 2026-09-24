@@ -16,7 +16,8 @@ import {
   getDocs,
   collection,
   onSnapshot,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } from '../lib/firebase';
 import {
   User,
@@ -187,6 +188,7 @@ export interface BotContextType {
   deleteProduct: (id: number | string) => void;
   deleteProducts: (ids: (number | string)[]) => void;
   deletePanel: (category: string, panelName: string) => void;
+  togglePanelMaintenance: (category: string, panelName: string, isMaintenance: boolean, note?: string) => void;
   removeProduct: (id: number | string) => void;
   injectProductKeys: (productId: number, keys: string[]) => void;
   deleteProductKey: (keyId: number) => void;

@@ -695,13 +695,15 @@ export const AdminDashboard: React.FC = () => {
     if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
 
     try {
-      const dbPromises = multiProdForm.plans.map((plan, planIdx) => {
+      // Process each duration plan sequentially to ensure every product plan is safely persisted without race conditions
+      for (let planIdx = 0; planIdx < multiProdForm.plans.length; planIdx++) {
+        const plan = multiProdForm.plans[planIdx];
         const keysArray = plan.keys.split('\n').map(k => k.trim()).filter(Boolean);
         const uniquePlanId = Date.now() + planIdx + Math.floor(Math.random() * 100000);
-        return addProduct(
+        await addProduct(
           {
             id: uniquePlanId,
-            category: multiProdForm.category,
+            category: multiProdForm.category.trim() || 'ANDROID NON ROOT PANEL',
             panel_name: multiProdForm.panel_name.trim(),
             name: plan.name.trim() || plan.validity.trim(),
             price_inr: Number(plan.price_inr),
@@ -719,9 +721,8 @@ export const AdminDashboard: React.FC = () => {
           },
           keysArray
         );
-      });
+      }
 
-      await Promise.all(dbPromises);
       setShowAddProductModal(false);
     } catch (err) {
       console.error('Error in database submission for new product:', err);

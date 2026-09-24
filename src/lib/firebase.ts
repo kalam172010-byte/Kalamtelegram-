@@ -119,14 +119,6 @@ function handleFirestoreWriteError(err: any) {
     clientQuotaExhausted = true;
     clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
     console.warn('Firestore notice: Write quota reached. Operating seamlessly with local high-speed state cache.');
-  } else if (
-    msg.includes('NOT_FOUND') ||
-    msg.includes('Code: 5') ||
-    err?.code === 'not-found' ||
-    msg.includes('5 NOT_FOUND')
-  ) {
-    clientDbUnavailable = true;
-    console.warn('Firestore notice: Custom database instance is not available. Seamlessly persisting via local disk and high-speed cache.');
   } else {
     console.warn('Firestore operation notice:', msg);
   }
@@ -172,9 +164,7 @@ async function testConnection() {
     await getDocFromServer(doc(db, '_connection_test', 'ping'));
   } catch (error: any) {
     const msg = String(error?.message || error?.code || error);
-    if (msg.includes('NOT_FOUND') || msg.includes('Code: 5') || error?.code === 'not-found') {
-      clientDbUnavailable = true;
-    } else if (msg.includes('the client is offline')) {
+    if (msg.includes('the client is offline')) {
       console.warn("Firestore: Client is operating in offline mode.");
     }
   }
