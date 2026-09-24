@@ -70,6 +70,24 @@ export class DatabaseStore {
 
         // Filter out default demo products if present
         products = products.filter(p => !demoPanelNames.includes(p.panel_name || ''));
+
+        // Deduplicate and assign strictly unique IDs to all duration plans
+        const seenIds = new Set<string | number>();
+        let nextUniqueId = 100;
+        products = products.map((p, idx) => {
+          let currentId = p.id;
+          if (currentId === undefined || currentId === null || seenIds.has(currentId)) {
+            currentId = Date.now() + idx + Math.floor(Math.random() * 1000);
+          }
+          seenIds.add(currentId);
+          return {
+            ...p,
+            id: currentId,
+            reseller_price: p.reseller_price ?? p.price_inr,
+            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+          };
+        });
+
         productKeys = productKeys.filter(k => products.some(p => String(p.id) === String(k.product_id)));
 
         const data: DatabaseSchema = {
@@ -372,10 +390,8 @@ export class DatabaseStore {
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
-    const numericIds = this.data.products.map(p => Number(p.id)).filter(n => !isNaN(n));
-    const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
     const exists = product.id !== undefined && product.id !== null && this.data.products.some(p => String(p.id) === String(product.id));
-    const finalId = (product.id && !exists) ? product.id : newId;
+    const finalId = (product.id && !exists) ? product.id : (Date.now() + Math.floor(Math.random() * 100000));
 
     const finalProduct: Product = {
       ...product,

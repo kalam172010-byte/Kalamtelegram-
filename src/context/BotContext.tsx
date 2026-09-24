@@ -182,7 +182,7 @@ export interface BotContextType {
   }) => Promise<{ success: boolean; recipientCount: number; message: string }>;
 
   // Admin DB Direct Manipulations
-  addProduct: (prod: Omit<Product, 'id' | 'stock'>, keys: string[]) => void;
+  addProduct: (prod: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => void;
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number) => void;
   removeProduct: (id: number) => void;
@@ -248,9 +248,24 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // If it contains legacy hardcoded demo IDs (1 to 11 with known dummy names) and user never added custom ones, start clean
+        // If it contains legacy hardcoded demo IDs and user never added custom ones, start clean
         const isLegacyDemo = Array.isArray(parsed) && parsed.some(p => p.panel_name === 'MST PANEL' || p.panel_name === 'DRIP PANEL');
-        if (!isLegacyDemo && Array.isArray(parsed)) return parsed;
+        if (!isLegacyDemo && Array.isArray(parsed)) {
+          const seen = new Set<string | number>();
+          return parsed.map((p, idx) => {
+            let id = p.id;
+            if (id === undefined || id === null || seen.has(id)) {
+              id = Date.now() + idx + Math.floor(Math.random() * 1000);
+            }
+            seen.add(id);
+            return {
+              ...p,
+              id,
+              reseller_price: p.reseller_price ?? p.price_inr,
+              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+            };
+          });
+        }
       } catch (e) {
         console.error('Error parsing products', e);
       }
@@ -486,7 +501,16 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
 
             if (Array.isArray(serverData.products)) {
-              setProducts(serverData.products);
+              const seen = new Set<string | number>();
+              const deduplicated = serverData.products.map((p: Product, idx: number) => {
+                let id = p.id;
+                if (id === undefined || id === null || seen.has(id)) {
+                  id = Date.now() + idx + Math.floor(Math.random() * 1000);
+                }
+                seen.add(id);
+                return { ...p, id };
+              });
+              setProducts(deduplicated);
             }
             if (Array.isArray(serverData.productKeys)) {
               setProductKeys(serverData.productKeys);
@@ -2086,8 +2110,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
     // 4a. Single Product Plan View
     if (callbackData.startsWith('prod_')) {
-      const prodId = Number(callbackData.replace('prod_', ''));
-      const prod = products.find(p => p.id === prodId);
+      const rawProdId = callbackData.replace('prod_', '');
+      const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
 
       if (!prod || !prod.is_active) {
         pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
@@ -2140,8 +2164,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
     // 4b. Product Maintenance Notice Click
     if (callbackData.startsWith('maint_')) {
-      const prodId = Number(callbackData.replace('maint_', ''));
-      const prod = products.find(p => p.id === prodId);
+      const rawProdId = callbackData.replace('maint_', '');
+      const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       pushBotMessage(
         `🛠 <b>PRODUCT UNDER MAINTENANCE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
         `📦 <b>Panel:</b> ${prod?.panel_name || 'Product'} (${prod?.name || ''})\n\n` +
@@ -2160,8 +2184,13 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
     // 6. Buy Product
     if (callbackData.startsWith('buy_')) {
-      const prodId = Number(callbackData.replace('buy_', ''));
-      handlePurchaseProduct(prodId);
+      const rawProdId = callbackData.replace('buy_', '');
+      const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      if (prod) {
+        handlePurchaseProduct(prod.id);
+      } else {
+        pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
+      }
       return;
     }
 
@@ -3384,8 +3413,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   // Direct Admin Database Actions
-  const addProduct = (prodData: Omit<Product, 'id' | 'stock'>, keys: string[]) => {
-    const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+  const addProduct = (prodData: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => {
+    const newId = prodData.id || (Date.now() + Math.floor(Math.random() * 100000));
     const cleanKeys = keys.map(k => k.trim()).filter(Boolean);
     const newProduct: Product = {
       ...prodData,
@@ -3394,7 +3423,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     };
 
     const newKeyEntities: ProductKey[] = cleanKeys.map((k, idx) => ({
-      id: Date.now() + idx,
+      id: Date.now() + idx + Math.floor(Math.random() * 10000),
       product_id: newId,
       key_text: k,
       is_used: 0

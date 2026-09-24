@@ -592,10 +592,12 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
 
-    multiProdForm.plans.forEach(plan => {
+    multiProdForm.plans.forEach((plan, planIdx) => {
       const keysArray = plan.keys.split('\n').map(k => k.trim()).filter(Boolean);
+      const uniquePlanId = Date.now() + planIdx + Math.floor(Math.random() * 100000);
       addProduct(
         {
+          id: uniquePlanId,
           category: multiProdForm.category,
           panel_name: multiProdForm.panel_name.trim(),
           name: plan.name.trim() || plan.validity.trim(),
