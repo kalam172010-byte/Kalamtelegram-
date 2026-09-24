@@ -105,7 +105,7 @@ export interface Product {
   price_inr: number;
   reseller_price: number;
   reseller_price_inr?: number;
-  stock: number;
+  stock?: number;
   apk_link: string;
   validity: string;
   device_limit: string;

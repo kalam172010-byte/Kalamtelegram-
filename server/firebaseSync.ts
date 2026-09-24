@@ -25,11 +25,13 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 function initServerFirestore() {
   const dbId = firebaseConfig.firestoreDatabaseId;
   try {
-    return dbId
-      ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
-      : initializeFirestore(app, { experimentalForceLongPolling: true });
-  } catch (err) {
     return dbId ? getFirestore(app, dbId) : getFirestore(app);
+  } catch (err) {
+    try {
+      return initializeFirestore(app, {}, dbId || undefined);
+    } catch {
+      return getFirestore(app);
+    }
   }
 }
 

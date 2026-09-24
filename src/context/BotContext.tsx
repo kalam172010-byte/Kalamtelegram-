@@ -582,10 +582,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // 2. Firestore Sync for Bots
-    const unsubBots = onSnapshot(collection(db, 'bots'), (snapshot) => {
-      if (!snapshot.empty) {
+    const unsubBots = onSnapshot(collection(db, 'bots'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
         const cloudBots: BotInstance[] = [];
-        snapshot.forEach((docSnap) => {
+        snapshot.forEach((docSnap: any) => {
           const b = docSnap.data() as BotInstance;
           if (b && b.id) cloudBots.push(b);
         });
@@ -598,19 +598,21 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       }
-    }, (err) => {
-      console.warn('Firestore bots sync notice:', err.message);
+    }, (err: any) => {
+      console.warn('Firestore bots sync notice:', err?.message || err);
     });
 
     // 3. Firestore Sync for Settings
-    const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
-      snapshot.forEach((docSnap) => {
-        if (docSnap.id === 'global') {
-          setSettings(prev => ({ ...prev, ...(docSnap.data() as Partial<Settings>) }));
-        }
-      });
-    }, (err) => {
-      console.warn('Firestore settings sync notice:', err.message);
+    const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot: any) => {
+      if (snapshot) {
+        snapshot.forEach((docSnap: any) => {
+          if (docSnap.id === 'global') {
+            setSettings(prev => ({ ...prev, ...(docSnap.data() as Partial<Settings>) }));
+          }
+        });
+      }
+    }, (err: any) => {
+      console.warn('Firestore settings sync notice:', err?.message || err);
     });
 
     return () => {
@@ -1798,7 +1800,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const availableKey = productKeys.find(k => k.product_id === prodId && !k.is_used);
         if (availableKey && (prod.delivery_mode === 'hybrid' || settings.provider_auto_fallback !== false)) {
           setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
-          setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
+          setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
           deliveredKey = availableKey.key_text || availableKey.key_string || '';
           deliverySource = 'Local Key Vault (API Fallback)';
         } else {
@@ -1819,7 +1821,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
       setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
-      setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
+      setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
       deliveredKey = availableKey.key_text || availableKey.key_string || '';
       deliverySource = 'Local Key Vault';
     }

@@ -64,12 +64,10 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
-        let products: Product[] = Array.isArray(parsed.products) ? parsed.products : [];
+        let products: Product[] = Array.isArray(parsed.products) && parsed.products.length > 0 
+          ? parsed.products 
+          : INITIAL_PRODUCTS;
         let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
-
-        // Filter out default demo products if present
-        products = products.filter(p => !demoPanelNames.includes(p.panel_name || ''));
 
         // Deduplicate and assign strictly unique IDs to all duration plans
         const seenIds = new Set<string | number>();

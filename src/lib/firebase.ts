@@ -52,19 +52,47 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-// Initialize Firestore with Database ID if specified, enabling long polling for fallback environments
+// Initialize Firestore with Database ID if specified
 function initFirestore(): Firestore {
   const dbId = firebaseConfigJson.firestoreDatabaseId;
   try {
-    return dbId
-      ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
-      : initializeFirestore(app, { experimentalForceLongPolling: true });
-  } catch (err) {
     return dbId ? getFirestore(app, dbId) : getFirestore(app);
+  } catch (err) {
+    try {
+      return initializeFirestore(app, {}, dbId || undefined);
+    } catch {
+      return getFirestore(app);
+    }
   }
 }
 
 export const db: Firestore = initFirestore();
+
+// Safe onSnapshot wrapper to prevent unhandled gRPC Write/Listen stream errors
+export function onSnapshotSafe(
+  reference: any,
+  onNext: (snapshot: any) => void,
+  onError?: (error: any) => void
+): () => void {
+  if (isClientFirestoreDisabled()) {
+    return () => {};
+  }
+  try {
+    return onSnapshot(
+      reference,
+      onNext,
+      (err: any) => {
+        handleFirestoreWriteError(err);
+        if (onError) {
+          onError(err);
+        }
+      }
+    );
+  } catch (err: any) {
+    handleFirestoreWriteError(err);
+    return () => {};
+  }
+}
 
 // Quota & Unavailable circuit breaker on client
 let clientQuotaExhausted = false;
@@ -158,7 +186,7 @@ export {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
+  onSnapshotSafe as onSnapshot,
   query,
   where,
   signInWithPopup,
