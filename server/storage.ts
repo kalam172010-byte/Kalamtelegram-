@@ -213,22 +213,14 @@ export class DatabaseStore {
       // 3. Merge Products & Keys with strict ID uniqueness
       if (Array.isArray(remote.products) && remote.products.length > 0) {
         const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
-        const seenIds = new Set<string | number>();
         this.data.products = remote.products
           .filter((p: any) => !demoPanelNames.includes(p.panel_name || ''))
-          .map((p: any, idx: number) => {
-            let currentId = p.id;
-            if (currentId === undefined || currentId === null || seenIds.has(currentId)) {
-              currentId = Date.now() + idx + Math.floor(Math.random() * 100000);
-            }
-            seenIds.add(currentId);
-            return {
-              ...p,
-              id: currentId,
-              reseller_price: p.reseller_price ?? p.price_inr,
-              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
-            };
-          });
+          .map((p: any, idx: number) => ({
+            ...p,
+            id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+            reseller_price: p.reseller_price ?? p.price_inr,
+            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+          }));
       }
       if (Array.isArray(remote.productKeys)) {
         this.data.productKeys = remote.productKeys.filter((k: any) => this.data.products.some(p => String(p.id) === String(k.product_id)));

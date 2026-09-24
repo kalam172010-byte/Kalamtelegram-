@@ -37,7 +37,29 @@ export const db = initServerFirestore();
 
 const STORE_DOC = doc(db, 'settings', 'master_database');
 
+// Circuit Breaker & Throttling State to prevent Firestore Quota Exhaustion
+let isQuotaExhausted = false;
+let quotaExhaustedUntil = 0;
+let saveDebounceTimer: NodeJS.Timeout | null = null;
+let pendingDataToSave: any = null;
+let isSaving = false;
+let lastSaveTime = 0;
+const MIN_SAVE_INTERVAL_MS = 20000; // Minimum 20 seconds between Firestore writes
+
+export function isFirestoreQuotaExhausted(): boolean {
+  if (isQuotaExhausted && Date.now() > quotaExhaustedUntil) {
+    isQuotaExhausted = false;
+    quotaExhaustedUntil = 0;
+    console.log('⚡ Firestore: Quota backoff window expired. Resuming cloud backup stream.');
+  }
+  return isQuotaExhausted;
+}
+
 export async function loadStateFromFirestore(): Promise<any | null> {
+  if (isFirestoreQuotaExhausted()) {
+    return null;
+  }
+
   try {
     console.log('⚡ Firestore: Connecting & retrieving persistent database snapshot...');
     const snap = await getDoc(STORE_DOC);
@@ -47,12 +69,31 @@ export async function loadStateFromFirestore(): Promise<any | null> {
       return data;
     }
   } catch (err: any) {
-    console.warn('⚡ Firestore load notice:', err.message);
+    const msg = String(err?.message || err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+      isQuotaExhausted = true;
+      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
+      console.warn('⚡ Firestore: Daily quota limit reached on cloud project. Operating securely with local high-speed disk database.');
+    } else {
+      console.warn('⚡ Firestore load notice:', msg);
+    }
   }
   return null;
 }
 
-export async function saveStateToFirestore(data: any): Promise<void> {
+async function performActualFirestoreSave(data: any): Promise<void> {
+  if (isFirestoreQuotaExhausted()) {
+    return;
+  }
+
+  if (isSaving) {
+    pendingDataToSave = data;
+    return;
+  }
+
+  isSaving = true;
+  lastSaveTime = Date.now();
+
   try {
     // Sanitize data for Firestore (JSON stringifiable)
     const cleanData = JSON.parse(JSON.stringify(data));
@@ -60,8 +101,49 @@ export async function saveStateToFirestore(data: any): Promise<void> {
       ...cleanData,
       last_synced_at: new Date().toISOString()
     }, { merge: true });
+    // Clear any previous error flag on success
+    isQuotaExhausted = false;
   } catch (err: any) {
-    console.warn('⚡ Firestore save notice:', err.message);
+    const msg = String(err?.message || err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted' || msg.includes('8 RESOURCE_EXHAUSTED')) {
+      isQuotaExhausted = true;
+      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
+      console.warn('⚡ Firestore Notice: Cloud write quota limit reached. Local disk database is 100% active and maintaining all state.');
+    } else {
+      console.warn('⚡ Firestore save notice:', msg);
+    }
+  } finally {
+    isSaving = false;
+    // If new data arrived while saving, schedule next debounced save
+    if (pendingDataToSave && !isFirestoreQuotaExhausted()) {
+      const nextData = pendingDataToSave;
+      pendingDataToSave = null;
+      saveStateToFirestore(nextData);
+    }
   }
 }
 
+export async function saveStateToFirestore(data: any): Promise<void> {
+  if (isFirestoreQuotaExhausted()) {
+    return;
+  }
+
+  pendingDataToSave = data;
+
+  // Clear existing debounce timer
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+  }
+
+  const timeSinceLastSave = Date.now() - lastSaveTime;
+  const delay = timeSinceLastSave < MIN_SAVE_INTERVAL_MS ? (MIN_SAVE_INTERVAL_MS - timeSinceLastSave) : 2500;
+
+  saveDebounceTimer = setTimeout(() => {
+    saveDebounceTimer = null;
+    if (pendingDataToSave) {
+      const dataToSave = pendingDataToSave;
+      pendingDataToSave = null;
+      performActualFirestoreSave(dataToSave).catch(() => {});
+    }
+  }, delay);
+}

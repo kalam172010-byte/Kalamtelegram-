@@ -251,20 +251,12 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // If it contains legacy hardcoded demo IDs and user never added custom ones, start clean
         const isLegacyDemo = Array.isArray(parsed) && parsed.some(p => p.panel_name === 'MST PANEL' || p.panel_name === 'DRIP PANEL');
         if (!isLegacyDemo && Array.isArray(parsed)) {
-          const seen = new Set<string | number>();
-          return parsed.map((p, idx) => {
-            let id = p.id;
-            if (id === undefined || id === null || seen.has(id)) {
-              id = Date.now() + idx + Math.floor(Math.random() * 1000);
-            }
-            seen.add(id);
-            return {
-              ...p,
-              id,
-              reseller_price: p.reseller_price ?? p.price_inr,
-              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
-            };
-          });
+          return parsed.map((p, idx) => ({
+            ...p,
+            id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+            reseller_price: p.reseller_price ?? p.price_inr,
+            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+          }));
         }
       } catch (e) {
         console.error('Error parsing products', e);
@@ -500,17 +492,13 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
 
-            if (Array.isArray(serverData.products)) {
-              const seen = new Set<string | number>();
-              const deduplicated = serverData.products.map((p: Product, idx: number) => {
-                let id = p.id;
-                if (id === undefined || id === null || seen.has(id)) {
-                  id = Date.now() + idx + Math.floor(Math.random() * 1000);
-                }
-                seen.add(id);
-                return { ...p, id };
-              });
-              setProducts(deduplicated);
+            if (Array.isArray(serverData.products) && serverData.products.length > 0) {
+              setProducts(serverData.products.map((p: Product, idx: number) => ({
+                ...p,
+                id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+                reseller_price: p.reseller_price ?? p.price_inr,
+                reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+              })));
             }
             if (Array.isArray(serverData.productKeys)) {
               setProductKeys(serverData.productKeys);
@@ -1745,8 +1733,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Process purchase
-  const handlePurchaseProduct = async (prodId: number, androidId?: string) => {
-    const prod = products.find(p => p.id === prodId);
+  const handlePurchaseProduct = async (prodId: number | string, androidId?: string) => {
+    const prod = products.find(p => String(p.id) === String(prodId));
     if (!prod) {
       pushBotMessage("❌ Critical Error: Item not found in DB!", getBackKeyboard('menu_shop'));
       return;
@@ -2027,18 +2015,15 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       let category = '';
       let panelName = '';
 
-      const numericId = Number(rawPayload);
-      if (!isNaN(numericId) && numericId > 0) {
-        const refProd = products.find(p => p.id === numericId);
-        if (refProd) {
-          category = refProd.category;
-          panelName = refProd.panel_name || refProd.name;
-          prods = products.filter(p =>
-            p.category.toLowerCase() === category.toLowerCase() &&
-            (p.panel_name || p.name).toLowerCase() === panelName.toLowerCase() &&
-            p.is_active === 1
-          );
-        }
+      const refProd = products.find(p => String(p.id) === String(rawPayload));
+      if (refProd) {
+        category = refProd.category;
+        panelName = refProd.panel_name || refProd.name;
+        prods = products.filter(p =>
+          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
+          (p.panel_name || p.name).toLowerCase().trim() === panelName.toLowerCase().trim() &&
+          p.is_active === 1
+        );
       }
 
       if (prods.length === 0) {
@@ -2046,8 +2031,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         category = parts[0];
         panelName = parts.slice(1).join('_');
         prods = products.filter(p =>
-          p.category.toLowerCase() === category.toLowerCase() &&
-          p.panel_name.toLowerCase() === panelName.toLowerCase() &&
+          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
+          (p.panel_name || p.name).toLowerCase().trim() === panelName.toLowerCase().trim() &&
           p.is_active === 1
         );
       }

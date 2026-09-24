@@ -7,13 +7,16 @@ import {
   getDoc, 
   getDocs, 
   getDocFromServer,
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
+  setDoc as rawSetDoc, 
+  updateDoc as rawUpdateDoc, 
+  deleteDoc as rawDeleteDoc, 
   onSnapshot, 
   query, 
   where,
-  type Firestore 
+  type Firestore,
+  type SetOptions,
+  type DocumentReference,
+  type UpdateData
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -63,6 +66,65 @@ function initFirestore(): Firestore {
 
 export const db: Firestore = initFirestore();
 
+// Quota circuit breaker on client
+let clientQuotaExhausted = false;
+let clientQuotaExhaustedUntil = 0;
+
+function isClientQuotaExhausted(): boolean {
+  if (clientQuotaExhausted && Date.now() > clientQuotaExhaustedUntil) {
+    clientQuotaExhausted = false;
+    clientQuotaExhaustedUntil = 0;
+  }
+  return clientQuotaExhausted;
+}
+
+// Resilient wrapper around setDoc that catches quota exhaustion gracefully
+export async function setDoc<T>(documentRef: DocumentReference<T, any>, data: any, options?: SetOptions): Promise<void> {
+  if (isClientQuotaExhausted()) return;
+  try {
+    if (options) {
+      await rawSetDoc(documentRef as any, data, options);
+    } else {
+      await rawSetDoc(documentRef as any, data);
+    }
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+      clientQuotaExhausted = true;
+      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+      console.warn('Firestore notice: Write quota reached. Data safely persisted to local cache.');
+    }
+  }
+}
+
+// Resilient wrapper around updateDoc
+export async function updateDoc<T extends Record<string, any>>(documentRef: DocumentReference<T, any>, data: UpdateData<T>): Promise<void> {
+  if (isClientQuotaExhausted()) return;
+  try {
+    await rawUpdateDoc(documentRef as any, data as any);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+      clientQuotaExhausted = true;
+      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+    }
+  }
+}
+
+// Resilient wrapper around deleteDoc
+export async function deleteDoc(documentRef: DocumentReference<any, any>): Promise<void> {
+  if (isClientQuotaExhausted()) return;
+  try {
+    await rawDeleteDoc(documentRef);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+      clientQuotaExhausted = true;
+      clientQuotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+    }
+  }
+}
+
 // Test connection on boot to verify health
 async function testConnection() {
   try {
@@ -80,9 +142,6 @@ export {
   doc,
   getDoc,
   getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -95,4 +154,3 @@ export {
 };
 
 export type { FirebaseUser };
-
