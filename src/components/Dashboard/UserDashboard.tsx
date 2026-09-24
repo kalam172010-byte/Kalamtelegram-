@@ -1081,9 +1081,9 @@ export const UserDashboard: React.FC = () => {
           <div>
             {/* Mobile Native Card View (visible on mobile, hidden on tablet/desktop) */}
             <div className="sm:hidden space-y-2.5">
-              {userOrders.slice(0, 5).map((ord) => (
+              {userOrders.slice(0, 5).map((ord, oIdx) => (
                 <div
-                  key={ord.id}
+                  key={`user-ord-mob-${ord.id || oIdx}-${oIdx}`}
                   className="liquid-glass-pill rounded-2xl p-3.5 space-y-2"
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -1136,8 +1136,8 @@ export const UserDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-slate-200 font-medium">
-                  {userOrders.slice(0, 5).map((ord) => (
-                    <tr key={ord.id} className="hover:bg-white/5 transition">
+                  {userOrders.slice(0, 5).map((ord, oIdx) => (
+                    <tr key={`user-ord-desk-${ord.id || oIdx}-${oIdx}`} className="hover:bg-white/5 transition">
                       <td className="py-3.5 pr-4 font-mono text-cyan-300 font-bold">
                         #{ord.id}
                       </td>

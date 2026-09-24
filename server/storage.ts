@@ -64,8 +64,13 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        const products = Array.isArray(parsed.products) && parsed.products.length > 0 ? parsed.products : INITIAL_PRODUCTS;
-        const productKeys = Array.isArray(parsed.productKeys) && parsed.productKeys.length > 0 ? parsed.productKeys : INITIAL_PRODUCT_KEYS;
+        const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
+        let products: Product[] = Array.isArray(parsed.products) ? parsed.products : [];
+        let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
+
+        // Filter out default demo products if present
+        products = products.filter(p => !demoPanelNames.includes(p.panel_name || ''));
+        productKeys = productKeys.filter(k => products.some(p => String(p.id) === String(k.product_id)));
 
         const data: DatabaseSchema = {
           users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS,
@@ -188,11 +193,12 @@ export class DatabaseStore {
       }
 
       // 3. Merge Products & Keys
-      if (Array.isArray(remote.products) && remote.products.length > 0) {
-        this.data.products = remote.products;
+      if (Array.isArray(remote.products)) {
+        const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
+        this.data.products = remote.products.filter((p: any) => !demoPanelNames.includes(p.panel_name || ''));
       }
-      if (Array.isArray(remote.productKeys) && remote.productKeys.length > 0) {
-        this.data.productKeys = remote.productKeys;
+      if (Array.isArray(remote.productKeys)) {
+        this.data.productKeys = remote.productKeys.filter((k: any) => this.data.products.some(p => String(p.id) === String(k.product_id)));
       }
 
       // 4. Merge Orders, Transactions, Tickets, Bots, Emojis, FSM States
@@ -361,15 +367,21 @@ export class DatabaseStore {
   }
 
   public getProduct(id: number | string): Product | undefined {
-    return this.data.products.find(p => String(p.id) === String(id) || Number(p.id) === Number(id));
+    if (id === undefined || id === null) return undefined;
+    return this.data.products.find(p => String(p.id) === String(id));
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
     const numericIds = this.data.products.map(p => Number(p.id)).filter(n => !isNaN(n));
     const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+    const exists = product.id !== undefined && product.id !== null && this.data.products.some(p => String(p.id) === String(product.id));
+    const finalId = (product.id && !exists) ? product.id : newId;
+
     const finalProduct: Product = {
       ...product,
-      id: product.id || newId
+      id: finalId,
+      reseller_price: product.reseller_price ?? product.price_inr,
+      reseller_price_inr: product.reseller_price_inr ?? product.price_inr
     };
     this.data.products.unshift(finalProduct);
 
@@ -392,7 +404,7 @@ export class DatabaseStore {
   }
 
   public updateProduct(id: number | string, updates: Partial<Product>): Product | null {
-    const idx = this.data.products.findIndex(p => String(p.id) === String(id) || Number(p.id) === Number(id));
+    const idx = this.data.products.findIndex(p => String(p.id) === String(id));
     if (idx === -1) return null;
     this.data.products[idx] = { ...this.data.products[idx], ...updates };
     this.saveData();
@@ -401,8 +413,8 @@ export class DatabaseStore {
 
   public deleteProduct(id: number | string): boolean {
     const initialLen = this.data.products.length;
-    this.data.products = this.data.products.filter(p => String(p.id) !== String(id) && Number(p.id) !== Number(id));
-    this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id) && Number(k.product_id) !== Number(id));
+    this.data.products = this.data.products.filter(p => String(p.id) !== String(id));
+    this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id));
     this.saveData();
     return this.data.products.length < initialLen;
   }

@@ -799,7 +799,7 @@ class TelegramEngine {
     const useApiDelivery = Boolean(
       product.delivery_mode === 'api_provider' ||
       (Boolean(product.provider_product_id) && (product.delivery_mode === 'hybrid' || settings.bantibhaiya_status === 'ON')) ||
-      (product.delivery_mode !== 'vault_only' && settings.bantibhaiya_status === 'ON' && Boolean(settings.bantibhaiya_api_key))
+      (product.delivery_mode !== 'manual_vault' && settings.bantibhaiya_status === 'ON' && Boolean(settings.bantibhaiya_api_key))
     );
 
     const providerPid = product.provider_product_id || String(product.id);
@@ -2058,15 +2058,6 @@ class TelegramEngine {
         p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
 
-      // SMART FALLBACK: If specific category search yielded 0 results,
-      // check if ANY active products exist in the store and show them so the store NEVER fails!
-      if (allCatProducts.length === 0) {
-        const globalActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
-        if (globalActiveProds.length > 0) {
-          allCatProducts = globalActiveProds;
-        }
-      }
-
       let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
       if (allCatProducts.length === 0) {
         text += `<i>❌ No products currently available in this category. Check back soon!</i>`;
@@ -2151,12 +2142,6 @@ class TelegramEngine {
           normalizeCategoryName(p.panel_name || p.name) === normalizeCategoryName(targetPanelName)
         )
       );
-
-      if (panelPlans.length === 0) {
-        panelPlans = dbStore.getData().products.filter(p =>
-          p.is_active !== 0 && isCategoryMatch(p.category, targetCategory)
-        );
-      }
 
       if (panelPlans.length === 0) {
         panelPlans = [refProduct];
@@ -2269,7 +2254,7 @@ class TelegramEngine {
 
       const hwidNote = isDeviceBound ? `\n📱 <b>Device Lock:</b> <i>Requires Android HWID on purchase</i>` : ``;
 
-      let text = `📦 <b>${product.panel_name}</b>\n` +
+      let text = `📦 <b>${product.panel_name || product.name}</b>\n` +
         `⏱ <b>Duration Plan:</b> ${product.name}\n━━━━━━━━━━━━━━━━━━━━\n` +
         `📂 <b>Category:</b> ${product.category}\n` +
         `⏳ <b>Validity:</b> ${product.validity}\n` +
@@ -2397,7 +2382,7 @@ class TelegramEngine {
 
       if (product.requires_android_id) {
         dbStore.setFsmState(user.user_id, 'wait_for_android_id', {
-          productId: prodId,
+          productId: product.id,
           userPrice
         });
 
@@ -2409,7 +2394,7 @@ class TelegramEngine {
 
         const cancelKb = {
           inline_keyboard: [
-            [{ text: '❌ Cancel Purchase', callback_data: `prod_${prodId}`, style: 'danger' }]
+            [{ text: '❌ Cancel Purchase', callback_data: `prod_${product.id}`, style: 'danger' }]
           ]
         };
 

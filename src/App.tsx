@@ -9,6 +9,7 @@ import { MyBotsDashboard } from './components/BotManager/MyBotsDashboard';
 import { PaymentGatewayManager } from './components/Gateways/PaymentGatewayManager';
 import { ResellerApiManager } from './components/ResellerAPI/ResellerApiManager';
 import { WebsiteLogo } from './components/Common/WebsiteLogo';
+import { OfflineIndicator } from './components/Common/OfflineIndicator';
 import { useKeyboardAwareness } from './hooks/useKeyboardAwareness';
 import { usePageRouter } from './hooks/usePageRouter';
 import {
@@ -798,6 +799,9 @@ const AppContent: React.FC = () => {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
       />
+
+      {/* Offline Status and Cache Notification */}
+      <OfflineIndicator />
     </div>
   );
 };

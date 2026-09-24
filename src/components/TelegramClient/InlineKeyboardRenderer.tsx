@@ -111,15 +111,16 @@ export const InlineKeyboardRenderer: React.FC<Props> = ({ keyboard, onButtonClic
   return (
     <div className="mt-3.5 space-y-2 w-full select-none">
       {keyboard.map((row, rowIdx) => (
-        <div key={rowIdx} className="flex gap-2 w-full items-center">
+        <div key={`tg-row-${rowIdx}`} className="flex gap-2 w-full items-center">
           {row.map((btn, colIdx) => {
             const isUrl = Boolean(btn.url);
             const styleClasses = getButtonStyleClasses(btn, rowIdx, colIdx);
+            const btnKey = `tg-btn-${rowIdx}-${colIdx}-${btn.callback_data || btn.url || btn.text || 'btn'}`;
 
             if (isUrl) {
               return (
                 <a
-                  key={colIdx}
+                  key={btnKey}
                   href={btn.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -136,7 +137,7 @@ export const InlineKeyboardRenderer: React.FC<Props> = ({ keyboard, onButtonClic
 
             return (
               <button
-                key={colIdx}
+                key={btnKey}
                 type="button"
                 onClick={() => btn.callback_data && onButtonClick(btn.callback_data, btn.text)}
                 className={`flex-1 min-w-0 min-h-[44px] py-2.5 px-2 sm:px-3.5 rounded-xl text-sm md:text-base font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer ${styleClasses}`}

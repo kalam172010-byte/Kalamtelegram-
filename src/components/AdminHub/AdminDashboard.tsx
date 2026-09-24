@@ -1816,12 +1816,12 @@ export const AdminDashboard: React.FC = () => {
 
                       {/* Plans Grid */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {group.plans.map(plan => {
-                          const planKeys = productKeys.filter(k => k.product_id === plan.id && !k.is_used);
+                        {group.plans.map((plan, planIdx) => {
+                          const planKeys = productKeys.filter(k => String(k.product_id) === String(plan.id) && !k.is_used);
                           const isMaint = Boolean(plan.is_maintenance);
                           return (
                             <div
-                              key={plan.id}
+                              key={`plan-item-${plan.id}-${planIdx}`}
                               className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between hover:border-slate-700 transition"
                             >
                               <div>
@@ -3674,7 +3674,7 @@ export const AdminDashboard: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
                         {sortedReferrers.map((user, idx) => (
-                          <tr key={user.user_id} className="hover:bg-slate-800/40 transition">
+                          <tr key={`top-ref-${user.user_id}-${idx}`} className="hover:bg-slate-800/40 transition">
                             <td className="py-3 font-bold font-mono">
                               {idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`}
                             </td>
@@ -3743,10 +3743,10 @@ export const AdminDashboard: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
-                        {referredUsers.map((u) => {
+                        {referredUsers.map((u, uIdx) => {
                           const referrer = allUsers.find(r => r.user_id === u.referred_by);
                           return (
-                            <tr key={u.user_id} className="hover:bg-slate-800/40 transition">
+                            <tr key={`ref-sub-${u.user_id}-${uIdx}`} className="hover:bg-slate-800/40 transition">
                               <td className="py-2.5 font-bold text-white">
                                 {u.first_name} <span className="text-slate-400 font-normal">(@{u.username || 'user'})</span>
                               </td>
@@ -5687,7 +5687,7 @@ export const AdminDashboard: React.FC = () => {
                 <div className="space-y-3">
                   {multiProdForm.plans.map((plan, pIdx) => (
                     <div
-                      key={plan.id}
+                      key={`multiprod-plan-${plan.id}-${pIdx}`}
                       className="bg-slate-950/90 border border-slate-800 p-3 rounded-xl space-y-2.5 shadow-inner"
                     >
                       <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">

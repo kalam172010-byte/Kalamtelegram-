@@ -233,13 +233,14 @@ export const TelegramBotView: React.FC = () => {
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 z-10 scrollbar-thin scrollbar-thumb-slate-700">
-        {messages.map((msg) => {
+        {messages.map((msg, msgIdx) => {
           const isBot = msg.sender === 'bot';
+          const uniqueKey = `tg-msg-${msg.id || msgIdx}-${msgIdx}`;
 
           // Render Welcome Sticker if specified
           if (msg.media_type === 'sticker') {
             return (
-              <div key={msg.id} className="flex justify-start my-3">
+              <div key={uniqueKey} className="flex justify-start my-3">
                 <div className="bg-gradient-to-br from-indigo-900/70 to-purple-900/70 border border-indigo-500/40 rounded-2xl p-4 shadow-xl flex items-center gap-3.5 max-w-sm animate-in zoom-in-95 duration-200">
                   <div className="text-3xl p-2.5 bg-indigo-500/20 rounded-2xl">⚡</div>
                   <div>
@@ -253,7 +254,7 @@ export const TelegramBotView: React.FC = () => {
 
           return (
             <motion.div
-              key={msg.id}
+              key={uniqueKey}
               initial={{ opacity: 0, y: 8, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}

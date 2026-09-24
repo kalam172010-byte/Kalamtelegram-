@@ -39,8 +39,7 @@ import {
   PaymentGatewayConfig,
   ResellerApiConfig
 } from '../types';
-import {
-  DEFAULT_EMOJIS,
+import { DEFAULT_EMOJIS,
   DEFAULT_SETTINGS,
   DEFAULT_GATEWAY_CONFIG,
   DEFAULT_RESELLER_CONFIG,
@@ -53,6 +52,7 @@ import {
   UI_TEXTS
 } from '../data/defaultData';
 import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
+import { offlineStorage } from '../utils/offlineStorage';
 
 export function isMaintenanceActive(settings?: { bot_status?: string; maintenance_mode?: boolean | string | number } | null): boolean {
   if (!settings) return false;
@@ -427,11 +427,17 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Active bot is selected from user's own bots or fallback to system store bots
   const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || bots.find(b => b.id === activeBotId) || bots[0] || INITIAL_BOTS[0];
 
-  // Sync state to local storage
-  useEffect(() => { localStorage.setItem('kalam_bot_users', JSON.stringify(users)); }, [users]);
+  // Sync state to local storage & offline storage cache
+  useEffect(() => {
+    localStorage.setItem('kalam_bot_users', JSON.stringify(users));
+    offlineStorage.saveUserBalances(users);
+  }, [users]);
   useEffect(() => { localStorage.setItem('kalam_bot_instances', JSON.stringify(bots)); }, [bots]);
   useEffect(() => { localStorage.setItem('kalam_active_bot_id', activeBotId); }, [activeBotId]);
-  useEffect(() => { localStorage.setItem('kalam_bot_products', JSON.stringify(products)); }, [products]);
+  useEffect(() => {
+    localStorage.setItem('kalam_bot_products', JSON.stringify(products));
+    offlineStorage.saveProducts(products);
+  }, [products]);
   useEffect(() => { localStorage.setItem('kalam_bot_keys', JSON.stringify(productKeys)); }, [productKeys]);
   useEffect(() => { localStorage.setItem('kalam_bot_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('kalam_bot_tickets', JSON.stringify(tickets)); }, [tickets]);

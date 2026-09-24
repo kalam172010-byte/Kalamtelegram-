@@ -5,25 +5,13 @@ import { Download, Smartphone, CheckCircle, ShieldCheck, ExternalLink, Zap, Appl
 export const PWAInstallCard: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, isAndroid, install } = usePWAInstall();
   const [showGuideModal, setShowGuideModal] = useState(false);
-  const [downloadingApk, setDownloadingApk] = useState(false);
 
   const handleApkDownload = () => {
-    setDownloadingApk(true);
-    // Create an instant download for a PWA app manifest / web app launcher package
-    setTimeout(() => {
-      const blob = new Blob([
-        `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <!-- Kalam FF Panel Mobile Web App Launcher -->\n</resources>`
-      ], { type: 'application/vnd.android.package-archive' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Kalam_FF_Panel_App.apk';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setDownloadingApk(false);
-    }, 1200);
+    if (isInstallable) {
+      install();
+    } else {
+      setShowGuideModal(true);
+    }
   };
 
   return (
@@ -60,33 +48,20 @@ export const PWAInstallCard: React.FC = () => {
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-sm font-semibold">
                 <CheckCircle className="w-5 h-5 text-emerald-400" /> App Installed on Device
               </div>
-            ) : isInstallable ? (
-              <button
-                onClick={install}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4" /> Install Web App Now
-              </button>
             ) : (
               <button
-                onClick={() => setShowGuideModal(true)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 font-bold text-sm transition-all cursor-pointer"
+                onClick={handleApkDownload}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
               >
-                <Smartphone className="w-4 h-4" /> 1-Click App Download Guide
+                <Download className="w-4 h-4" /> Install App on Phone
               </button>
             )}
 
             <button
-              onClick={handleApkDownload}
-              disabled={downloadingApk}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-semibold text-sm transition-all cursor-pointer disabled:opacity-50"
+              onClick={() => setShowGuideModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-semibold text-sm transition-all cursor-pointer"
             >
-              {downloadingApk ? (
-                <Zap className="w-4 h-4 animate-spin text-indigo-400" />
-              ) : (
-                <Download className="w-4 h-4 text-indigo-400" />
-              )}
-              {downloadingApk ? 'Downloading APK...' : 'Direct APK File'}
+              <Smartphone className="w-4 h-4 text-indigo-400" /> Install Guide
             </button>
           </div>
         </div>
@@ -174,7 +149,7 @@ export const PWAInstallCard: React.FC = () => {
                 onClick={handleApkDownload}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-white font-bold text-sm shadow-lg hover:brightness-110 cursor-pointer flex items-center justify-center gap-2"
               >
-                <Download className="w-4 h-4" /> Download Direct APK Package
+                <Download className="w-4 h-4" /> 1-Click Direct Install App
               </button>
             </div>
 
