@@ -233,18 +233,23 @@ async function startServer() {
   // 5. Manage Products (Add, Edit, Delete, Stock/Key refill)
   app.post('/api/products', (req, res) => {
     try {
-      const { action, product, productId, keys, keyId } = req.body;
+      const { action, product, productId, productIds, keys, keyId, category, panelName } = req.body;
 
       if (action === 'create' && product) {
         dbStore.addProduct(product, keys);
         dbStore.logActivity(12846461, 'CREATE_PRODUCT', `Created product: ${product.name}`);
       } else if (action === 'update' && product) {
-        dbStore.updateProduct(Number(product.id), product);
+        dbStore.updateProduct(product.id, product);
         dbStore.logActivity(12846461, 'UPDATE_PRODUCT', `Updated product: ${product.name}`);
       } else if (action === 'delete') {
-        const idToDelete = Number(productId);
-        dbStore.deleteProduct(idToDelete);
-        dbStore.logActivity(12846461, 'DELETE_PRODUCT', `Deleted product ID: ${idToDelete}`);
+        dbStore.deleteProduct(productId);
+        dbStore.logActivity(12846461, 'DELETE_PRODUCT', `Deleted product ID: ${productId}`);
+      } else if (action === 'delete_batch' && Array.isArray(productIds)) {
+        const count = dbStore.deleteProducts(productIds);
+        dbStore.logActivity(12846461, 'DELETE_PRODUCTS_BATCH', `Deleted ${count} products`);
+      } else if (action === 'delete_panel') {
+        const count = dbStore.deletePanel(category, panelName);
+        dbStore.logActivity(12846461, 'DELETE_PANEL', `Deleted panel ${panelName} (${count} plans removed)`);
       } else if (action === 'add_keys') {
         const id = Number(productId);
         dbStore.injectProductKeys(id, keys || []);

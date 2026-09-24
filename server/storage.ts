@@ -443,6 +443,34 @@ export class DatabaseStore {
     return this.data.products.length < initialLen;
   }
 
+  public deleteProducts(ids: (number | string)[]): number {
+    const strIds = new Set(ids.map(id => String(id)));
+    const initialLen = this.data.products.length;
+    this.data.products = this.data.products.filter(p => !strIds.has(String(p.id)));
+    this.data.productKeys = this.data.productKeys.filter(k => !strIds.has(String(k.product_id)));
+    this.saveData();
+    return initialLen - this.data.products.length;
+  }
+
+  public deletePanel(category: string, panelName: string): number {
+    const initialLen = this.data.products.length;
+    const deletedProductIds = new Set<string>();
+    
+    this.data.products = this.data.products.filter(p => {
+      const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
+      const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+      if (matchCat && matchName) {
+        deletedProductIds.add(String(p.id));
+        return false;
+      }
+      return true;
+    });
+
+    this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id)));
+    this.saveData();
+    return initialLen - this.data.products.length;
+  }
+
   public injectProductKeys(productId: number, keys: string[]): number {
     let added = 0;
     if (Array.isArray(keys)) {

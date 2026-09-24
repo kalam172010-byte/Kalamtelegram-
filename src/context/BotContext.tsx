@@ -184,8 +184,10 @@ export interface BotContextType {
   // Admin DB Direct Manipulations
   addProduct: (prod: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => void;
   updateProduct: (id: number, fields: Partial<Product>) => void;
-  deleteProduct: (id: number) => void;
-  removeProduct: (id: number) => void;
+  deleteProduct: (id: number | string) => void;
+  deleteProducts: (ids: (number | string)[]) => void;
+  deletePanel: (category: string, panelName: string) => void;
+  removeProduct: (id: number | string) => void;
   injectProductKeys: (productId: number, keys: string[]) => void;
   deleteProductKey: (keyId: number) => void;
   updateUserBalance: (userId: number, delta: number, reason?: string, notifyTelegram?: boolean) => void;
@@ -492,7 +494,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
 
-            if (Array.isArray(serverData.products) && serverData.products.length > 0) {
+            if (Array.isArray(serverData.products)) {
               setProducts(serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -600,20 +602,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore bots sync notice:', err.message);
     });
 
-    // 3. Firestore Sync for Products
-    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      const cloudProducts: Product[] = [];
-      snapshot.forEach((docSnap) => {
-        cloudProducts.push(docSnap.data() as Product);
-      });
-      if (cloudProducts.length > 0 || !snapshot.empty) {
-        setProducts(cloudProducts);
-      }
-    }, (err) => {
-      console.warn('Firestore products sync notice:', err.message);
-    });
-
-    // 4. Firestore Sync for Settings
+    // 3. Firestore Sync for Settings
     const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
       snapshot.forEach((docSnap) => {
         if (docSnap.id === 'global') {
@@ -630,7 +619,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('focus', handleFocus);
       unsubscribeAuth();
       unsubBots();
-      unsubProducts();
       unsubSettings();
     };
   }, []);
@@ -2131,11 +2119,15 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       text += `━━━━━━━━━━━━━━━━━━━━\n` +
         `<i>Keys are delivered immediately upon checkout directly to this chat!</i>`;
 
+      const isApi = prod.delivery_mode === 'api_provider' || Boolean(prod.provider_product_id);
+      const vaultKeyCount = productKeys.filter(k => String(k.product_id) === String(prod.id) && !k.is_used).length;
+      const hasStock = isApi || vaultKeyCount > 0 || prodStock > 0;
+
       const kb: InlineKeyboardButton[][] = [];
 
       if (isMaint) {
         kb.push([{ text: `🛠️ Under Maintenance`, callback_data: `maint_${prod.id}`, style: "warning" }]);
-      } else if (prodStock > 0) {
+      } else if (hasStock) {
         kb.push([{ text: `🛒 CONFIRM & BUY NOW (${fmtCurr(finalPrice)})`, callback_data: `buy_${prod.id}`, style: "danger" }]);
       } else {
         kb.push([{ text: `❌ Out of Stock`, callback_data: "ignore_stock_click", style: "danger" }]);
@@ -3512,23 +3504,23 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
   };
 
-  const deleteProduct = (id: number) => {
-    const numId = Number(id);
+  const deleteProduct = (id: number | string) => {
+    const strId = String(id);
     setProducts(prev => {
-      const updated = prev.filter(p => p.id !== numId);
+      const updated = prev.filter(p => String(p.id) !== strId);
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
       return updated;
     });
     setProductKeys(prev => {
-      const updated = prev.filter(k => k.product_id !== numId);
+      const updated = prev.filter(k => String(k.product_id) !== strId);
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => p.id !== numId),
-        productKeys: (b.productKeys || []).filter(k => k.product_id !== numId)
+        products: (b.products || []).filter(p => String(p.id) !== strId),
+        productKeys: (b.productKeys || []).filter(k => String(k.product_id) !== strId)
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -3536,7 +3528,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Invalidate active Telegram FSM state if it was referencing the deleted product
     setFsmData(prev => {
-      if (prev && prev.productId === numId) {
+      if (prev && String(prev.productId) === strId) {
         setCurrentFsmState(null);
         return {};
       }
@@ -3549,8 +3541,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       const filteredKeyboard = msg.keyboard.map(row => 
         row.filter(btn => {
           if (!btn.callback_data) return true;
-          if (btn.callback_data === `buy_${numId}`) return false;
-          if (btn.callback_data === `prod_${numId}`) return false;
+          if (btn.callback_data === `buy_${strId}`) return false;
+          if (btn.callback_data === `prod_${strId}`) return false;
           return true;
         })
       ).filter(row => row.length > 0);
@@ -3561,10 +3553,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       };
     }));
 
-    logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${numId} deleted`);
+    logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${strId} deleted`);
 
-    // Sync deletion in Real-Time to Cloud Firestore
-    deleteDoc(doc(db, 'products', String(numId))).catch(() => {});
+    // Sync deletion to Cloud Firestore
+    deleteDoc(doc(db, 'products', strId)).catch(() => {});
 
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
@@ -3572,7 +3564,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'delete',
-        productId: numId
+        productId: strId
       })
     })
     .then(res => res.json())
@@ -3584,7 +3576,100 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .catch(err => console.warn('Failed to sync product deletion to server:', err));
   };
 
-  const removeProduct = (id: number) => {
+  const deleteProducts = (ids: (number | string)[]) => {
+    const strIds = new Set(ids.map(id => String(id)));
+    setProducts(prev => {
+      const updated = prev.filter(p => !strIds.has(String(p.id)));
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+    setProductKeys(prev => {
+      const updated = prev.filter(k => !strIds.has(String(k.product_id)));
+      localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
+      return updated;
+    });
+    setBots(prev => {
+      const updated = prev.map(b => ({
+        ...b,
+        products: (b.products || []).filter(p => !strIds.has(String(p.id))),
+        productKeys: (b.productKeys || []).filter(k => !strIds.has(String(k.product_id)))
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
+    logActivity(12846461, 'ADMIN_DELETE_PRODUCTS', `Batch deleted ${ids.length} products`);
+
+    // Sync deletion to Cloud Firestore
+    ids.forEach(id => {
+      deleteDoc(doc(db, 'products', String(id))).catch(() => {});
+    });
+
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete_batch',
+        productIds: ids
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      }
+    })
+    .catch(err => console.warn('Failed to sync batch product deletion to server:', err));
+  };
+
+  const deletePanel = (category: string, panelName: string) => {
+    const deletedIds: string[] = [];
+    setProducts(prev => {
+      const updated = prev.filter(p => {
+        const matchCat = (p.category || '').trim().toLowerCase() === (category || '').trim().toLowerCase();
+        const matchName = (p.panel_name || p.name || '').trim().toLowerCase() === (panelName || '').trim().toLowerCase();
+        if (matchCat && matchName) {
+          deletedIds.push(String(p.id));
+          return false;
+        }
+        return true;
+      });
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+
+    setProductKeys(prev => {
+      const deletedSet = new Set(deletedIds);
+      const updated = prev.filter(k => !deletedSet.has(String(k.product_id)));
+      localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
+      return updated;
+    });
+
+    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);
+
+    deletedIds.forEach(id => {
+      deleteDoc(doc(db, 'products', id)).catch(() => {});
+    });
+
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete_panel',
+        category,
+        panelName
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      }
+    })
+    .catch(err => console.warn('Failed to sync panel deletion to server:', err));
+  };
+
+  const removeProduct = (id: number | string) => {
     deleteProduct(id);
   };
 
@@ -4545,6 +4630,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         addProduct,
         updateProduct,
         deleteProduct,
+        deleteProducts,
+        deletePanel,
         removeProduct,
         injectProductKeys,
         deleteProductKey,

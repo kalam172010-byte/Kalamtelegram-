@@ -104,6 +104,8 @@ export const AdminDashboard: React.FC = () => {
     addProduct,
     updateProduct,
     deleteProduct,
+    deleteProducts,
+    deletePanel,
     injectProductKeys,
     deleteProductKey,
     updateUserBalance,
@@ -700,11 +702,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDeleteEntirePanel = (category: string, panelName: string) => {
     if (window.confirm(`⚠️ Are you sure you want to delete "${panelName}" (${category}) and ALL of its duration plans?`)) {
-      const prodsToDelete = products.filter(
-        p => p.category.toLowerCase() === category.toLowerCase() &&
-             (p.panel_name || p.name).toLowerCase() === panelName.toLowerCase()
-      );
-      prodsToDelete.forEach(p => deleteProduct(p.id));
+      deletePanel(category, panelName);
     }
   };
 

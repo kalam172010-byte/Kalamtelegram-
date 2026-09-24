@@ -139,7 +139,7 @@ export const ProductCatalog: React.FC = () => {
 
             const isMaint = Boolean(activePlan.is_maintenance);
             const planKeys = productKeys.filter(k => String(k.product_id) === String(activePlan.id) && !k.is_used);
-            const inStock = activePlan.delivery_mode === 'api_provider' || planKeys.length > 0 || (activePlan.stock || 0) > 0;
+            const inStock = activePlan.delivery_mode === 'api_provider' || Boolean(activePlan.provider_product_id) || planKeys.length > 0 || (activePlan.stock || 0) > 0;
             const hasSufficientBalance = currentUser.balance >= finalPrice;
 
             return (
