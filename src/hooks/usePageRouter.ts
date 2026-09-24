@@ -142,6 +142,7 @@ export function usePageRouter({
         case 'admin': {
           const adminSubTitleMap: Record<AdminTab, string> = {
             overview: 'Admin Overview',
+            appinstall: 'Mobile App Download & PWA Center',
             bots: 'Bot Fleet Master Control',
             health: 'System Health & Server Diagnostics',
             products: 'Product Store Management & Key Vault',

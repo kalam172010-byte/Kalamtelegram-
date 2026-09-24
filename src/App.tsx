@@ -302,7 +302,7 @@ const AppContent: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('admin')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
-                activeTab === 'admin' && adminTab !== 'products' && adminTab !== 'users'
+                activeTab === 'admin' && adminTab !== 'products' && adminTab !== 'users' && adminTab !== 'appinstall'
                   ? 'bg-gradient-to-r from-indigo-500 to-rose-600 text-white shadow-lg shadow-indigo-500/25 font-bold'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
@@ -311,6 +311,23 @@ const AppContent: React.FC = () => {
               <span>Admin Hub</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('admin');
+              setAdminTab('appinstall');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+              activeTab === 'admin' && adminTab === 'appinstall'
+                ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-lg shadow-cyan-500/25 font-bold'
+                : 'bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold'
+            }`}
+            title="Download / Install Web App on Mobile"
+          >
+            <Smartphone className="w-4 h-4 text-cyan-300" />
+            <span>Download App</span>
+          </button>
         </div>
 
         {/* Right User Status & Actions */}

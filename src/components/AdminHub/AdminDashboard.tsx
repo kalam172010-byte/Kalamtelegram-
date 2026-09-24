@@ -48,11 +48,13 @@ import {
   Video,
   Mic,
   Volume2,
-  Globe
+  Globe,
+  Smartphone
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
 import { SystemHealthWidget } from './SystemHealthWidget';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
+import { PWAInstallCard } from '../Common/PWAInstallCard';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -869,6 +871,13 @@ export const AdminDashboard: React.FC = () => {
             subtitle: 'UPI & Provider',
             icon: CreditCard,
             color: 'from-teal-500/20 to-cyan-600/20 border-teal-500/30 text-teal-300'
+          },
+          {
+            id: 'appinstall',
+            title: 'App Download',
+            subtitle: 'PWA Mobile App',
+            icon: Smartphone,
+            color: 'from-cyan-500/20 via-indigo-600/20 to-blue-600/20 border-cyan-400/40 text-cyan-300'
           }
         ].map((hub) => {
           const HubIcon = hub.icon;
@@ -907,6 +916,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="liquid-glass-pill rounded-2xl p-1 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
         {[
           { id: 'overview', label: '📊 Overview', icon: Zap },
+          { id: 'appinstall', label: '📱 App Download (PWA)', icon: Smartphone },
           { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
           { id: 'botcommands', label: '🤖 Bot Commands', icon: Code2 },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
@@ -947,6 +957,20 @@ export const AdminDashboard: React.FC = () => {
         ref={contentScrollRef}
         className="w-full space-y-6 pb-24 sm:pb-12 pr-0.5 select-auto"
       >
+        {/* ================= APP DOWNLOAD & PWA INSTALL TAB ================= */}
+        {adminTab === 'appinstall' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <PWAInstallCard />
+          </div>
+        )}
+
+        {/* ================= OVERVIEW TAB ================= */}
+        {adminTab === 'overview' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <PWAInstallCard />
+          </div>
+        )}
+
         {/* ================= BOT FLEET & CLONER TAB ================= */}
         {adminTab === 'bots' && (
           <div className="space-y-6 max-w-6xl mx-auto">
