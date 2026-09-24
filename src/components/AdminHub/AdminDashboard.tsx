@@ -49,9 +49,14 @@ import {
   Mic,
   Volume2,
   Globe,
-  Smartphone
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  Power
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
+import { sortProductsByDuration } from '../../utils/durationSorter';
 import { SystemHealthWidget } from './SystemHealthWidget';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
 import { PWAInstallCard } from '../Common/PWAInstallCard';
@@ -71,12 +76,18 @@ const DURATION_PRESETS_MAP: Record<string, DurationPresetConfig> = {
   '12 Hours': { validity: '12 Hours', name: '12 Hours', provider_duration: '12 Hours', price_inr: 45, reseller_price: 30 },
   '24 Hours': { validity: '24 Hours', name: '24 Hours', provider_duration: '24 Hours', price_inr: 60, reseller_price: 40 },
   '1 Day': { validity: '1 Day', name: '1 Day', provider_duration: '1 Day', price_inr: 50, reseller_price: 35 },
+  '2 Days': { validity: '2 Days', name: '2 Days', provider_duration: '2 Days', price_inr: 90, reseller_price: 60 },
   '3 Days': { validity: '3 Days', name: '3 Days', provider_duration: '3 Days', price_inr: 120, reseller_price: 80 },
+  '5 Days': { validity: '5 Days', name: '5 Days', provider_duration: '5 Days', price_inr: 180, reseller_price: 120 },
   '7 Days': { validity: '7 Days', name: '7 Days', provider_duration: '7 Days', price_inr: 250, reseller_price: 150 },
+  '10 Days': { validity: '10 Days', name: '10 Days', provider_duration: '10 Days', price_inr: 320, reseller_price: 210 },
   '15 Days': { validity: '15 Days', name: '15 Days', provider_duration: '15 Days', price_inr: 450, reseller_price: 300 },
   '30 Days': { validity: '30 Days', name: '30 Days', provider_duration: '30 Days', price_inr: 750, reseller_price: 500 },
   '60 Days': { validity: '60 Days', name: '60 Days', provider_duration: '60 Days', price_inr: 1200, reseller_price: 850 },
-  'Lifetime': { validity: 'Lifetime', name: 'Lifetime', provider_duration: 'Lifetime', price_inr: 2000, reseller_price: 1400 }
+  '90 Days': { validity: '90 Days', name: '90 Days', provider_duration: '90 Days', price_inr: 1600, reseller_price: 1100 },
+  '180 Days': { validity: '180 Days', name: '180 Days', provider_duration: '180 Days', price_inr: 2500, reseller_price: 1700 },
+  '365 Days': { validity: '365 Days', name: '365 Days', provider_duration: '365 Days', price_inr: 3500, reseller_price: 2400 },
+  'Lifetime': { validity: 'Lifetime', name: 'Lifetime', provider_duration: 'Lifetime', price_inr: 4999, reseller_price: 3500 }
 };
 
 export const AdminDashboard: React.FC = () => {
@@ -446,10 +457,10 @@ export const AdminDashboard: React.FC = () => {
     provider_product_id: 'PID_FF_NONROOT_V1',
     requires_android_id: 0,
     plans: [
-      { id: 'p_1', validity: '1 Day', provider_duration: '1 Day', name: '1 Day', price_inr: 50, reseller_price: 35, keys: '' },
-      { id: 'p_2', validity: '7 Days', provider_duration: '7 Days', name: '7 Days', price_inr: 250, reseller_price: 150, keys: '' },
-      { id: 'p_3', validity: '30 Days', provider_duration: '30 Days', name: '30 Days', price_inr: 600, reseller_price: 400, keys: '' },
-      { id: 'p_4', validity: 'Lifetime', provider_duration: 'Lifetime', name: 'Lifetime', price_inr: 1500, reseller_price: 1000, keys: '' }
+      { id: 'p_1', validity: '1 Day', provider_duration: '1 Day', name: '1 Day', price_inr: 50, reseller_price: 35, keys: '', is_maintenance: 0 },
+      { id: 'p_2', validity: '7 Days', provider_duration: '7 Days', name: '7 Days', price_inr: 250, reseller_price: 150, keys: '', is_maintenance: 0 },
+      { id: 'p_3', validity: '30 Days', provider_duration: '30 Days', name: '30 Days', price_inr: 600, reseller_price: 400, keys: '', is_maintenance: 0 },
+      { id: 'p_4', validity: 'Lifetime', provider_duration: 'Lifetime', name: 'Lifetime', price_inr: 1500, reseller_price: 1000, keys: '', is_maintenance: 0 }
     ]
   });
 
@@ -549,13 +560,35 @@ export const AdminDashboard: React.FC = () => {
     ? products
     : products.filter(p => p.category === selectedCategory);
 
+  // Accordion state: Panels collapsed by default or tapped to open
+  const [expandedPanels, setExpandedPanels] = useState<Record<string, boolean>>({});
+
+  const togglePanelExpansion = (groupKey: string) => {
+    setExpandedPanels(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }));
+  };
+
+  const handleToggleEntirePanelMaintenance = (plans: Product[]) => {
+    const isAnyMaint = plans.some(p => Boolean(p.is_maintenance));
+    const targetMaint = isAnyMaint ? 0 : 1;
+    plans.forEach(p => {
+      updateProduct(p.id, { is_maintenance: targetMaint });
+    });
+  };
+
+  const handleTogglePlanMaintenance = (planId: number | string, currentMaint: boolean) => {
+    updateProduct(planId, { is_maintenance: currentMaint ? 0 : 1 });
+  };
+
   const handleAddPlanRow = () => {
     const newId = 'p_' + Date.now();
     setMultiProdForm(prev => ({
       ...prev,
       plans: [
         ...prev.plans,
-        { id: newId, validity: '15 Days', provider_duration: '15 Days', name: '15 Days', price_inr: 400, reseller_price: 260, keys: '' }
+        { id: newId, validity: '15 Days', provider_duration: '15 Days', name: '15 Days', price_inr: 400, reseller_price: 260, keys: '', is_maintenance: 0 }
       ]
     }));
   };
@@ -601,6 +634,20 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
+  const handleLoadDailyPreset = () => {
+    setMultiProdForm(prev => ({
+      ...prev,
+      plans: [
+        { id: 'p_1', validity: '1 Day', provider_duration: '1 Day', name: '1 Day', price_inr: 50, reseller_price: 35, keys: '' },
+        { id: 'p_2', validity: '2 Days', provider_duration: '2 Days', name: '2 Days', price_inr: 90, reseller_price: 60, keys: '' },
+        { id: 'p_3', validity: '3 Days', provider_duration: '3 Days', name: '3 Days', price_inr: 120, reseller_price: 80, keys: '' },
+        { id: 'p_4', validity: '7 Days', provider_duration: '7 Days', name: '7 Days', price_inr: 250, reseller_price: 150, keys: '' },
+        { id: 'p_5', validity: '15 Days', provider_duration: '15 Days', name: '15 Days', price_inr: 450, reseller_price: 300, keys: '' },
+        { id: 'p_6', validity: '30 Days', provider_duration: '30 Days', name: '30 Days', price_inr: 750, reseller_price: 500, keys: '' }
+      ]
+    }));
+  };
+
   const handleLoadHourlyPreset = () => {
     setMultiProdForm(prev => ({
       ...prev,
@@ -632,7 +679,7 @@ export const AdminDashboard: React.FC = () => {
           device_limit: multiProdForm.device_limit || '1 Device HWID',
           apk_link: multiProdForm.apk_link,
           is_active: 1,
-          is_maintenance: 0,
+          is_maintenance: plan.is_maintenance ? 1 : 0,
           maintenance_note: '',
           delivery_mode: multiProdForm.delivery_mode,
           provider_product_id: multiProdForm.provider_product_id,
@@ -1740,7 +1787,15 @@ export const AdminDashboard: React.FC = () => {
                     grp.totalStock += inStock;
                   });
 
+                  // Ensure all plans in each group are strictly sorted by duration
+                  panelMap.forEach(group => {
+                    group.plans = sortProductsByDuration(group.plans);
+                  });
+
                   const groups = Array.from(panelMap.values());
+                  groups.forEach(group => {
+                    group.plans = sortProductsByDuration(group.plans);
+                  });
 
                   if (groups.length === 0) {
                     return (
@@ -1761,178 +1816,281 @@ export const AdminDashboard: React.FC = () => {
                     );
                   }
 
-                  return groups.map(group => (
-                    <div
-                      key={group.key}
-                      className="bg-slate-900 border border-slate-800/90 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl hover:border-slate-700/80 transition"
-                    >
-                      {/* Product Header */}
-                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-2.5 py-0.5 rounded-full">
-                              {group.category}
-                            </span>
-                            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full font-mono">
-                              {group.plans.length} {group.plans.length === 1 ? 'Duration Plan' : 'Duration Plans'}
-                            </span>
-                            {group.provider_product_id && (
-                              <span className="text-[10px] text-indigo-300 bg-indigo-950/70 border border-indigo-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold">
-                                PID: {group.provider_product_id}
-                              </span>
-                            )}
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold font-mono ${
-                              group.totalStock > 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  return groups.map(group => {
+                    const isExpanded = Boolean(expandedPanels[group.key]);
+                    const isPanelMaintenance = group.plans.length > 0 && group.plans.every(p => Boolean(p.is_maintenance));
+                    const isAnyPlanMaintenance = group.plans.some(p => Boolean(p.is_maintenance));
+
+                    return (
+                      <div
+                        key={group.key}
+                        className={`bg-slate-900 border rounded-2xl transition shadow-xl overflow-hidden ${
+                          isPanelMaintenance
+                            ? 'border-amber-500/50 bg-gradient-to-b from-amber-950/20 to-slate-900'
+                            : 'border-slate-800/90 hover:border-slate-700/80'
+                        }`}
+                      >
+                        {/* ================= PRODUCT MAIN HEADER (TOUCH TO EXPAND) ================= */}
+                        <div
+                          onClick={() => togglePanelExpansion(group.key)}
+                          className="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 cursor-pointer select-none bg-slate-900/60 hover:bg-slate-850/70 transition"
+                        >
+                          <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                            {/* Accordion Chevron Trigger */}
+                            <div className={`p-2 rounded-xl border shrink-0 transition-transform duration-200 ${
+                              isExpanded 
+                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 rotate-180' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                             }`}>
-                              {group.totalStock} Total Keys
-                            </span>
-                          </div>
-                          <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                            <span>{group.panel_name}</span>
-                          </h3>
-                          <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
-                            <span>Limit: <strong className="text-slate-200">{group.device_limit || '1 Device HWID'}</strong></span>
-                            {group.apk_link && (
-                              <a
-                                href={group.apk_link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1"
-                              >
-                                <span>APK Download</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
+                              <ChevronDown className="w-5 h-5" />
+                            </div>
 
-                        {/* Top Group Actions */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowAddPlanToPanelModal({
-                                category: group.category,
-                                panel_name: group.panel_name,
-                                apk_link: group.apk_link,
-                                device_limit: group.device_limit,
-                                delivery_mode: (group.delivery_mode as any) || 'api_provider',
-                                provider_product_id: group.provider_product_id,
-                                requires_android_id: group.requires_android_id
-                              });
-                            }}
-                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer active:scale-95"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>+ Add Duration Plan</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteEntirePanel(group.category, group.panel_name)}
-                            className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-xl transition cursor-pointer border border-rose-500/20"
-                            title="Delete Entire Product and all duration plans"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                            <div className="space-y-1.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-2.5 py-0.5 rounded-full">
+                                  {group.category}
+                                </span>
 
-                      {/* Plans Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {group.plans.map((plan, planIdx) => {
-                          const planKeys = productKeys.filter(k => String(k.product_id) === String(plan.id) && !k.is_used);
-                          const isMaint = Boolean(plan.is_maintenance);
-                          return (
-                            <div
-                              key={`plan-item-${plan.id}-${planIdx}`}
-                              className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between hover:border-slate-700 transition"
-                            >
-                              <div>
-                                <div className="flex items-center justify-between gap-1 mb-1.5">
-                                  <span className="font-bold text-white text-xs sm:text-sm font-mono flex items-center gap-1">
-                                    <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                                    <span>{plan.name}</span>
+                                <span className="text-[10px] font-bold bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700 flex items-center gap-1 font-mono">
+                                  <Clock className="w-3 h-3 text-cyan-400" />
+                                  <span>{group.plans.length} {group.plans.length === 1 ? 'Duration Plan' : 'Duration Plans'}</span>
+                                </span>
+
+                                {group.provider_product_id && (
+                                  <span className="text-[10px] text-indigo-300 bg-indigo-950/70 border border-indigo-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold">
+                                    PID: {group.provider_product_id}
                                   </span>
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    planKeys.length > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
-                                  }`}>
-                                    {planKeys.length} Keys
+                                )}
+
+                                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold font-mono ${
+                                  group.totalStock > 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                }`}>
+                                  {group.totalStock} Total Keys
+                                </span>
+
+                                {isPanelMaintenance ? (
+                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
+                                    <Wrench className="w-3 h-3 text-amber-400" />
+                                    <span>PANEL UNDER MAINTENANCE</span>
                                   </span>
-                                </div>
+                                ) : isAnyPlanMaintenance ? (
+                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                    <Wrench className="w-3 h-3 text-amber-400" />
+                                    <span>PARTIAL MAINTENANCE</span>
+                                  </span>
+                                ) : null}
+                              </div>
 
-                                <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 space-y-1 text-xs">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-slate-400 text-[11px]">User Price:</span>
-                                    <span className="font-bold text-emerald-400 font-mono">₹{plan.price_inr.toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-slate-400 text-[11px]">Reseller Price:</span>
-                                    <span className="font-bold text-amber-300 font-mono">₹{(plan.reseller_price ?? plan.reseller_price_inr ?? 0).toFixed(2)}</span>
-                                  </div>
-                                  {plan.provider_duration && (
-                                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800/70 text-indigo-300">
-                                      <span className="text-slate-400">API Duration:</span>
-                                      <span className="font-mono font-semibold bg-indigo-950/60 px-1.5 py-0.2 rounded border border-indigo-500/20">{plan.provider_duration}</span>
-                                    </div>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-base sm:text-lg font-black text-white truncate">
+                                  {group.panel_name}
+                                </h3>
+                                <span className="text-xs text-cyan-400 font-semibold hidden sm:inline opacity-80">
+                                  {isExpanded ? '• (Click to collapse rows)' : '• (Click to show duration plans)'}
+                                </span>
+                              </div>
 
-                                {isMaint && (
-                                  <div className="mt-1.5 p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-[10px] text-amber-300 flex items-center gap-1">
-                                    <Wrench className="w-3 h-3 text-amber-400 shrink-0" />
-                                    <span className="truncate">Under Maintenance</span>
-                                  </div>
+                              <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
+                                <span>Limit: <strong className="text-slate-200">{group.device_limit || '1 Device HWID'}</strong></span>
+                                {group.apk_link && (
+                                  <a
+                                    href={group.apk_link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1"
+                                  >
+                                    <span>APK Download</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
                                 )}
                               </div>
+                            </div>
+                          </div>
 
-                              {/* Plan Actions */}
-                              <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowAddKeysModal(plan.id)}
-                                    className="py-1.5 px-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                                  >
-                                    <Key className="w-3 h-3" />
-                                    <span>+ Keys</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenEditProduct(plan)}
-                                    className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 border border-slate-700 cursor-pointer active:scale-95"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
-                                </div>
+                          {/* ================= PANEL ACTIONS & MAINTENANCE SWITCH ================= */}
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-2 flex-wrap justify-end shrink-0"
+                          >
+                            {/* Panel-Level Maintenance Mode Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleEntirePanelMaintenance(group.plans)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 border ${
+                                isPanelMaintenance
+                                  ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35 shadow-amber-500/10'
+                                  : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-750 hover:text-white'
+                              }`}
+                              title="Toggle Maintenance mode for this entire product panel"
+                            >
+                              <Wrench className={`w-3.5 h-3.5 ${isPanelMaintenance ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+                              <span>{isPanelMaintenance ? '🛠️ Maintenance: ON' : '🛠️ Panel Maintenance'}</span>
+                            </button>
 
-                                <div className="flex items-center justify-between gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateProduct(plan.id, { is_active: plan.is_active ? 0 : 1 })}
-                                    className={`text-[10px] font-semibold px-2 py-1 rounded flex items-center gap-1 transition cursor-pointer ${
-                                      plan.is_active ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 bg-slate-800'
+                            {/* Add Duration Plan Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAddPlanToPanelModal({
+                                  category: group.category,
+                                  panel_name: group.panel_name,
+                                  apk_link: group.apk_link,
+                                  device_limit: group.device_limit,
+                                  delivery_mode: (group.delivery_mode as any) || 'api_provider',
+                                  provider_product_id: group.provider_product_id,
+                                  requires_android_id: group.requires_android_id
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Add Plan</span>
+                            </button>
+
+                            {/* Delete Entire Panel */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEntirePanel(group.category, group.panel_name)}
+                              className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-xl transition cursor-pointer border border-rose-500/20"
+                              title="Delete Entire Product and all duration plans"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ================= EXPANDED DURATION PLAN ROWS (SHOWN ON TOUCH / CLICK) ================= */}
+                        {isExpanded && (
+                          <div className="p-4 sm:p-5 border-t border-slate-800/80 bg-slate-950/60 space-y-3">
+                            <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
+                              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>Duration Plans ({group.plans.length}) - Sorted by Duration:</span>
+                              </span>
+                              <span className="text-[11px] text-slate-500">
+                                💡 Each plan can have its own individual maintenance mode, pricing & keys!
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {group.plans.map((plan, planIdx) => {
+                                const planKeys = productKeys.filter(k => String(k.product_id) === String(plan.id) && !k.is_used);
+                                const isMaint = Boolean(plan.is_maintenance);
+
+                                return (
+                                  <div
+                                    key={`plan-item-${plan.id}-${planIdx}`}
+                                    className={`rounded-xl p-3.5 space-y-2.5 flex flex-col justify-between transition border ${
+                                      isMaint
+                                        ? 'bg-amber-950/20 border-amber-500/40 shadow-sm shadow-amber-500/10'
+                                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
                                     }`}
                                   >
-                                    {plan.is_active ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                                    <span>{plan.is_active ? 'Active' : 'Hidden'}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteProduct(plan.id)}
-                                    className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/20 transition cursor-pointer"
-                                    title="Delete this plan"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
+                                    <div>
+                                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                                        <span className="font-bold text-white text-xs sm:text-sm font-mono flex items-center gap-1">
+                                          <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                          <span>{plan.name}</span>
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                          planKeys.length > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                                        }`}>
+                                          {planKeys.length} Keys
+                                        </span>
+                                      </div>
+
+                                      <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80 space-y-1 text-xs">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-400 text-[11px]">User Price:</span>
+                                          <span className="font-bold text-emerald-400 font-mono">₹{plan.price_inr.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-400 text-[11px]">Reseller Price:</span>
+                                          <span className="font-bold text-amber-300 font-mono">₹{(plan.reseller_price ?? plan.reseller_price_inr ?? 0).toFixed(2)}</span>
+                                        </div>
+                                        {plan.provider_duration && (
+                                          <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800/70 text-indigo-300">
+                                            <span className="text-slate-400">API Duration:</span>
+                                            <span className="font-mono font-semibold bg-indigo-950/60 px-1.5 py-0.2 rounded border border-indigo-500/20">{plan.provider_duration}</span>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Individual Maintenance Mode Badge */}
+                                      {isMaint && (
+                                        <div className="mt-2 p-1.5 bg-amber-500/15 border border-amber-500/40 rounded-lg text-[10px] text-amber-300 font-bold flex items-center gap-1.5 animate-pulse">
+                                          <Wrench className="w-3 h-3 text-amber-400 shrink-0" />
+                                          <span>Plan In Maintenance</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Plan Action Controls & Individual Maintenance Toggle */}
+                                    <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                                      {/* Individual Plan Maintenance Mode Switch */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTogglePlanMaintenance(plan.id, isMaint)}
+                                        className={`w-full py-1.5 px-2 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                                          isMaint
+                                            ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35'
+                                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-amber-300 hover:border-amber-500/30'
+                                        }`}
+                                      >
+                                        <Wrench className={`w-3.5 h-3.5 ${isMaint ? 'text-amber-400' : 'text-slate-500'}`} />
+                                        <span>{isMaint ? '🛠️ Maintenance: ON' : '🛠️ Maintenance: OFF'}</span>
+                                      </button>
+
+                                      <div className="grid grid-cols-2 gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowAddKeysModal(plan.id)}
+                                          className="py-1.5 px-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                                        >
+                                          <Key className="w-3 h-3" />
+                                          <span>+ Keys</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditProduct(plan)}
+                                          className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 border border-slate-700 cursor-pointer active:scale-95"
+                                        >
+                                          <Edit3 className="w-3 h-3" />
+                                          <span>Edit</span>
+                                        </button>
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-1 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateProduct(plan.id, { is_active: plan.is_active ? 0 : 1 })}
+                                          className={`text-[10px] font-semibold px-2 py-1 rounded flex items-center gap-1 transition cursor-pointer ${
+                                            plan.is_active ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 bg-slate-800'
+                                          }`}
+                                        >
+                                          {plan.is_active ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                          <span>{plan.is_active ? 'Active' : 'Hidden'}</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => deleteProduct(plan.id)}
+                                          className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/20 transition cursor-pointer"
+                                          title="Delete this plan"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ));
+                    );
+                  });
                 })()}
               </div>
             )}
@@ -5519,17 +5677,21 @@ export const AdminDashboard: React.FC = () => {
       {/* ================= ADD PRODUCT & PLANS MODAL ================= */}
       {showAddProductModal && (
         <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[92dvh] sm:max-h-[88dvh] shadow-2xl flex flex-col overflow-hidden">
-            {/* Modal Header */}
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full max-h-[92dvh] sm:max-h-[88dvh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header (Matching video) */}
             <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-800 shrink-0 flex items-center justify-between">
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-cyan-400" />
-                  Create Product & Configure Duration Plans
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Set product details once, configure Reseller API PID, and attach individual duration plans with custom API durations.
-                </p>
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    Add Product
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Add products, plans, pricing, and key delivery settings.
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -5542,35 +5704,62 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Scrollable Form Body */}
             <form id="create-multi-product-form" onSubmit={handleCreateProduct} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
-              {/* Top Row: Category & Panel Name */}
+              {/* Field 1: Product Name */}
+              <div>
+                <label className="text-slate-300 mb-1.5 block font-bold text-xs">
+                  Product Name <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={multiProdForm.panel_name}
+                  onChange={(e) => setMultiProdForm({ ...multiProdForm, panel_name: e.target.value })}
+                  placeholder="e.g. VIP ZERO PANEL or Netflix Premium"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-cyan-300 outline-none font-bold text-sm focus:border-cyan-400 shadow-inner"
+                />
+              </div>
+
+              {/* Field 2: Device Category (optional) */}
+              <div>
+                <label className="text-slate-300 mb-1 block font-bold text-xs">
+                  Device Category <span className="text-slate-500 font-normal">(optional)</span>
+                </label>
+                <select
+                  value={multiProdForm.category}
+                  onChange={(e) => setMultiProdForm({ ...multiProdForm, category: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 outline-none font-semibold"
+                >
+                  <option value="ANDROID NON ROOT PANEL">ANDROID NON ROOT PANEL</option>
+                  <option value="ANDROID ROOT PANEL">ANDROID ROOT PANEL</option>
+                  <option value="PC PANEL">PC PANEL</option>
+                  <option value="IOS / IPA PANEL">IOS / IPA PANEL</option>
+                  <option value="ALL PRODUCTS">ALL PRODUCTS (General)</option>
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Leave unchosen and this product shows under &quot;All Products&quot; instead of a specific device type.
+                </p>
+              </div>
+
+              {/* Field 3: Channel Link / APK Download (optional) */}
+              <div>
+                <label className="text-slate-300 mb-1 block font-bold text-xs">
+                  Channel Link / APK URL <span className="text-slate-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={multiProdForm.apk_link}
+                  onChange={(e) => setMultiProdForm({ ...multiProdForm, apk_link: e.target.value })}
+                  placeholder="e.g. https://t.me/yourchannel or Direct APK link"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 outline-none focus:border-cyan-400 font-mono text-xs"
+                />
+              </div>
+
+              {/* Field 4: Device Limit & Reseller API Mode */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
                 <div>
-                  <label className="text-slate-300 mb-1.5 block font-bold text-xs">1. Device Category</label>
-                  <select
-                    value={multiProdForm.category}
-                    onChange={(e) => setMultiProdForm({ ...multiProdForm, category: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200 outline-none font-bold"
-                  >
-                    <option value="ANDROID NON ROOT PANEL">ANDROID NON ROOT PANEL</option>
-                    <option value="ANDROID ROOT PANEL">ANDROID ROOT PANEL</option>
-                    <option value="PC PANEL">PC PANEL</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-slate-300 mb-1.5 block font-bold text-xs">2. Product / Panel Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={multiProdForm.panel_name}
-                    onChange={(e) => setMultiProdForm({ ...multiProdForm, panel_name: e.target.value })}
-                    placeholder="e.g. VIP ZERO PANEL or MST CHEAT"
-                    className="w-full bg-slate-900 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 outline-none font-bold text-sm shadow-inner"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-400 mb-1 block font-semibold">Device Limit</label>
+                  <label className="text-slate-400 mb-1 block font-semibold">
+                    Device Limit <span className="text-slate-500 font-normal">(optional)</span>
+                  </label>
                   <input
                     type="text"
                     value={multiProdForm.device_limit}
@@ -5581,71 +5770,52 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-slate-400 mb-1 block font-semibold">APK Download / Channel URL</label>
-                  <input
-                    type="text"
-                    value={multiProdForm.apk_link}
-                    onChange={(e) => setMultiProdForm({ ...multiProdForm, apk_link: e.target.value })}
-                    placeholder="https://t.me/KyunodaProAPKs or Direct link"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-cyan-200 outline-none focus:border-cyan-400 font-mono text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Reseller & Delivery API settings */}
-              <div className="p-3.5 bg-slate-950/80 border border-indigo-500/30 rounded-xl space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5" />
-                    Key Delivery Mode & Reseller API Configuration
-                  </span>
-                  <span className="text-[10px] text-slate-400">Automated vs Vault</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'api_provider' })}
-                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
-                      multiProdForm.delivery_mode === 'api_provider'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'bg-slate-900 text-slate-400 border border-slate-800'
-                    }`}
-                  >
-                    ⚡ Auto API
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'hybrid' })}
-                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
-                      multiProdForm.delivery_mode === 'hybrid'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'bg-slate-900 text-slate-400 border border-slate-800'
-                    }`}
-                  >
-                    🔄 Hybrid
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'manual_vault' })}
-                    className={`p-2 rounded-lg text-center font-bold transition cursor-pointer ${
-                      multiProdForm.delivery_mode === 'manual_vault'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'bg-slate-900 text-slate-400 border border-slate-800'
-                    }`}
-                  >
-                    🔒 Vault Only
-                  </button>
+                  <label className="text-slate-400 mb-1 block font-semibold">
+                    Key Delivery Mode
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'api_provider' })}
+                      className={`p-1.5 rounded-lg text-center font-bold text-[11px] transition cursor-pointer ${
+                        multiProdForm.delivery_mode === 'api_provider'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'bg-slate-900 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      ⚡ Auto API
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'hybrid' })}
+                      className={`p-1.5 rounded-lg text-center font-bold text-[11px] transition cursor-pointer ${
+                        multiProdForm.delivery_mode === 'hybrid'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'bg-slate-900 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      🔄 Hybrid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMultiProdForm({ ...multiProdForm, delivery_mode: 'manual_vault' })}
+                      className={`p-1.5 rounded-lg text-center font-bold text-[11px] transition cursor-pointer ${
+                        multiProdForm.delivery_mode === 'manual_vault'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'bg-slate-900 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      🔒 Vault
+                    </button>
+                  </div>
                 </div>
 
                 {multiProdForm.delivery_mode !== 'manual_vault' && (
-                  <div className="bg-indigo-950/30 p-3 rounded-xl border border-indigo-500/20 space-y-2">
+                  <div className="col-span-1 sm:col-span-2 pt-2 border-t border-slate-800/80">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[11px] text-indigo-300 font-bold mb-1 block">
-                          Provider Product PID (Same for all duration plans)
+                        <label className="text-[10px] text-indigo-300 font-bold mb-1 block">
+                          Provider PID (Auto Restock / Reseller API)
                         </label>
                         <input
                           type="text"
@@ -5655,8 +5825,7 @@ export const AdminDashboard: React.FC = () => {
                           className="w-full bg-slate-900 border border-indigo-500/50 rounded-lg p-2 text-xs text-indigo-200 font-mono font-bold"
                         />
                       </div>
-
-                      <div className="flex items-center gap-2 pt-2 sm:pt-5">
+                      <div className="flex items-center gap-2 pt-1 sm:pt-4">
                         <input
                           type="checkbox"
                           id="multiReqAndroidId"
@@ -5665,41 +5834,41 @@ export const AdminDashboard: React.FC = () => {
                           className="rounded accent-indigo-500 w-4 h-4 cursor-pointer"
                         />
                         <label htmlFor="multiReqAndroidId" className="text-slate-300 text-[11px] cursor-pointer">
-                          Requires Device HWID / Android ID upon buy
+                          Requires HWID / Android ID
                         </label>
                       </div>
                     </div>
-                    <p className="text-[10px] text-indigo-300/80">
-                      ℹ️ Note: The Provider PID above applies to this entire panel. You can customize the exact Reseller API duration for each duration plan below!
-                    </p>
                   </div>
                 )}
               </div>
 
-              {/* ================= DURATION PLANS SECTION ================= */}
-              <div className="p-3.5 bg-cyan-950/20 border border-cyan-500/30 rounded-xl space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
-                  <div>
-                    <span className="font-bold text-cyan-300 flex items-center gap-1.5 text-sm">
-                      ⏱ Duration Plans & Reseller API Duration Mapping ({multiProdForm.plans.length})
-                    </span>
-                    <span className="text-[10px] text-cyan-400/80 block">
-                      Each plan has its own display validity, pricing, and independent Reseller API duration string.
-                    </span>
-                  </div>
+              {/* ================= PLANS SECTION (Matching video) ================= */}
+              <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
+                    <Plus className="w-3.5 h-3.5 text-cyan-400" />
+                    Plans (optional) & Individual Maintenance
+                  </span>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleLoadDailyPreset}
+                      className="px-2 py-0.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-500/40 rounded-lg text-[10px] font-bold cursor-pointer"
+                    >
+                      ⚡ Daily (1D, 2D, 3D, 7D, 15D, 30D)
+                    </button>
                     <button
                       type="button"
                       onClick={handleLoadStandardPreset}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
+                      className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
                     >
                       ⚡ Standard (1D, 7D, 30D, Life)
                     </button>
                     <button
                       type="button"
                       onClick={handleLoadHourlyPreset}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
+                      className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
                     >
                       ⚡ Hourly (2H, 6H, 12H, 24H)
                     </button>
@@ -5708,126 +5877,157 @@ export const AdminDashboard: React.FC = () => {
 
                 {/* Plan Rows */}
                 <div className="space-y-3">
-                  {multiProdForm.plans.map((plan, pIdx) => (
-                    <div
-                      key={`multiprod-plan-${plan.id}-${pIdx}`}
-                      className="bg-slate-950/90 border border-slate-800 p-3 rounded-xl space-y-2.5 shadow-inner"
-                    >
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
-                        <span className="font-bold text-cyan-400 text-xs flex items-center gap-1.5">
-                          <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-cyan-300 font-mono">Plan #{pIdx + 1}</span>
-                          <span className="text-white font-bold">{plan.validity}</span>
-                        </span>
-                        {multiProdForm.plans.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePlanRow(plan.id)}
-                            className="text-rose-400 hover:text-rose-300 p-1 text-[11px] font-semibold flex items-center gap-1 cursor-pointer hover:bg-rose-500/10 rounded-lg"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Remove Plan</span>
-                          </button>
-                        )}
-                      </div>
+                  {multiProdForm.plans.map((plan, pIdx) => {
+                    const isMaint = Boolean(plan.is_maintenance);
+                    return (
+                      <div
+                        key={`multiprod-plan-${plan.id}-${pIdx}`}
+                        className={`p-3 rounded-xl space-y-2.5 transition border ${
+                          isMaint
+                            ? 'bg-amber-950/20 border-amber-500/40 shadow-sm shadow-amber-500/10'
+                            : 'bg-slate-900 border-slate-800'
+                        }`}
+                      >
+                        {/* Top Plan Row: Validity & Price & Delete */}
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-6 sm:col-span-5">
+                            <label className="text-slate-400 text-[10px] block mb-0.5">Plan / Validity Name</label>
+                            <input
+                              type="text"
+                              required
+                              value={plan.validity}
+                              onChange={(e) => handlePlanChange(plan.id, 'validity', e.target.value)}
+                              placeholder="e.g. 1 Day / 3 Days"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold text-xs"
+                            />
+                          </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                        <div>
-                          <label className="text-slate-300 text-[10px] font-bold mb-1 block">Display Plan Duration</label>
-                          <input
-                            type="text"
-                            required
-                            value={plan.validity}
-                            onChange={(e) => handlePlanChange(plan.id, 'validity', e.target.value)}
-                            placeholder="e.g. 1 Day, 7 Days"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white font-bold text-xs"
-                          />
+                          <div className="col-span-5 sm:col-span-6">
+                            <label className="text-emerald-400 text-[10px] font-bold block mb-0.5">Price (₹)</label>
+                            <input
+                              type="number"
+                              required
+                              value={plan.price_inr}
+                              onChange={(e) => handlePlanChange(plan.id, 'price_inr', Number(e.target.value))}
+                              placeholder="₹ Price"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold text-xs"
+                            />
+                          </div>
+
+                          <div className="col-span-1 text-right flex justify-end">
+                            {multiProdForm.plans.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePlanRow(plan.id)}
+                                className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
+                                title="Delete Plan"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
                         </div>
 
+                        {/* Row 2: Reseller Price */}
                         <div>
-                          <label className="text-indigo-300 text-[10px] font-bold mb-1 block flex items-center gap-1">
-                            <span>Reseller API Duration</span>
-                            <span className="text-[9px] text-slate-500 font-normal">(Provider)</span>
+                          <label className="text-amber-300 text-[10px] font-semibold block mb-0.5 flex items-center gap-1">
+                            <span>👑 Reseller Price (₹)</span>
+                            <span className="text-slate-500 font-normal">(optional)</span>
                           </label>
                           <input
-                            type="text"
-                            required
-                            value={plan.provider_duration || ''}
-                            onChange={(e) => handlePlanChange(plan.id, 'provider_duration', e.target.value)}
-                            placeholder="e.g. 1 Day, 7 Days, 30 Days"
-                            className="w-full bg-slate-900 border border-indigo-500/40 rounded-lg p-1.5 text-indigo-200 font-mono font-bold text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-emerald-400 text-[10px] font-bold mb-1 block">User Price (₹)</label>
-                          <input
                             type="number"
-                            required
-                            value={plan.price_inr}
-                            onChange={(e) => handlePlanChange(plan.id, 'price_inr', Number(e.target.value))}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-emerald-400 font-bold text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-amber-300 text-[10px] font-bold mb-1 block">Reseller Price (₹)</label>
-                          <input
-                            type="number"
-                            required
                             value={plan.reseller_price}
                             onChange={(e) => handlePlanChange(plan.id, 'reseller_price', Number(e.target.value))}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-amber-300 font-bold text-xs"
+                            placeholder="optional"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-amber-300 font-semibold text-xs"
                           />
                         </div>
-                      </div>
 
-                      <div>
-                        <label className="text-slate-400 text-[10px] mb-0.5 block">
-                          Initial Vault Keys for {plan.validity} (Optional, 1 per line)
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={plan.keys}
-                          onChange={(e) => handlePlanChange(plan.id, 'keys', e.target.value)}
-                          placeholder="KEY-SAMPLE-1234&#10;KEY-SAMPLE-5678"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-cyan-300 font-mono text-[11px] outline-none"
-                        />
+                        {/* Row 3: Initial Vault Keys */}
+                        <div>
+                          <label className="text-slate-400 text-[10px] block mb-0.5">
+                            Keys (one per line, optional)
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={plan.keys}
+                            onChange={(e) => handlePlanChange(plan.id, 'keys', e.target.value)}
+                            placeholder="KEY-0001&#10;KEY-0002"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-cyan-300 font-mono text-[11px] outline-none"
+                          />
+                        </div>
+
+                        {/* Row 4: Reseller API Duration & Individual Maintenance Switch */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/80 items-center">
+                          <div>
+                            <label className="text-[10px] text-indigo-300 font-semibold block mb-0.5">
+                              API Auto-Restock Duration (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={plan.provider_duration || ''}
+                              onChange={(e) => handlePlanChange(plan.id, 'provider_duration', e.target.value)}
+                              placeholder="e.g. 1 Day / 7 Days"
+                              className="w-full bg-slate-950 border border-indigo-500/30 rounded-lg p-1.5 text-indigo-200 font-mono text-xs"
+                            />
+                          </div>
+
+                          {/* Individual Plan Maintenance Mode Toggle Switch */}
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
+                              Plan Maintenance Status
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handlePlanChange(plan.id, 'is_maintenance', isMaint ? 0 : 1)}
+                              className={`w-full py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                                isMaint
+                                  ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35'
+                                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-amber-300 hover:border-amber-500/30'
+                              }`}
+                            >
+                              <Wrench className={`w-3.5 h-3.5 ${isMaint ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                              <span>{isMaint ? '🛠️ Under Maintenance: ON' : '🛠️ Under Maintenance: OFF'}</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
+                {/* + Add More Plan Button (Matching video) */}
                 <button
                   type="button"
                   onClick={handleAddPlanRow}
-                  className="w-full py-2.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                  className="w-full py-2.5 bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-200 border border-indigo-500/30 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>+ Add Another Duration Plan</span>
+                  <span>+ Add More Plan</span>
                 </button>
               </div>
             </form>
 
-            {/* Always Visible Fixed Action Footer */}
+            {/* Modal Bottom Footer (Matching video + Add Product button) */}
             <div className="p-3.5 sm:px-6 sm:py-3.5 bg-slate-950/90 border-t border-slate-800 shrink-0 flex items-center justify-between gap-2 z-10">
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Configuring <span className="text-cyan-300 font-bold">{multiProdForm.plans.length}</span> duration {multiProdForm.plans.length === 1 ? 'plan' : 'plans'}
+                Configuring <span className="text-cyan-300 font-bold">{multiProdForm.plans.length}</span> {multiProdForm.plans.length === 1 ? 'plan' : 'plans'}
               </span>
-              <div className="flex items-center gap-2.5 ml-auto">
+              <div className="flex items-center gap-2.5 ml-auto w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowAddProductModal(false)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer transition text-xs"
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer transition text-xs flex-1 sm:flex-none"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   form="create-multi-product-form"
-                  className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/30 cursor-pointer transition active:scale-95 text-xs flex items-center gap-2"
+                  className="px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-600/30 cursor-pointer transition active:scale-95 text-xs flex items-center justify-center gap-2 flex-1 sm:flex-none"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Save & Create Product ({multiProdForm.plans.length} Plans)</span>
+                  <span>+ Add Product</span>
                 </button>
               </div>
             </div>
@@ -5953,12 +6153,31 @@ export const AdminDashboard: React.FC = () => {
                   Initial Vault Keys (Optional, 1 per line)
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={singlePlanForm.keys}
                   onChange={(e) => setSinglePlanForm({ ...singlePlanForm, keys: e.target.value })}
                   placeholder={`KEY-SAMPLE-9901\nKEY-SAMPLE-9902`}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-cyan-300 font-mono text-xs outline-none"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-cyan-300 font-mono text-xs outline-none"
                 />
+              </div>
+
+              {/* Single Plan Maintenance Toggle */}
+              <div>
+                <label className="text-[11px] text-slate-400 font-semibold block mb-1">
+                  Plan Maintenance Status
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSinglePlanForm({ ...singlePlanForm, is_maintenance: singlePlanForm.is_maintenance ? 0 : 1 })}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border ${
+                    singlePlanForm.is_maintenance
+                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-amber-300 hover:border-amber-500/30'
+                  }`}
+                >
+                  <Wrench className={`w-4 h-4 ${singlePlanForm.is_maintenance ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span>{singlePlanForm.is_maintenance ? '🛠️ Under Maintenance: ON' : '🛠️ Under Maintenance: OFF'}</span>
+                </button>
               </div>
 
             </form>

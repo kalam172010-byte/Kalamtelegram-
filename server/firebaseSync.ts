@@ -15,7 +15,7 @@ function getFirebaseConfig() {
   }
   return {
     projectId: 'kalam-panel',
-    firestoreDatabaseId: 'ai-studio-kalamffpaneltele-80fa19f6-f935-4bdf-97bc-0c6dd01b4d82'
+    firestoreDatabaseId: 'ai-studio-kalamtelegram-fbe85e45-7e8b-4c74-8606-6c7736ba397a'
   };
 }
 

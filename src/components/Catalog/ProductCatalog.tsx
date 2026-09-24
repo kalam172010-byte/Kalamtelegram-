@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useBot } from '../../context/BotContext';
 import { Product } from '../../types';
+import { sortProductsByDuration } from '../../utils/durationSorter';
 import {
   Package,
   Clock,
@@ -61,6 +62,11 @@ export const ProductCatalog: React.FC = () => {
       }
 
       map.get(key)!.plans.push(prod);
+    });
+
+    // Ensure all plans inside each panel are strictly sorted in duration order
+    map.forEach(panel => {
+      panel.plans = sortProductsByDuration(panel.plans);
     });
 
     return Array.from(map.values());

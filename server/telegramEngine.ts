@@ -4,6 +4,7 @@ import { famGateway } from './famGateway';
 import { bantiResellerService } from './bantiResellerApi';
 import QRCode from 'qrcode';
 import { apiLogger } from './apiLogger';
+import { sortProductsByDuration } from '../src/utils/durationSorter';
 
 export interface BotStatus {
   isRunning: boolean;
@@ -2081,6 +2082,11 @@ class TelegramEngine {
         panelMap.get(pName)!.push(prod);
       }
 
+      // Sort plans inside each panel by duration
+      for (const [pName, plans] of panelMap.entries()) {
+        panelMap.set(pName, sortProductsByDuration(plans));
+      }
+
       text += `👉 <b>Select a Product / Panel to view its available plan durations:</b>\n\n`;
       
       let pIdx = 1;
@@ -2092,7 +2098,8 @@ class TelegramEngine {
 
       const buttons: any[] = [];
       for (const [pName, plans] of panelMap.entries()) {
-        const firstProd = plans[0];
+        const sortedPlans = sortProductsByDuration(plans);
+        const firstProd = sortedPlans[0];
         buttons.push([{
           text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
           callback_data: `pnl_${firstProd.id}`,
@@ -2149,7 +2156,10 @@ class TelegramEngine {
         panelPlans = [refProduct];
       }
 
-      console.log(`[TelegramEngine] [TRACE] Found ${panelPlans.length} duration plans for panel: "${targetPanelName}":`, panelPlans.map(pl => ({ id: pl.id, name: pl.name, validity: pl.validity, price: pl.price_inr })));
+      // Guarantee strict chronological order (1 Day -> 2 Days -> 3 Days -> 7 Days -> 15 Days -> 30 Days -> Lifetime)
+      panelPlans = sortProductsByDuration(panelPlans);
+
+      console.log(`[TelegramEngine] [TRACE] Found ${panelPlans.length} sorted duration plans for panel: "${targetPanelName}":`, panelPlans.map(pl => ({ id: pl.id, name: pl.name, validity: pl.validity, price: pl.price_inr })));
 
       let catCode = 'cat_nonroot';
       if (targetCategory.toLowerCase().includes('root') && !targetCategory.toLowerCase().includes('non')) {
