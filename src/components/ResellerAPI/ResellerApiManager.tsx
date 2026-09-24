@@ -34,23 +34,23 @@ export const ResellerApiManager: React.FC = () => {
 
   const reseller = activeBot?.reseller_api || ({} as any);
 
-  const [providerName, setProviderName] = useState(reseller.provider_name || 'Reseller Provider API');
-  const [apiUrl, setApiUrl] = useState(reseller.api_url || 'https://bantibhaiya.to/api/reseller_v1.php');
+  const [providerName, setProviderName] = useState(reseller.provider_name || '');
+  const [apiUrl, setApiUrl] = useState(reseller.api_url || '');
   const [apiKey, setApiKey] = useState(reseller.api_key || '');
   const [masterKey, setMasterKey] = useState(reseller.master_key || '');
-  const [status, setStatus] = useState<'ON' | 'OFF'>(reseller.status || 'ON');
-  const [autoFallback, setAutoFallback] = useState(reseller.auto_fallback ?? true);
+  const [status, setStatus] = useState<'ON' | 'OFF'>(reseller.status || 'OFF');
+  const [autoFallback, setAutoFallback] = useState(reseller.auto_fallback ?? false);
 
   // Sync state when active bot changes
   React.useEffect(() => {
     if (activeBot?.reseller_api) {
       const r = activeBot.reseller_api;
-      setProviderName(r.provider_name || 'Reseller Provider API');
-      setApiUrl(r.api_url || 'https://bantibhaiya.to/api/reseller_v1.php');
+      setProviderName(r.provider_name || '');
+      setApiUrl(r.api_url || '');
       setApiKey(r.api_key || '');
       setMasterKey(r.master_key || '');
-      setStatus(r.status || 'ON');
-      setAutoFallback(r.auto_fallback ?? true);
+      setStatus(r.status || 'OFF');
+      setAutoFallback(r.auto_fallback ?? false);
     }
   }, [activeBot?.id]);
 
@@ -60,9 +60,9 @@ export const ResellerApiManager: React.FC = () => {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; balance?: number } | null>(null);
 
   // Direct Key Generator Tester
-  const [testProductId, setTestProductId] = useState('207');
-  const [testDuration, setTestDuration] = useState('1 Day');
-  const [testAndroidId, setTestAndroidId] = useState('8a7b9c0d1e2f3a4b');
+  const [testProductId, setTestProductId] = useState('');
+  const [testDuration, setTestDuration] = useState('');
+  const [testAndroidId, setTestAndroidId] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);

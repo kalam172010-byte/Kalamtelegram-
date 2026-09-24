@@ -42,8 +42,8 @@ export const CreateBotWizardModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [autoApprove, setAutoApprove] = useState(true);
 
   // Step 3: Reseller API
-  const [providerName, setProviderName] = useState('Reseller Provider API');
-  const [apiUrl, setApiUrl] = useState('https://bantibhaiya.to/api/reseller_v1.php');
+  const [providerName, setProviderName] = useState('');
+  const [apiUrl, setApiUrl] = useState('');
   const [resellerApiKey, setResellerApiKey] = useState('');
   const [masterKey, setMasterKey] = useState('');
   const [autoFallback, setAutoFallback] = useState(true);

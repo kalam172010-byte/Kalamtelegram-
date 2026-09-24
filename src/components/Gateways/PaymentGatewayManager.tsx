@@ -39,7 +39,7 @@ export const PaymentGatewayManager: React.FC = () => {
   const [provider, setProvider] = useState<PaymentGatewayConfig['gateway_provider']>(gateway.gateway_provider || 'fampay');
   const [apiKey, setApiKey] = useState(gateway.api_key || '');
   const [secretKey, setSecretKey] = useState(gateway.secret_key || '');
-  const [verifyEndpoint, setVerifyEndpoint] = useState(gateway.verify_endpoint || 'https://fampay.anujbots.xyz/verify.php');
+  const [verifyEndpoint, setVerifyEndpoint] = useState(gateway.verify_endpoint || '');
   const [usdtAddress, setUsdtAddress] = useState(gateway.usdt_trc20_address || '');
   const [usdtRate, setUsdtRate] = useState(gateway.usdt_to_inr_rate || 90.0);
   const [autoApprove, setAutoApprove] = useState(gateway.auto_approve ?? true);
@@ -55,7 +55,7 @@ export const PaymentGatewayManager: React.FC = () => {
       setProvider(g.gateway_provider || 'famgateway');
       setApiKey(g.api_key || '');
       setSecretKey(g.secret_key || '');
-      setVerifyEndpoint(g.verify_endpoint || 'https://famgateway.in/api/checkout-status.php');
+      setVerifyEndpoint(g.verify_endpoint || '');
       setUsdtAddress(g.usdt_trc20_address || '');
       setUsdtRate(g.usdt_to_inr_rate || 90.0);
       setAutoApprove(g.auto_approve ?? true);

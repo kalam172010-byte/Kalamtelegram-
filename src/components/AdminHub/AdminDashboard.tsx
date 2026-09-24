@@ -348,9 +348,9 @@ export const AdminDashboard: React.FC = () => {
   const [generatingTestKey, setGeneratingTestKey] = useState(false);
   const [testKeyResult, setTestKeyResult] = useState<any | null>(null);
   const [testKeyParams, setTestKeyParams] = useState({
-    productId: 'PID_FF_NONROOT_V1',
-    duration: '1 Day',
-    androidId: '0b9b969bc2e7997b'
+    productId: '',
+    duration: '',
+    androidId: ''
   });
 
   // Telegram Bot Slash Commands Manager State
@@ -455,13 +455,10 @@ export const AdminDashboard: React.FC = () => {
     apk_link: '',
     device_limit: '1 Device HWID',
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
-    provider_product_id: 'PID_FF_NONROOT_V1',
+    provider_product_id: '',
     requires_android_id: 0,
     plans: [
-      { id: 'p_1', validity: '1 Day', provider_duration: '1 Day', name: '1 Day', price_inr: 50, reseller_price: 35, keys: '', is_maintenance: 0 },
-      { id: 'p_2', validity: '7 Days', provider_duration: '7 Days', name: '7 Days', price_inr: 250, reseller_price: 150, keys: '', is_maintenance: 0 },
-      { id: 'p_3', validity: '30 Days', provider_duration: '30 Days', name: '30 Days', price_inr: 600, reseller_price: 400, keys: '', is_maintenance: 0 },
-      { id: 'p_4', validity: 'Lifetime', provider_duration: 'Lifetime', name: 'Lifetime', price_inr: 1500, reseller_price: 1000, keys: '', is_maintenance: 0 }
+      { id: 'p_1', validity: '', provider_duration: '', name: '', price_inr: '' as any, reseller_price: '' as any, keys: '', is_maintenance: 0 }
     ]
   });
 
@@ -486,11 +483,11 @@ export const AdminDashboard: React.FC = () => {
   } | null>(null);
 
   const [singlePlanForm, setSinglePlanForm] = useState({
-    validity: '1 Day',
-    provider_duration: '1 Day',
-    name: '1 Day',
-    price_inr: 50,
-    reseller_price: 35,
+    validity: '',
+    provider_duration: '',
+    name: '',
+    price_inr: '' as any,
+    reseller_price: '' as any,
     keys: '',
     is_maintenance: 0,
     maintenance_note: ''
@@ -500,17 +497,17 @@ export const AdminDashboard: React.FC = () => {
     category: 'ANDROID NON ROOT PANEL',
     panel_name: '',
     name: '',
-    price_inr: 250,
-    reseller_price: 150,
-    validity: '7 Days',
+    price_inr: '' as any,
+    reseller_price: '' as any,
+    validity: '',
     device_limit: '1 Device HWID',
     apk_link: '',
     is_active: 1,
     is_maintenance: 0,
     maintenance_note: '',
     delivery_mode: 'api_provider' as 'api_provider' | 'hybrid' | 'manual_vault',
-    provider_product_id: 'PID_FF_NONROOT_V1',
-    provider_duration: '7 Days',
+    provider_product_id: '',
+    provider_duration: '',
     requires_android_id: 0
   });
 
@@ -606,7 +603,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
       plans: [
         ...prev.plans,
-        { id: newId, validity: '15 Days', provider_duration: '15 Days', name: '15 Days', price_inr: 400, reseller_price: 260, keys: '', is_maintenance: 0 }
+        { id: newId, validity: '', provider_duration: '', name: '', price_inr: '' as any, reseller_price: '' as any, keys: '', is_maintenance: 0 }
       ]
     }));
   };
@@ -715,13 +712,10 @@ export const AdminDashboard: React.FC = () => {
       apk_link: '',
       device_limit: '1 Device HWID',
       delivery_mode: 'api_provider',
-      provider_product_id: 'PID_FF_NONROOT_V1',
+      provider_product_id: '',
       requires_android_id: 0,
       plans: [
-        { id: 'p_1', validity: '1 Day', provider_duration: '1 Day', name: '1 Day', price_inr: 50, reseller_price: 35, keys: '', is_maintenance: 0 },
-        { id: 'p_2', validity: '7 Days', provider_duration: '7 Days', name: '7 Days', price_inr: 250, reseller_price: 150, keys: '', is_maintenance: 0 },
-        { id: 'p_3', validity: '30 Days', provider_duration: '30 Days', name: '30 Days', price_inr: 600, reseller_price: 400, keys: '', is_maintenance: 0 },
-        { id: 'p_4', validity: 'Lifetime', provider_duration: 'Lifetime', name: 'Lifetime', price_inr: 1500, reseller_price: 1000, keys: '', is_maintenance: 0 }
+        { id: 'p_1', validity: '', provider_duration: '', name: '', price_inr: '' as any, reseller_price: '' as any, keys: '', is_maintenance: 0 }
       ]
     });
   };
@@ -745,7 +739,7 @@ export const AdminDashboard: React.FC = () => {
         is_maintenance: singlePlanForm.is_maintenance ? 1 : 0,
         maintenance_note: singlePlanForm.maintenance_note || '',
         delivery_mode: showAddPlanToPanelModal.delivery_mode || 'api_provider',
-        provider_product_id: showAddPlanToPanelModal.provider_product_id || 'PID_FF_NONROOT_V1',
+        provider_product_id: showAddPlanToPanelModal.provider_product_id || '',
         provider_duration: singlePlanForm.provider_duration?.trim() || singlePlanForm.validity.trim(),
         requires_android_id: Boolean(showAddPlanToPanelModal.requires_android_id)
       },
@@ -754,11 +748,11 @@ export const AdminDashboard: React.FC = () => {
 
     setShowAddPlanToPanelModal(null);
     setSinglePlanForm({
-      validity: '1 Day',
-      provider_duration: '1 Day',
-      name: '1 Day',
-      price_inr: 50,
-      reseller_price: 35,
+      validity: '',
+      provider_duration: '',
+      name: '',
+      price_inr: '' as any,
+      reseller_price: '' as any,
       keys: '',
       is_maintenance: 0,
       maintenance_note: ''
@@ -786,7 +780,7 @@ export const AdminDashboard: React.FC = () => {
       is_maintenance: prod.is_maintenance ? 1 : 0,
       maintenance_note: prod.maintenance_note || '',
       delivery_mode: prod.delivery_mode || 'api_provider',
-      provider_product_id: prod.provider_product_id || 'PID_FF_NONROOT_V1',
+      provider_product_id: prod.provider_product_id || '',
       provider_duration: prod.provider_duration || prod.validity || prod.name,
       requires_android_id: prod.requires_android_id ? 1 : 0
     });
@@ -5955,8 +5949,8 @@ export const AdminDashboard: React.FC = () => {
                                     <label className="text-[10px] text-indigo-300 font-semibold mb-0.5 block">Provider Product PID</label>
                                     <input
                                       type="text"
-                                      value={plan.provider_duration || multiProdForm.provider_product_id}
-                                      onChange={(e) => handlePlanChange(plan.id, 'provider_duration', e.target.value)}
+                                      value={multiProdForm.provider_product_id}
+                                      onChange={(e) => setMultiProdForm({ ...multiProdForm, provider_product_id: e.target.value })}
                                       placeholder="e.g. PID_FF_NONROOT_V1"
                                       className="w-full bg-[#0b0e1b] border border-indigo-500/40 rounded-lg p-2 text-xs text-indigo-200 font-mono"
                                     />
