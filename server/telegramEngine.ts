@@ -2111,6 +2111,7 @@ class TelegramEngine {
 
     if (data.startsWith('pnl_')) {
       const rawProdId = data.replace('pnl_', '');
+      console.log(`[TelegramEngine] [TRACE] Panel Selected callback: rawProdId=${rawProdId}`);
       let refProduct = dbStore.getProduct(rawProdId);
       if (!refProduct) {
         refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
@@ -2120,6 +2121,7 @@ class TelegramEngine {
       }
 
       if (!refProduct) {
+        console.warn(`[TelegramEngine] [TRACE] Panel refProduct not found for rawProdId=${rawProdId}`);
         await this.answerCallback(cb.id, '❌ Product panel no longer available.', true);
         const text = `⚠️ <b>PANEL UNAVAILABLE</b>\n\nThis panel is no longer listed.`;
         const keyboard = {
@@ -2146,6 +2148,8 @@ class TelegramEngine {
       if (panelPlans.length === 0) {
         panelPlans = [refProduct];
       }
+
+      console.log(`[TelegramEngine] [TRACE] Found ${panelPlans.length} duration plans for panel: "${targetPanelName}":`, panelPlans.map(pl => ({ id: pl.id, name: pl.name, validity: pl.validity, price: pl.price_inr })));
 
       let catCode = 'cat_nonroot';
       if (targetCategory.toLowerCase().includes('root') && !targetCategory.toLowerCase().includes('non')) {
@@ -2213,10 +2217,13 @@ class TelegramEngine {
 
     if (data.startsWith('prod_')) {
       const rawProdId = data.replace('prod_', '');
+      console.log(`[TelegramEngine] [TRACE] Duration Plan Clicked: rawProdId="${rawProdId}"`);
       let product = dbStore.getProduct(rawProdId);
       if (!product) {
         product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       }
+
+      console.log(`[TelegramEngine] [TRACE] Resolved Product:`, product ? { id: product.id, panel: product.panel_name, name: product.name, validity: product.validity, price: product.price_inr } : 'NOT FOUND');
 
       if (!product || !product.is_active) {
         await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);

@@ -210,10 +210,25 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Merge Products & Keys
-      if (Array.isArray(remote.products)) {
+      // 3. Merge Products & Keys with strict ID uniqueness
+      if (Array.isArray(remote.products) && remote.products.length > 0) {
         const demoPanelNames = ["KALAM NON-ROOT VIP PANEL", "KALAM ROOT ULTRA BYPASS PANEL", "KALAM PC EMULATOR INJECTOR"];
-        this.data.products = remote.products.filter((p: any) => !demoPanelNames.includes(p.panel_name || ''));
+        const seenIds = new Set<string | number>();
+        this.data.products = remote.products
+          .filter((p: any) => !demoPanelNames.includes(p.panel_name || ''))
+          .map((p: any, idx: number) => {
+            let currentId = p.id;
+            if (currentId === undefined || currentId === null || seenIds.has(currentId)) {
+              currentId = Date.now() + idx + Math.floor(Math.random() * 100000);
+            }
+            seenIds.add(currentId);
+            return {
+              ...p,
+              id: currentId,
+              reseller_price: p.reseller_price ?? p.price_inr,
+              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+            };
+          });
       }
       if (Array.isArray(remote.productKeys)) {
         this.data.productKeys = remote.productKeys.filter((k: any) => this.data.products.some(p => String(p.id) === String(k.product_id)));
@@ -240,9 +255,10 @@ export class DatabaseStore {
       }
 
       this.isFirestoreSynced = true;
-      // Persist merged state to local disk
+      // Persist merged & deduplicated state to local disk and back to Firestore
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-      console.log('⚡ Firestore: Cloud state restored! Bot token, user FSM, & wallet balances preserved across deploy.');
+      await saveStateToFirestore(this.data).catch(() => {});
+      console.log('⚡ Firestore: Cloud state restored & product IDs deduplicated across deploy.');
     } catch (e: any) {
       console.warn('⚡ Firestore syncWithFirestore notice:', e.message);
     }

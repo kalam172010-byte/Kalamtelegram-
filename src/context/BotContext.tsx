@@ -2022,6 +2022,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     // 4. Panel Selected: View Packages & Pricing
     if (callbackData.startsWith('pnl_')) {
       const rawPayload = callbackData.replace('pnl_', '');
+      console.log(`[BotContext] [TRACE] Panel Selected: rawPayload="${rawPayload}"`);
       let prods: Product[] = [];
       let category = '';
       let panelName = '';
@@ -2050,6 +2051,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
           p.is_active === 1
         );
       }
+
+      console.log(`[BotContext] [TRACE] Found ${prods.length} duration plans:`, prods.map(p => ({ id: p.id, name: p.name, validity: p.validity, price: p.price_inr })));
 
       if (prods.length === 0) {
         pushBotMessage("No products found for this panel.", getBackKeyboard('menu_shop'));
@@ -2111,7 +2114,10 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     // 4a. Single Product Plan View
     if (callbackData.startsWith('prod_')) {
       const rawProdId = callbackData.replace('prod_', '');
+      console.log(`[BotContext] [TRACE] Plan Clicked: rawProdId="${rawProdId}"`);
       const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+
+      console.log(`[BotContext] [TRACE] Resolved Plan Object:`, prod ? { id: prod.id, panel: prod.panel_name, name: prod.name, validity: prod.validity, price: prod.price_inr } : 'NOT FOUND');
 
       if (!prod || !prod.is_active) {
         pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));

@@ -56,6 +56,29 @@ import { SystemHealthWidget } from './SystemHealthWidget';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
 import { PWAInstallCard } from '../Common/PWAInstallCard';
 
+interface DurationPresetConfig {
+  validity: string;
+  name: string;
+  provider_duration: string;
+  price_inr: number;
+  reseller_price: number;
+}
+
+const DURATION_PRESETS_MAP: Record<string, DurationPresetConfig> = {
+  '1 Hour': { validity: '1 Hour', name: '1 Hour', provider_duration: '1 Hour', price_inr: 10, reseller_price: 8 },
+  '2 Hours': { validity: '2 Hours', name: '2 Hours', provider_duration: '2 Hours', price_inr: 20, reseller_price: 15 },
+  '6 Hours': { validity: '6 Hours', name: '6 Hours', provider_duration: '6 Hours', price_inr: 35, reseller_price: 25 },
+  '12 Hours': { validity: '12 Hours', name: '12 Hours', provider_duration: '12 Hours', price_inr: 45, reseller_price: 30 },
+  '24 Hours': { validity: '24 Hours', name: '24 Hours', provider_duration: '24 Hours', price_inr: 60, reseller_price: 40 },
+  '1 Day': { validity: '1 Day', name: '1 Day', provider_duration: '1 Day', price_inr: 50, reseller_price: 35 },
+  '3 Days': { validity: '3 Days', name: '3 Days', provider_duration: '3 Days', price_inr: 120, reseller_price: 80 },
+  '7 Days': { validity: '7 Days', name: '7 Days', provider_duration: '7 Days', price_inr: 250, reseller_price: 150 },
+  '15 Days': { validity: '15 Days', name: '15 Days', provider_duration: '15 Days', price_inr: 450, reseller_price: 300 },
+  '30 Days': { validity: '30 Days', name: '30 Days', provider_duration: '30 Days', price_inr: 750, reseller_price: 500 },
+  '60 Days': { validity: '60 Days', name: '60 Days', provider_duration: '60 Days', price_inr: 1200, reseller_price: 850 },
+  'Lifetime': { validity: 'Lifetime', name: 'Lifetime', provider_duration: 'Lifetime', price_inr: 2000, reseller_price: 1400 }
+};
+
 export const AdminDashboard: React.FC = () => {
   const {
     currentUser,
@@ -5860,25 +5883,30 @@ export const AdminDashboard: React.FC = () => {
                 {/* Quick Presets */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-[10px] text-slate-400 mr-1">Quick Presets:</span>
-                  {['1 Hour', '2 Hours', '6 Hours', '12 Hours', '1 Day', '3 Days', '7 Days', '15 Days', '30 Days', '60 Days', 'Lifetime'].map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setSinglePlanForm({
-                        ...singlePlanForm,
-                        validity: preset,
-                        name: preset,
-                        provider_duration: preset
-                      })}
-                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
-                        singlePlanForm.validity === preset
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                          : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {Object.keys(DURATION_PRESETS_MAP).map(presetKey => {
+                    const preset = DURATION_PRESETS_MAP[presetKey];
+                    return (
+                      <button
+                        key={presetKey}
+                        type="button"
+                        onClick={() => setSinglePlanForm(prev => ({
+                          ...prev,
+                          validity: preset.validity,
+                          name: preset.name,
+                          provider_duration: preset.provider_duration,
+                          price_inr: preset.price_inr,
+                          reseller_price: preset.reseller_price
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                          singlePlanForm.validity === presetKey
+                            ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                            : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                        }`}
+                      >
+                        {presetKey} (₹{preset.price_inr})
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -6045,25 +6073,30 @@ export const AdminDashboard: React.FC = () => {
                 {/* Quick Duration Preset Chips */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-[10px] text-slate-400 mr-1">Quick Presets:</span>
-                  {['1 Hour', '2 Hours', '6 Hours', '12 Hours', '1 Day', '3 Days', '7 Days', '15 Days', '30 Days', '60 Days', 'Lifetime'].map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setEditProdForm({
-                        ...editProdForm,
-                        validity: preset,
-                        name: editProdForm.name ? editProdForm.name : preset,
-                        provider_duration: preset
-                      })}
-                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
-                        editProdForm.validity === preset
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                          : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {Object.keys(DURATION_PRESETS_MAP).map(presetKey => {
+                    const preset = DURATION_PRESETS_MAP[presetKey];
+                    return (
+                      <button
+                        key={presetKey}
+                        type="button"
+                        onClick={() => setEditProdForm(prev => ({
+                          ...prev,
+                          validity: preset.validity,
+                          name: preset.name,
+                          provider_duration: preset.provider_duration,
+                          price_inr: preset.price_inr,
+                          reseller_price: preset.reseller_price
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                          editProdForm.validity === presetKey
+                            ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                            : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                        }`}
+                      >
+                        {presetKey} (₹{preset.price_inr})
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

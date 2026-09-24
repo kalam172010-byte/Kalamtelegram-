@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { CreateBotWizardModal } from '../BotManager/CreateBotWizardModal';
 import { UserProfileModal } from '../Auth/UserProfileModal';
+import { ProductCatalog } from '../Catalog/ProductCatalog';
 
 export const UserDashboard: React.FC = () => {
   const {
@@ -644,7 +645,44 @@ export const UserDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 4. 🎁 Refer & Earn Rewards Hub */}
+      {/* 4. 🛒 Products Catalog & Duration Plans */}
+      <div className="liquid-glass-card rounded-3xl p-5 md:p-7 shadow-2xl relative overflow-hidden border border-cyan-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-xl shadow-cyan-500/25 shrink-0 border border-cyan-400/40">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg md:text-xl font-black text-white tracking-tight">
+                  Product Store & Instant Key Catalog
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  Live Stock
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Browse all panels, select your desired duration plan, and buy instant license keys.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openAddProductModal}
+              className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Product</span>
+            </button>
+          </div>
+        </div>
+
+        <ProductCatalog />
+      </div>
+
+      {/* 5. 🎁 Refer & Earn Rewards Hub */}
       <div id="referral-hub-section" className="liquid-glass-card rounded-3xl p-5 md:p-7 shadow-2xl relative overflow-hidden border border-pink-500/30">
         {/* Glow Effects */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
