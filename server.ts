@@ -39,6 +39,40 @@ async function startServer() {
     res.json(status);
   });
 
+  // 1.1 Bot Process Auto-Restart & Re-initialization Endpoint
+  app.post('/api/bot/auto-restart', async (req, res) => {
+    try {
+      await telegramEngine.restart();
+      const status = telegramEngine.getStatus();
+      res.json({
+        success: true,
+        message: 'Bot process auto-reinitialized successfully without requiring manual save-changes action.',
+        status
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 1.1 Telegram Commands Management
+  app.delete('/api/telegram/commands', async (req, res) => {
+    try {
+      await telegramEngine.deleteMyCommands();
+      res.json({ success: true, message: 'Bot menu commands cleared from Telegram servers.' });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/telegram/commands', async (req, res) => {
+    try {
+      await telegramEngine.syncBotCommands();
+      res.json({ success: true, message: 'Bot menu commands synced successfully.' });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // 2. Fetch All Data
   app.get('/api/data', (req, res) => {
     const data = dbStore.getData();

@@ -8,6 +8,11 @@ import { apiLogger } from './apiLogger';
 export interface BotStatus {
   isRunning: boolean;
   isConnected: boolean;
+  connectionHealth: 'HEALTHY' | 'STALE' | 'DISCONNECTED' | 'RECONNECTING';
+  autoRestartEnabled: boolean;
+  autoRestartCount: number;
+  lastAutoRestartTime: string | null;
+  consecutiveErrors: number;
   botInfo: {
     id: number;
     first_name: string;
@@ -38,6 +43,21 @@ function sanitizeUrl(url?: string, fallback: string = 'https://t.me/KalamFFPanel
   return fallback;
 }
 
+export function normalizeCategoryName(str: string): string {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function isCategoryMatch(prodCategory: string, targetCategory: string): boolean {
+  if (!prodCategory || !targetCategory) return false;
+  const c1 = normalizeCategoryName(prodCategory);
+  const c2 = normalizeCategoryName(targetCategory);
+  if (c1 === c2) return true;
+  if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
+  if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
+  if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
+  return false;
+}
+
 class TelegramEngine {
   private isRunning: boolean = false;
   private isConnected: boolean = false;
@@ -49,24 +69,34 @@ class TelegramEngine {
   private updateOffset: number = 0;
   private watchdogTimer: NodeJS.Timeout | null = null;
 
+  // 24/7 Connection Guard & Auto-Restart Metrics
+  private autoRestartCount: number = 0;
+  private lastAutoRestartTime: string | null = null;
+  private consecutiveErrors: number = 0;
+
   constructor() {
     this.startWatchdog();
   }
 
-  private getValidTokenFromStore(): string {
+  public getValidTokenFromStore(): string {
     const settings = dbStore.getData().settings;
-    if (settings.bot_token && !settings.bot_token.includes('exampleToken')) {
-      return settings.bot_token;
+    if (settings.bot_token && settings.bot_token.trim() && !settings.bot_token.includes('exampleToken')) {
+      return settings.bot_token.trim();
+    }
+    const envToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+    if (envToken && envToken.trim() && !envToken.includes('exampleToken')) {
+      dbStore.updateSettings({ bot_token: envToken.trim() });
+      return envToken.trim();
     }
     const storedBots = dbStore.getBots();
-    const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
+    const validBot = storedBots.find(b => b.bot_token && b.bot_token.trim() && !b.bot_token.includes('exampleToken'));
     if (validBot) {
       dbStore.updateSettings({
-        bot_token: validBot.bot_token,
+        bot_token: validBot.bot_token.trim(),
         bot_username: validBot.username,
         admin_id: validBot.admin_id || validBot.admin_chat_id || settings.admin_id
       });
-      return validBot.bot_token;
+      return validBot.bot_token.trim();
     }
     return '';
   }
@@ -75,7 +105,7 @@ class TelegramEngine {
     if (this.watchdogTimer) {
       clearInterval(this.watchdogTimer);
     }
-    // High-frequency 24/7 Watchdog runs every 5 seconds
+    // High-frequency 24/7 Connection Guard Watchdog runs every 5 seconds
     this.watchdogTimer = setInterval(async () => {
       try {
         const token = this.getValidTokenFromStore();
@@ -87,23 +117,50 @@ class TelegramEngine {
         const lastPollMs = this.lastPollTimestamp ? new Date(this.lastPollTimestamp).getTime() : 0;
         const timeSinceLastPollSec = lastPollMs > 0 ? (now - lastPollMs) / 1000 : 999;
 
-        // Auto-heal if engine is stopped OR if last successful poll heartbeat was over 25 seconds ago
-        if (!this.isRunning || timeSinceLastPollSec > 25) {
-          console.log(`⚡ Telegram 24/7 Watchdog: Heartbeat missing or engine stopped [isRunning=${this.isRunning}, lastPoll=${Math.round(timeSinceLastPollSec)}s ago]. Auto-restarting Telegram Engine...`);
+        // Auto-Detect Connection Drop / Timeout / Stopped Loop:
+        // Automatically re-initialize the bot process if:
+        // 1. Engine is stopped
+        // 2. Heartbeat missing for > 18 seconds
+        // 3. Consecutive network/polling errors >= 2
+        if (!this.isRunning || timeSinceLastPollSec > 18 || this.consecutiveErrors >= 2) {
+          this.autoRestartCount++;
+          this.lastAutoRestartTime = new Date().toISOString();
+          console.log(`⚡ Telegram 24/7 Connection Guard: Detected connection drop/stale poll [isRunning=${this.isRunning}, lastPoll=${Math.round(timeSinceLastPollSec)}s ago, errors=${this.consecutiveErrors}]. Auto-reinitializing bot process (Attempt #${this.autoRestartCount})...`);
+
+          dbStore.logActivity(0, 'BOT_AUTO_RESTART', `Auto-reinitialized bot engine without user intervention (Trigger #${this.autoRestartCount})`);
+          
           await this.restart().catch((err: any) => {
-            console.warn('Telegram Watchdog restart warning:', err.message);
+            console.warn('Telegram Watchdog auto-restart notice:', err.message);
           });
         }
       } catch (e: any) {
-        console.warn('Telegram Watchdog loop tick warning:', e.message);
+        console.warn('Telegram Watchdog loop tick notice:', e.message);
       }
     }, 5000);
   }
 
   public getStatus(): BotStatus {
+    const now = Date.now();
+    const lastPollMs = this.lastPollTimestamp ? new Date(this.lastPollTimestamp).getTime() : 0;
+    const timeSinceLastPollSec = lastPollMs > 0 ? (now - lastPollMs) / 1000 : 999;
+
+    let connectionHealth: 'HEALTHY' | 'STALE' | 'DISCONNECTED' | 'RECONNECTING' = 'HEALTHY';
+    if (!this.isRunning || !this.isConnected) {
+      connectionHealth = 'DISCONNECTED';
+    } else if (this.consecutiveErrors > 0) {
+      connectionHealth = 'RECONNECTING';
+    } else if (timeSinceLastPollSec > 15) {
+      connectionHealth = 'STALE';
+    }
+
     return {
       isRunning: this.isRunning,
       isConnected: this.isConnected,
+      connectionHealth,
+      autoRestartEnabled: true,
+      autoRestartCount: this.autoRestartCount,
+      lastAutoRestartTime: this.lastAutoRestartTime,
+      consecutiveErrors: this.consecutiveErrors,
       botInfo: this.botInfo,
       lastError: this.lastError,
       lastPollTimestamp: this.lastPollTimestamp,
@@ -269,6 +326,51 @@ class TelegramEngine {
     });
   }
 
+  public async deleteMyCommands(): Promise<any> {
+    const scopes = [
+      { type: 'default' },
+      { type: 'all_private_chats' },
+      { type: 'all_group_chats' },
+      { type: 'all_chat_administrators' }
+    ];
+    let result: any = null;
+    for (const scope of scopes) {
+      try {
+        result = await this.callApi('deleteMyCommands', { scope });
+      } catch (e: any) {
+        // ignore
+      }
+    }
+    try {
+      await this.callApi('deleteMyCommands', {});
+    } catch (e) {}
+
+    dbStore.updateSettings({ bot_commands_enabled: false });
+    return result || { ok: true };
+  }
+
+  public async syncBotCommands(): Promise<any> {
+    const settings = dbStore.getData().settings;
+    if (settings.bot_commands_enabled === false) {
+      return await this.deleteMyCommands();
+    }
+    try {
+      const commands = [
+        { command: 'start', description: '✨ Launch Shop & Main Menu' },
+        { command: 'shop', description: '🛒 Product Store Catalog & Duration Plans' },
+        { command: 'addbalance', description: '💳 Add Wallet Balance via FamPay UPI' },
+        { command: 'profile', description: '👤 My Profile & Purchased License Keys' },
+        { command: 'reseller', description: '👑 Reseller VIP Wholesale Dashboard' },
+        { command: 'referral', description: '🎁 Refer Friends & Earn Cash Bonus' },
+        { command: 'help', description: '💬 24/7 Support Channel & Tickets' }
+      ];
+      dbStore.updateSettings({ bot_commands_enabled: true });
+      return await this.callApi('setMyCommands', { commands });
+    } catch (e: any) {
+      console.warn('setMyCommands notice:', e.message);
+    }
+  }
+
   /**
    * Start long polling engine
    */
@@ -277,19 +379,8 @@ class TelegramEngine {
       return;
     }
 
-    // Auto-heal missing settings token from bots storage if available
-    let currentToken = dbStore.getData().settings.bot_token;
-    if (!currentToken || currentToken.includes('exampleToken')) {
-      const storedBots = dbStore.getBots();
-      const validBot = storedBots.find(b => b.bot_token && !b.bot_token.includes('exampleToken'));
-      if (validBot) {
-        dbStore.updateSettings({
-          bot_token: validBot.bot_token,
-          bot_username: validBot.username,
-          admin_id: validBot.admin_id || validBot.admin_chat_id || dbStore.getData().settings.admin_id
-        });
-      }
-    }
+    // Auto-heal missing settings token from bots storage or process.env if available
+    this.getValidTokenFromStore();
 
     this.isRunning = true;
     this.pollingAbortController = new AbortController();
@@ -300,6 +391,12 @@ class TelegramEngine {
     } else {
       try {
         await this.callApi('deleteWebhook', { drop_pending_updates: false });
+        const settings = dbStore.getData().settings;
+        if (settings.bot_commands_enabled === false) {
+          await this.deleteMyCommands().catch(() => {});
+        } else {
+          await this.syncBotCommands().catch(() => {});
+        }
       } catch (e) {
         // ignore
       }
@@ -381,12 +478,14 @@ class TelegramEngine {
             this.lastPollTimestamp = new Date().toISOString();
             this.isConnected = true;
             this.lastError = null;
+            this.consecutiveErrors = 0;
             for (const update of data.result) {
               this.updateOffset = update.update_id + 1;
               this.updatesProcessed++;
               await this.handleUpdate(update);
             }
           } else if (!data.ok) {
+            this.consecutiveErrors++;
             this.lastError = data.description || 'Telegram API returned false status';
             await new Promise(r => setTimeout(r, 2000));
           }
@@ -394,6 +493,7 @@ class TelegramEngine {
           if (!this.isRunning) {
             break;
           }
+          this.consecutiveErrors++;
           this.lastError = err.message || 'Polling request interrupted';
           // Seamless retry on network fluctuation or timeout
           await new Promise(r => setTimeout(r, 1000));
@@ -1807,7 +1907,7 @@ class TelegramEngine {
       }
 
       const allCatProducts = dbStore.getData().products.filter(p => 
-        p.category.toLowerCase() === categoryName.toLowerCase() && p.is_active === 1
+        p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
 
       let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -1881,9 +1981,9 @@ class TelegramEngine {
       const targetPanelName = refProduct.panel_name || refProduct.name;
 
       const panelPlans = dbStore.getData().products.filter(p =>
-        p.category.toLowerCase() === targetCategory.toLowerCase() &&
-        (p.panel_name || p.name).toLowerCase() === targetPanelName.toLowerCase() &&
-        p.is_active === 1
+        p.is_active !== 0 &&
+        isCategoryMatch(p.category, targetCategory) &&
+        (p.panel_name || p.name).trim().toLowerCase() === targetPanelName.trim().toLowerCase()
       );
 
       if (panelPlans.length === 0) {
@@ -2530,6 +2630,41 @@ class TelegramEngine {
       await this.sendAdminPanel(chatId, user, messageId);
       return;
     }
+
+    if (data === 'admin_delete_commands') {
+      if (!this.isAdmin(user, chatId)) return;
+      await this.deleteMyCommands();
+      await this.answerCallback(cb.id, '✅ All Telegram Bot Menu Commands Cleared!', true);
+      await this.sendMessage(
+        chatId,
+        `🧹 <b>BOT MENU COMMANDS DELETED!</b>\n\n` +
+        `All registered Telegram bot menu commands have been removed from Telegram servers.\n` +
+        `Users will no longer see old slash commands in their Telegram chat menu button.`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
+
+    if (data === 'admin_sync_commands') {
+      if (!this.isAdmin(user, chatId)) return;
+      dbStore.updateSettings({ bot_commands_enabled: true });
+      await this.syncBotCommands();
+      await this.answerCallback(cb.id, '✅ Telegram Bot Menu Commands Synced & Updated!', true);
+      await this.sendMessage(
+        chatId,
+        `🔄 <b>BOT MENU COMMANDS RESET & SYNCED!</b>\n\n` +
+        `Clean, official commands set in Telegram:\n` +
+        `• /start - Launch Shop & Main Menu\n` +
+        `• /shop - Store Catalog & Duration Plans\n` +
+        `• /addbalance - Add Wallet Balance\n` +
+        `• /profile - My Profile & Keys\n` +
+        `• /reseller - Reseller Wholesale\n` +
+        `• /referral - Refer & Earn\n` +
+        `• /help - Support & Tickets`,
+        { inline_keyboard: [[{ text: '🔙 Back to Admin Terminal', callback_data: 'admin_panel' }]] }
+      );
+      return;
+    }
   }
 
   private getWelcomeText(user: User): string {
@@ -3083,6 +3218,10 @@ class TelegramEngine {
             text: settings.bot_status === 'ON' ? '🟢 Bot: Online (Click to Pause)' : '🔴 Bot: Maintenance (Click to Resume)',
             callback_data: 'admin_toggle_maint'
           }
+        ],
+        [
+          { text: '🧹 Clear Bot Commands', callback_data: 'admin_delete_commands' },
+          { text: '🔄 Reset Bot Commands', callback_data: 'admin_sync_commands' }
         ],
         [
           { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh' },
