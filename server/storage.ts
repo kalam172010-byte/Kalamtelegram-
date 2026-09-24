@@ -423,7 +423,7 @@ export class DatabaseStore {
       }
       const prod = this.data.products.find(p => p.id === productId);
       if (prod) {
-        prod.stock += added;
+        prod.stock = (prod.stock || 0) + added;
       }
       this.saveData();
     }
@@ -437,7 +437,7 @@ export class DatabaseStore {
     if (!key.is_used) {
       const prod = this.data.products.find(p => p.id === key.product_id);
       if (prod) {
-        prod.stock = Math.max(0, prod.stock - 1);
+        prod.stock = Math.max(0, (prod.stock || 0) - 1);
       }
     }
     this.saveData();

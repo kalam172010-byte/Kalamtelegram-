@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   auth,
@@ -73,6 +73,7 @@ export function isMaintenanceActive(settings?: { bot_status?: string; maintenanc
 export interface BotContextType {
   // Authentication & Session
   currentUser: User;
+  isAdmin: boolean;
   setCurrentUserId: (userId: number) => void;
   allUsers: User[];
   isAuthenticated: boolean;
@@ -166,7 +167,15 @@ export interface BotContextType {
   sendBroadcastMessage: (params: {
     targetAudience: 'all' | 'referrers' | 'vip' | 'reseller' | 'non_reseller';
     text: string;
+    mediaType?: 'text' | 'photo' | 'video' | 'voice' | 'audio';
     imageUrl?: string;
+    videoUrl?: string;
+    voiceUrl?: string;
+    audioUrl?: string;
+    mediaUrl?: string;
+    mediaBase64?: string;
+    mediaFilename?: string;
+    mediaMimeType?: string;
     buttonText?: string;
     buttonUrl?: string;
     pinMessage?: boolean;
@@ -385,6 +394,23 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Current active user
   const currentUser = users.find(u => u.user_id === currentUserId) || users[0] || INITIAL_USERS[0];
+
+  // Comprehensive Master Admin Authorization Validation State
+  const isAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const isExplicitAdmin = currentUser.is_admin === 1 || currentUser.role === 'admin';
+    const matchesAdminId = Boolean(settings.admin_id && settings.admin_id > 0 && currentUser.user_id === settings.admin_id);
+    const matchesDefaultAdmin = !settings.admin_id || settings.admin_id === 0 || settings.admin_id === 12846461 || currentUser.user_id === 12846461;
+    const matchesContact = Boolean(
+      settings.admin_contact &&
+      currentUser.username &&
+      currentUser.username.toLowerCase().replace('@', '') === settings.admin_contact.toLowerCase().replace('@', '')
+    );
+    const matchesKalamUsername = Boolean(currentUser.username && currentUser.username.toLowerCase() === 'kalam172010');
+    const matchesKalamEmail = Boolean(currentUser.email && currentUser.email.toLowerCase() === 'kalam172010@gmail.com');
+
+    return isExplicitAdmin || matchesAdminId || matchesDefaultAdmin || matchesContact || matchesKalamUsername || matchesKalamEmail;
+  }, [currentUser, settings.admin_id, settings.admin_contact]);
 
   const setCurrentUserId = (id: number) => {
     setCurrentUserIdState(id);
@@ -1695,7 +1721,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const isReseller = Boolean(currentUser.is_reseller);
     const normalPrice = prod.price_inr;
-    const finalPrice = isReseller ? prod.reseller_price : normalPrice;
+    const finalPrice = isReseller ? (prod.reseller_price ?? prod.reseller_price_inr ?? normalPrice) : normalPrice;
     const savings = normalPrice - finalPrice;
 
     if (currentUser.balance < finalPrice) {
@@ -1753,7 +1779,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (availableKey && (prod.delivery_mode === 'hybrid' || settings.provider_auto_fallback !== false)) {
           setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
           setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
-          deliveredKey = availableKey.key_text;
+          deliveredKey = availableKey.key_text || availableKey.key_string || '';
           deliverySource = 'Local Key Vault (API Fallback)';
         } else {
           setIsBotTyping(false);
@@ -1774,7 +1800,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
       setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
-      deliveredKey = availableKey.key_text;
+      deliveredKey = availableKey.key_text || availableKey.key_string || '';
       deliverySource = 'Local Key Vault';
     }
 
@@ -1986,9 +2012,10 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       prods.forEach(p => {
         const normalPrice = p.price_inr;
-        const finalPrice = isReseller ? p.reseller_price : normalPrice;
+        const finalPrice = isReseller ? (p.reseller_price ?? p.reseller_price_inr ?? normalPrice) : normalPrice;
         const isMaint = Boolean(p.is_maintenance);
-        const stockStatus = isMaint ? '🛠️ Under Maintenance' : (p.stock > 0 ? `✅ In Stock (${p.stock})` : "❌ Out of Stock");
+        const pStock = p.stock || 0;
+        const stockStatus = isMaint ? '🛠️ Under Maintenance' : (pStock > 0 ? `✅ In Stock (${pStock})` : "❌ Out of Stock");
 
         text += `${getEmojiTag('product_store')} ⏱ <b>Plan: ${p.name}</b>\n`;
         if (isReseller) {
@@ -2041,8 +2068,9 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       const isReseller = Boolean(currentUser.is_reseller);
       const normalPrice = prod.price_inr;
-      const finalPrice = isReseller ? prod.reseller_price : (currentUser.is_vip ? Math.round(normalPrice * 0.85) : normalPrice);
+      const finalPrice = isReseller ? (prod.reseller_price ?? prod.reseller_price_inr ?? normalPrice) : (currentUser.is_vip ? Math.round(normalPrice * 0.85) : normalPrice);
       const isMaint = Boolean(prod.is_maintenance);
+      const prodStock = prod.stock || 0;
 
       let text = `📦 <b>${prod.panel_name}</b>\n` +
         `⏱ <b>Duration Plan:</b> ${prod.name}\n━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2050,7 +2078,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         `⏳ <b>Validity:</b> ${prod.validity}\n` +
         `🔒 <b>Device Limit:</b> ${prod.device_limit}\n` +
         `💰 <b>Price:</b> <b>${fmtCurr(finalPrice)}</b>\n` +
-        `📦 <b>Stock Status:</b> ${isMaint ? '🛠 Under Maintenance' : (prod.stock > 0 ? `✅ In Stock (${prod.stock})` : '❌ Out of Stock')}\n` +
+        `📦 <b>Stock Status:</b> ${isMaint ? '🛠 Under Maintenance' : (prodStock > 0 ? `✅ In Stock (${prodStock})` : '❌ Out of Stock')}\n` +
         `💳 <b>Your Wallet Balance:</b> ${fmtCurr(currentUser.balance)}\n`;
 
       if (prod.apk_link && prod.apk_link.startsWith('http')) {
@@ -2064,7 +2092,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       if (isMaint) {
         kb.push([{ text: `🛠️ Under Maintenance`, callback_data: `maint_${prod.id}`, style: "warning" }]);
-      } else if (prod.stock > 0) {
+      } else if (prodStock > 0) {
         kb.push([{ text: `🛒 CONFIRM & BUY NOW (${fmtCurr(finalPrice)})`, callback_data: `buy_${prod.id}`, style: "danger" }]);
       } else {
         kb.push([{ text: `❌ Out of Stock`, callback_data: "ignore_stock_click", style: "danger" }]);
@@ -2712,7 +2740,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 <b>Panel Name:</b> ${prod.panel_name}
 <b>Package Date/Time:</b> ${prod.name}
 <b>Standard Price:</b> ${fmtCurr(prod.price_inr)}
-👑 <b>Wholesale Price:</b> ${fmtCurr(prod.reseller_price)}
+👑 <b>Wholesale Price:</b> ${fmtCurr(prod.reseller_price ?? prod.reseller_price_inr ?? 0)}
 <b>Vault Stock:</b> ${prod.stock}
 <b>Payload Link:</b> ${prod.apk_link || 'None'}
 <b>Time Config:</b> ${prod.validity}
@@ -3423,7 +3451,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }));
 
     setProductKeys(prev => [...newKeyEntities, ...prev]);
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: p.stock + cleanKeys.length } : p));
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: (p.stock || 0) + cleanKeys.length } : p));
     logActivity(12846461, 'ADMIN_INJECT_KEYS', `Added ${cleanKeys.length} keys to #${productId}`);
 
     // Sync injected keys to Backend Server (Live Telegram Engine Storage)
@@ -3444,7 +3472,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     setProductKeys(prev => prev.filter(k => k.id !== keyId));
     if (!key.is_used) {
-      setProducts(prev => prev.map(p => p.id === key.product_id ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
+      setProducts(prev => prev.map(p => p.id === key.product_id ? { ...p, stock: Math.max(0, (p.stock || 0) - 1) } : p));
     }
   };
 
@@ -3687,10 +3715,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
       if (isExplicitlyOff) {
         cleanSettings.maintenance_mode = false;
-        cleanSettings.bot_status = 'ON';
+        cleanSettings.bot_status = 'ON' as const;
       } else if (isExplicitlyOn) {
         cleanSettings.maintenance_mode = true;
-        cleanSettings.bot_status = 'OFF';
+        cleanSettings.bot_status = 'OFF' as const;
       }
     }
 
@@ -3759,7 +3787,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleMaintenanceMode = async (forceState?: boolean) => {
     const nextMaintenance = forceState !== undefined ? forceState : !settings.maintenance_mode;
-    const nextBotStatus = nextMaintenance ? 'OFF' : 'ON';
+    const nextBotStatus: 'ON' | 'OFF' = nextMaintenance ? 'OFF' : 'ON';
 
     const updates = {
       maintenance_mode: nextMaintenance,
@@ -4302,6 +4330,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     <BotContext.Provider
       value={{
         currentUser,
+        isAdmin,
         setCurrentUserId,
         allUsers: users,
         isAuthenticated,

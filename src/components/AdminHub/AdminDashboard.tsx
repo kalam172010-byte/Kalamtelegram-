@@ -47,7 +47,8 @@ import {
   Clock,
   Video,
   Mic,
-  Volume2
+  Volume2,
+  Globe
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
 import { SystemHealthWidget } from './SystemHealthWidget';
@@ -56,6 +57,7 @@ import { WebsiteLogo } from '../Common/WebsiteLogo';
 export const AdminDashboard: React.FC = () => {
   const {
     currentUser,
+    isAdmin,
     setCurrentUserId,
     setActiveTab,
     bots,
@@ -686,7 +688,7 @@ export const AdminDashboard: React.FC = () => {
       panel_name: prod.panel_name,
       name: prod.name,
       price_inr: prod.price_inr,
-      reseller_price: prod.reseller_price,
+      reseller_price: prod.reseller_price ?? prod.reseller_price_inr ?? Math.round(prod.price_inr * 0.7),
       validity: prod.validity || prod.name,
       device_limit: prod.device_limit || '1 Device HWID',
       apk_link: prod.apk_link || '',
@@ -1818,7 +1820,7 @@ export const AdminDashboard: React.FC = () => {
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-slate-400 text-[11px]">Reseller Price:</span>
-                                    <span className="font-bold text-amber-300 font-mono">₹{plan.reseller_price.toFixed(2)}</span>
+                                    <span className="font-bold text-amber-300 font-mono">₹{(plan.reseller_price ?? plan.reseller_price_inr ?? 0).toFixed(2)}</span>
                                   </div>
                                   {plan.provider_duration && (
                                     <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800/70 text-indigo-300">
@@ -1931,7 +1933,7 @@ export const AdminDashboard: React.FC = () => {
                               <div className="text-[10px] text-slate-500">{prod.device_limit}</div>
                             </td>
                             <td className="p-3.5 font-bold text-emerald-400">₹{prod.price_inr.toFixed(2)}</td>
-                            <td className="p-3.5 font-bold text-amber-300">₹{prod.reseller_price.toFixed(2)}</td>
+                            <td className="p-3.5 font-bold text-amber-300">₹{(prod.reseller_price ?? prod.reseller_price_inr ?? 0).toFixed(2)}</td>
                             <td className="p-3.5">
                               <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] ${
                                 prodKeys.length > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'

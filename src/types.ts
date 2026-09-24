@@ -101,8 +101,10 @@ export interface Product {
   category: string; // 'ANDROID NON ROOT PANEL' | 'ANDROID ROOT PANEL' | 'PC PANEL' | string
   panel_name: string; // e.g., 'MST PANEL', 'DRIP PANEL', 'VIP ZERO'
   name: string; // Package/duration e.g., '24 Hours', '7 Days', '1 Month', 'Lifetime'
+  duration?: string;
   price_inr: number;
   reseller_price: number;
+  reseller_price_inr?: number;
   stock: number;
   apk_link: string;
   validity: string;
@@ -117,10 +119,12 @@ export interface Product {
 }
 
 export interface ProductKey {
-  id: number;
+  id: number | string;
   product_id: number;
-  key_text: string;
+  key_text?: string;
+  key_string?: string;
   is_used: number; // 0 or 1
+  created_at?: string;
 }
 
 export interface Order {
@@ -318,4 +322,4 @@ export interface ChatMessage {
 
 export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
-export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code';
+export type AdminTab = 'overview' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'broadcast' | 'tickets' | 'coupons' | 'gateways' | 'emojis' | 'logs' | 'code' | 'botcommands' | 'bot_engine';

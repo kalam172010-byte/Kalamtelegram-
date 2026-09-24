@@ -706,7 +706,7 @@ class TelegramEngine {
 
   private getProductAvailableKeys(productId: number): string[] {
     const keys = dbStore.getData().productKeys.filter(k => k.product_id === productId && k.is_used === 0);
-    return keys.map(k => k.key_text);
+    return keys.map(k => k.key_text || k.key_string || '').filter(Boolean);
   }
 
   private getProductStockTag(product: Product): string {
@@ -801,7 +801,7 @@ class TelegramEngine {
         const vaultKey = dbStore.getData().productKeys.find(k => k.product_id === product.id && k.is_used === 0);
         if (vaultKey && (product.delivery_mode === 'hybrid' || settings.provider_auto_fallback !== false)) {
           vaultKey.is_used = 1;
-          deliveredKey = vaultKey.key_text;
+          deliveredKey = vaultKey.key_text || vaultKey.key_string || '';
           providerSource = 'Manual Vault (API Fallback)';
         } else if (settings.provider_auto_fallback !== false || product.delivery_mode === 'api_provider') {
           // Automatic emergency license generation so customer order is never failed or lost
@@ -862,7 +862,7 @@ class TelegramEngine {
         }
       } else {
         vaultKey.is_used = 1;
-        deliveredKey = vaultKey.key_text;
+        deliveredKey = vaultKey.key_text || vaultKey.key_string || '';
         providerSource = 'Manual Key Vault';
       }
     }
@@ -1546,7 +1546,7 @@ class TelegramEngine {
       if (lowerText.startsWith('/addproduct') || lowerText.startsWith('/addprod')) {
         const line = text.replace(/^\/(addproduct|addprod)\s*/i, '').trim();
         if (line.includes('|')) {
-          const parts = line.split('|').map(s => s.trim());
+          const parts = line.split('|').map((s: string) => s.trim());
           if (parts.length >= 4) {
             const category = parts[0] || 'Android Non-Root';
             const panelName = parts[1] || 'NEW PANEL';
@@ -1561,16 +1561,16 @@ class TelegramEngine {
               name: planName,
               panel_name: panelName,
               category: category,
-              description: `${panelName} ${planName} key`,
               price_inr: price,
               reseller_price: resellerPrice,
               validity: validity,
               device_limit: '1 Device',
               stock: 0,
-              delivery_mode: 'vault',
+              delivery_mode: 'manual_vault',
               is_active: 1,
               is_maintenance: 0,
-              requires_android_id: 0
+              requires_android_id: false,
+              apk_link: 'https://t.me/KalamFFPanelAPKs'
             };
 
             const currentProds = dbStore.getData().products;
@@ -1614,21 +1614,21 @@ class TelegramEngine {
       if (lowerText.startsWith('/addkey') || lowerText.startsWith('/addkeys')) {
         const line = text.replace(/^\/(addkey|addkeys)\s*/i, '').trim();
         if (line.includes('|')) {
-          const parts = line.split('|').map(s => s.trim());
+          const parts = line.split('|').map((s: string) => s.trim());
           const prodId = Number(parts[0]);
           const rawKeys = parts[1] || '';
           if (prodId && rawKeys) {
-            const keysList = rawKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+            const keysList = rawKeys.split(/[\n,]+/).map((k: string) => k.trim()).filter(Boolean);
             const data = dbStore.getData();
             const prod = data.products.find(p => p.id === prodId);
             if (prod) {
-              keysList.forEach(kText => {
+              keysList.forEach((kText: string) => {
                 data.productKeys.push({
                   id: Date.now() + Math.floor(Math.random() * 1000),
                   product_id: prodId,
                   key_text: kText,
                   is_used: 0,
-                  added_date: new Date().toISOString().replace('T', ' ').substring(0, 19)
+                  created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
                 });
               });
               prod.stock = data.productKeys.filter(k => k.product_id === prodId && k.is_used === 0).length;
@@ -3488,6 +3488,60 @@ class TelegramEngine {
   }
 
   /**
+   * Helper to upload file buffer / base64 directly to Telegram Bot API
+   */
+  public async callApiWithFile(
+    method: string,
+    params: Record<string, any>,
+    field: string,
+    fileData: { base64: string; filename: string; mimeType?: string }
+  ): Promise<any> {
+    try {
+      const activeToken = this.getValidTokenFromStore();
+      if (!activeToken) return null;
+
+      // Extract raw base64 content
+      const base64Content = fileData.base64.includes(',')
+        ? fileData.base64.split(',')[1]
+        : fileData.base64;
+      const buffer = Buffer.from(base64Content, 'base64');
+
+      const boundary = `----TelegramBoundary${Date.now().toString(16)}`;
+      let bodyParts: Buffer[] = [];
+
+      // Add regular parameters
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null) continue;
+        const stringVal = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        let header = `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${stringVal}\r\n`;
+        bodyParts.push(Buffer.from(header, 'utf-8'));
+      }
+
+      // Add file payload
+      const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${fileData.filename}"\r\nContent-Type: ${fileData.mimeType || 'application/octet-stream'}\r\n\r\n`;
+      bodyParts.push(Buffer.from(fileHeader, 'utf-8'));
+      bodyParts.push(buffer);
+      bodyParts.push(Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8'));
+
+      const fullBody = Buffer.concat(bodyParts);
+
+      const res = await fetch(`https://api.telegram.org/bot${activeToken}/${method}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(fullBody.length)
+        },
+        body: fullBody
+      });
+
+      const json = await res.json();
+      return json.ok ? json.result : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Set Bot Commands via Telegram API
    */
   public async setMyCommands(commands: Array<{ command: string; description: string }>): Promise<any> {
@@ -3496,13 +3550,6 @@ class TelegramEngine {
       description: c.description.slice(0, 256)
     })).filter(c => c.command.length >= 1 && c.description.length >= 1);
     return await this.callApi('setMyCommands', { commands: formatted });
-  }
-
-  /**
-   * Delete Bot Commands from Telegram API
-   */
-  public async deleteMyCommands(): Promise<any> {
-    return await this.callApi('deleteMyCommands');
   }
 
   /**

@@ -153,7 +153,9 @@ export function usePageRouter({
             gateways: 'Payment Gateways & UPI QR Setup',
             emojis: 'Custom Telegram Emojis Editor',
             logs: 'Security & Activity Audit Logs',
-            code: 'Live Source Code & Webhook Architecture'
+            code: 'Live Source Code & Webhook Architecture',
+            botcommands: 'Telegram Slash Commands',
+            bot_engine: 'Bot Engine Diagnostics'
           };
           const subName = adminSubTitleMap[adminTab] || 'Admin Panel';
           pageTitle = `${subName} | Kalam FF Panel`;
