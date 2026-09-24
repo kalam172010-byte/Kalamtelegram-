@@ -2421,15 +2421,13 @@ class TelegramEngine {
       } else {
         await this.sendMessage(
           chatId,
-          `⏳ <b>Payment Status: Pending</b>\n\n` +
+          `⏳ <b>Payment Status: Pending / Verifying...</b>\n\n` +
           `Order ID: <code>${orderId}</code>\n\n` +
-          `If you have already paid in your UPI app (GPay / PhonePe / Paytm / FamPay / BHIM):\n` +
-          `👉 Click <b>"📝 Submit 12-Digit UTR"</b> below and send your UTR Reference Number for <b>instant automated credit</b>!`,
+          `Please complete the UPI transfer in your UPI app. The payment is verified automatically!`,
           {
             inline_keyboard: [
-              [{ text: '📝 Submit 12-Digit UTR Number', callback_data: `submit_utr_${orderId}` }],
-              [{ text: '🔄 Retry Check Status', callback_data: `check_order_${orderId}` }],
-              [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+              [{ text: '🔄 Check & Auto-Confirm Payment', callback_data: `check_order_${orderId}`, style: 'success' }],
+              [{ text: '❌ Cancel The Payment', callback_data: 'main_menu', style: 'danger' }]
             ]
           }
         );
@@ -3195,7 +3193,7 @@ class TelegramEngine {
       `2️⃣ Scan the QR Code image above OR pay to UPI ID <code>${upiId}</code>.\n` +
       `3️⃣ Pay exact amount: <b>₹${amount.toFixed(2)}</b>.\n` +
       `4️⃣ <b>FamGateway will AUTOMATICALLY credit your wallet</b> in seconds!\n\n` +
-      `<i>👉 After paying, tap "🔄 Check & Auto-Confirm Payment" or "📝 Submit 12-Digit UTR" below.</i>`;
+      `<i>👉 After paying, tap "🔄 Check & Auto-Confirm Payment" below.</i>`;
 
     const keyboardButtons: any[] = [];
 
@@ -3207,24 +3205,12 @@ class TelegramEngine {
     }
 
     keyboardButtons.push([
-      { text: '🔄 Check & Auto-Confirm Payment', callback_data: `check_order_${orderId}` }
+      { text: '🔄 Check & Auto-Confirm Payment', callback_data: `check_order_${orderId}`, style: 'success' }
     ]);
 
     keyboardButtons.push([
-      { text: '📝 Submit 12-Digit UTR Number', callback_data: `submit_utr_${orderId}` }
+      { text: '❌ Cancel The Payment', callback_data: 'main_menu', style: 'danger' }
     ]);
-
-    const bottomRow: any[] = [
-      { text: '💳 Choose Other Amount', callback_data: 'add_balance' }
-    ];
-
-    if (settings.support_telegram && (settings.support_telegram.startsWith('http://') || settings.support_telegram.startsWith('https://') || settings.support_telegram.startsWith('tg://'))) {
-      bottomRow.push({ text: '💬 Support', url: settings.support_telegram });
-    } else {
-      bottomRow.push({ text: '🔙 Main Menu', callback_data: 'main_menu' });
-    }
-
-    keyboardButtons.push(bottomRow);
 
     const keyboard = { inline_keyboard: keyboardButtons };
 

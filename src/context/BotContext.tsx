@@ -1591,23 +1591,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {
         text: "🔄 Check & Auto-Verify Payment",
         callback_data: `verify_${orderId}`,
-        style: "primary"
+        style: "success"
       }
     ]);
 
     kb.push([
       {
-        text: "📝 Submit 12-Digit UTR Number",
-        callback_data: `submit_utr_${orderId}`,
-        style: "primary"
-      }
-    ]);
-
-    kb.push([
-      {
-        text: "🔙 Cancel / Choose Other Amount",
-        callback_data: "menu_add_balance",
-        icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
+        text: "❌ Cancel The Payment",
+        callback_data: "back_main",
         style: "danger"
       }
     ]);
@@ -1623,7 +1614,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `1️⃣ Scan the generated FamGateway QR Code or click <b>Open FamGateway.in Checkout</b>\n` +
       `2️⃣ Pay exact amount <b>${fmtCurr(validAmount)}</b> in PhonePe, Google Pay, Paytm or FamPay\n` +
       `3️⃣ <b>Your balance will be credited AUTOMATICALLY via FamGateway.in!</b>\n\n` +
-      `<i>👉 If already paid, tap "Check & Auto-Verify Payment" or submit your 12-digit UTR below.</i>`;
+      `<i>👉 If already paid, tap "Check & Auto-Verify Payment" below.</i>`;
 
     editLastBotMessage(text, kb, {
       order_id: orderId,
