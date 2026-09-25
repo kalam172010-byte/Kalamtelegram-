@@ -185,6 +185,20 @@
   ],
   "logs": [
     {
+      "id": 1790298777831,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 01:12:57"
+    },
+    {
+      "id": 1790298666740,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 01:11:06"
+    },
+    {
       "id": 1790298610548,
       "user_id": 12846461,
       "action": "TG_CONNECT_SUCCESS",
@@ -1179,10 +1193,10 @@
     "gift": "5974026322961501198"
   },
   "fsmStates": {
-    "8282895979": {
+    "5255460348": {
       "state": ""
     },
-    "5255460348": {
+    "8282895979": {
       "state": ""
     }
   },

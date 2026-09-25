@@ -5,7 +5,8 @@ import {
   saveStateToFirestore,
   syncProductToFirestore,
   deleteProductFromFirestore,
-  deleteProductsFromFirestore
+  deleteProductsFromFirestore,
+  isFirestoreAvailable
 } from './firebaseSync';
 import {
   User,
@@ -200,8 +201,7 @@ export class DatabaseStore {
       fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
       
       // Async sync to Cloud Firestore to survive Render auto-deploys & restarts
-      // Only push to Firestore if synced or if local disk file existed
-      if (this.isFirestoreSynced || fs.existsSync(DB_FILE)) {
+      if (this.isFirestoreSynced && isFirestoreAvailable()) {
         saveStateToFirestore(target, forceImmediate).catch(err => {
           console.warn('Background Firestore save notice:', err.message);
         });
@@ -215,9 +215,11 @@ export class DatabaseStore {
     try {
       const remote = await loadStateFromFirestore();
       if (!remote) {
-        console.log('⚡ Firestore: Initializing cloud backup with current state...');
-        this.isFirestoreSynced = true;
-        await saveStateToFirestore(this.data, true);
+        if (isFirestoreAvailable()) {
+          console.log('⚡ Firestore: Initializing cloud backup with current state...');
+          this.isFirestoreSynced = true;
+          await saveStateToFirestore(this.data, true);
+        }
         return;
       }
 
@@ -597,9 +599,18 @@ export class DatabaseStore {
     const initialLen = this.data.products.length;
     const deletedProductIds = new Set<string>();
     
+    const targetCat = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const targetName = (panelName || '').trim().toLowerCase();
+    const targetNameNorm = targetName.replace(/[^a-z0-9]/g, '');
+
     this.data.products = this.data.products.filter(p => {
-      const matchCat = matchCategoryFlexible(p.category, category);
-      const matchName = matchNameFlexible(p.panel_name || p.name, panelName);
+      const pCat = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const pName = (p.panel_name || p.name || '').trim().toLowerCase();
+      const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
+
+      const matchCat = !targetCat || pCat === targetCat || matchCategoryFlexible(p.category, category);
+      const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === targetNameNorm);
+
       if (matchCat && matchName) {
         deletedProductIds.add(String(p.id));
         return false;

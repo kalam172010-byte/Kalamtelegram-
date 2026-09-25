@@ -239,6 +239,9 @@ async function startServer() {
       if (action === 'create' && product) {
         dbStore.addProduct(product, keys);
         dbStore.logActivity(12846461, 'CREATE_PRODUCT', `Created product: ${product.name}`);
+      } else if (action === 'create_batch' && Array.isArray(req.body.products)) {
+        const added = dbStore.addProductsBatch(req.body.products, req.body.keysMap);
+        dbStore.logActivity(12846461, 'CREATE_PRODUCTS_BATCH', `Created ${added.length} product plans`);
       } else if (action === 'update' && product) {
         dbStore.updateProduct(product.id, product);
         dbStore.logActivity(12846461, 'UPDATE_PRODUCT', `Updated product: ${product.name}`);

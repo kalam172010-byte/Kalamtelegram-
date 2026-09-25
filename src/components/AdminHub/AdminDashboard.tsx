@@ -113,6 +113,7 @@ export const AdminDashboard: React.FC = () => {
     settings,
     emojis,
     addProduct,
+    addProductsBatch,
     updateProduct,
     deleteProduct,
     deleteProducts,
@@ -447,10 +448,11 @@ export const AdminDashboard: React.FC = () => {
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [showAddKeysModal, setShowAddKeysModal] = useState<number | null>(null);
   const [newKeysText, setNewKeysText] = useState('');
+  const [panelToDelete, setPanelToDelete] = useState<{ category: string; panelName: string } | null>(null);
 
   // Multi-Plan Product Creation Form State
   const [multiProdForm, setMultiProdForm] = useState({
-    category: '',
+    category: 'ANDROID NON ROOT PANEL',
     panel_name: '',
     apk_link: '',
     device_limit: '',
@@ -565,7 +567,16 @@ export const AdminDashboard: React.FC = () => {
 
   const filteredProducts = selectedCategory === 'ALL'
     ? products
-    : products.filter(p => p.category === selectedCategory);
+    : products.filter(p => {
+        const catNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const selNorm = selectedCategory.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (catNorm === selNorm) return true;
+        if (catNorm.includes('nonroot') && selNorm.includes('nonroot')) return true;
+        if (!catNorm.includes('non') && catNorm.includes('root') && !selNorm.includes('non') && selNorm.includes('root')) return true;
+        if (catNorm.includes('pc') && selNorm.includes('pc')) return true;
+        if ((catNorm.includes('ios') || catNorm.includes('ipa')) && (selNorm.includes('ios') || selNorm.includes('ipa'))) return true;
+        return false;
+      });
 
   // Accordion state: Panels collapsed by default or tapped to open
   const [expandedPanels, setExpandedPanels] = useState<Record<string, boolean>>({});

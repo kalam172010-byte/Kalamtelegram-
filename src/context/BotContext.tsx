@@ -184,6 +184,7 @@ export interface BotContextType {
 
   // Admin DB Direct Manipulations
   addProduct: (prod: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]) => Promise<void>;
+  addProductsBatch: (products: Product[], keysMap?: Record<string, string[]>) => Promise<void>;
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number | string) => void;
   deleteProducts: (ids: (number | string)[]) => void;
@@ -3515,12 +3516,96 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         })
       });
       const data = await res.json();
-      if (data && Array.isArray(data.products)) {
-        setProducts(data.products);
-        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+      if (data) {
+        if (Array.isArray(data.products)) {
+          setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        }
+        if (Array.isArray(data.productKeys)) {
+          setProductKeys(data.productKeys);
+        }
       }
     } catch (err) {
       console.warn('Failed to sync new product to server:', err);
+    }
+  };
+
+  const addProductsBatch = async (newProducts: Product[], keysMap?: Record<string, string[]>): Promise<void> => {
+    const cleanProducts: Product[] = [];
+    const newKeyEntities: ProductKey[] = [];
+
+    for (let i = 0; i < newProducts.length; i++) {
+      const p = newProducts[i];
+      const pId = p.id || (Date.now() + i + Math.floor(Math.random() * 100000));
+      const rawKeys = keysMap?.[String(p.id)] || keysMap?.[String(pId)] || keysMap?.[p.name] || (p as any).keys || [];
+      const cleanKeys = Array.isArray(rawKeys) ? rawKeys.map((k: any) => String(k).trim()).filter(Boolean) : [];
+
+      const cleanP: Product = {
+        ...p,
+        id: pId,
+        is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
+        stock: cleanKeys.length > 0 ? cleanKeys.length : (p.stock || 0)
+      };
+      cleanProducts.push(cleanP);
+
+      cleanKeys.forEach((k: string, kIdx: number) => {
+        newKeyEntities.push({
+          id: Date.now() + i * 1000 + kIdx + Math.floor(Math.random() * 10000),
+          product_id: pId,
+          key_text: k,
+          is_used: 0
+        });
+      });
+    }
+
+    const newIdSet = new Set(cleanProducts.map(p => String(p.id)));
+
+    setProducts(prev => {
+      const updated = [...cleanProducts, ...prev.filter(p => !newIdSet.has(String(p.id)))];
+      localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      return updated;
+    });
+
+    setProductKeys(prev => {
+      const updated = [...newKeyEntities, ...prev];
+      localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
+      return updated;
+    });
+
+    setBots(prev => {
+      const updated = prev.map(b => ({
+        ...b,
+        products: [...cleanProducts, ...(b.products || []).filter(p => !newIdSet.has(String(p.id)))],
+        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+      }));
+      localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
+      return updated;
+    });
+
+    logActivity(12846461, 'ADMIN_ADD_PRODUCTS_BATCH', `Added ${cleanProducts.length} plans (${newKeyEntities.length} keys)`);
+
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_batch',
+          products: cleanProducts,
+          keysMap
+        })
+      });
+      const data = await res.json();
+      if (data) {
+        if (Array.isArray(data.products)) {
+          setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        }
+        if (Array.isArray(data.productKeys)) {
+          setProductKeys(data.productKeys);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to sync batch products to server:', err);
     }
   };
 
@@ -3561,9 +3646,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       })
       .then(res => res.json())
       .then(data => {
-        if (data && Array.isArray(data.products)) {
-          setProducts(data.products);
-          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        if (data) {
+          if (Array.isArray(data.products)) {
+            setProducts(data.products);
+            setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+          }
+          if (Array.isArray(data.productKeys)) {
+            setProductKeys(data.productKeys);
+          }
         }
       })
       .catch(err => console.warn('Failed to sync product update to server:', err));
@@ -3632,9 +3722,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     })
     .then(res => res.json())
     .then(data => {
-      if (data && Array.isArray(data.products)) {
-        setProducts(data.products);
-        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+      if (data) {
+        if (Array.isArray(data.products)) {
+          setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        }
+        if (Array.isArray(data.productKeys)) {
+          setProductKeys(data.productKeys);
+        }
       }
     })
     .catch(err => console.warn('Failed to sync product deletion to server:', err));
@@ -3674,9 +3769,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     })
     .then(res => res.json())
     .then(data => {
-      if (data && Array.isArray(data.products)) {
-        setProducts(data.products);
-        setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+      if (data) {
+        if (Array.isArray(data.products)) {
+          setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        }
+        if (Array.isArray(data.productKeys)) {
+          setProductKeys(data.productKeys);
+        }
       }
     })
     .catch(err => console.warn('Failed to sync batch product deletion to server:', err));
@@ -3686,19 +3786,21 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     const deletedIds: string[] = [];
     
     const catNorm = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const nameNorm = (panelName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const nameNorm = (panelName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const targetName = (panelName || '').trim().toLowerCase();
 
     setProducts(prev => {
       const updated = prev.filter(p => {
         const pCatNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const pNameNorm = (p.panel_name || p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const pName = (p.panel_name || p.name || '').trim().toLowerCase();
+        const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
 
-        const matchCat = pCatNorm === catNorm || pCatNorm.includes(catNorm) || catNorm.includes(pCatNorm) ||
+        const matchCat = !catNorm || pCatNorm === catNorm ||
           (pCatNorm.includes('nonroot') && catNorm.includes('nonroot')) ||
           (!pCatNorm.includes('non') && pCatNorm.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
           ((pCatNorm.includes('pc') || pCatNorm.includes('emulator')) && (catNorm.includes('pc') || catNorm.includes('emulator')));
 
-        const matchName = pNameNorm === nameNorm || pNameNorm.includes(nameNorm) || nameNorm.includes(pNameNorm);
+        const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === nameNorm);
 
         if (matchCat && matchName) {
           deletedIds.push(String(p.id));
@@ -3741,8 +3843,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     })
     .then(res => res.json())
     .then(data => {
-      if (data && Array.isArray(data.products)) {
-        setProducts(data.products);
+      if (data) {
+        if (Array.isArray(data.products)) {
+          setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
+        }
+        if (Array.isArray(data.productKeys)) {
+          setProductKeys(data.productKeys);
+        }
       }
     })
     .catch(err => console.warn('Failed to sync panel deletion to server:', err));
@@ -4759,6 +4867,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         resetChat,
         simulatePaymentSuccess,
         addProduct,
+        addProductsBatch,
         updateProduct,
         deleteProduct,
         deleteProducts,

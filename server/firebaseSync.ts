@@ -1,7 +1,24 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  setLogLevel, 
+  getDocFromServer,
+  doc, 
+  getDoc, 
+  setDoc, 
+  deleteDoc,
+  type Firestore
+} from 'firebase/firestore';
+
+// Suppress internal Firebase SDK stream retry/error spam in server process
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore
+}
 
 function getFirebaseConfig() {
   try {
@@ -22,49 +39,136 @@ function getFirebaseConfig() {
 const firebaseConfig = getFirebaseConfig();
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-function initServerFirestore() {
-  const dbId = firebaseConfig.firestoreDatabaseId;
+function createFirestoreInstance(databaseId?: string): Firestore {
   try {
-    return dbId ? getFirestore(app, dbId) : getFirestore(app);
-  } catch (err) {
+    if (databaseId && databaseId !== '(default)') {
+      return getFirestore(app, databaseId);
+    }
+    return getFirestore(app);
+  } catch {
     try {
-      return initializeFirestore(app, {}, dbId || undefined);
+      return initializeFirestore(app, {}, databaseId || undefined);
     } catch {
       return getFirestore(app);
     }
   }
 }
 
-export const db = initServerFirestore();
+// Active database instance
+export let db = createFirestoreInstance(firebaseConfig.firestoreDatabaseId);
+let STORE_DOC = doc(db, 'settings', 'master_database');
 
-const STORE_DOC = doc(db, 'settings', 'master_database');
+// Connection & Health State
+let isCloudDbAvailable = false;
+let isConnectionVerified = false;
+let connectionCheckPromise: Promise<boolean> | null = null;
+let lastConnectionCheckTime = 0;
+const CONNECTION_RETRY_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
-// Circuit Breaker & Throttling State to prevent Firestore Quota Exhaustion
+// Circuit Breaker & Throttling State
 let isQuotaExhausted = false;
 let quotaExhaustedUntil = 0;
 let saveDebounceTimer: NodeJS.Timeout | null = null;
 let pendingDataToSave: any = null;
 let isSaving = false;
 let lastSaveTime = 0;
-const MIN_SAVE_INTERVAL_MS = 15000; // Minimum interval for standard background autosave
+const MIN_SAVE_INTERVAL_MS = 15000;
 
 export function isFirestoreQuotaExhausted(): boolean {
   if (isQuotaExhausted && Date.now() > quotaExhaustedUntil) {
     isQuotaExhausted = false;
     quotaExhaustedUntil = 0;
-    console.log('⚡ Firestore: Quota backoff window expired. Resuming cloud backup stream.');
+    console.log('⚡ Firestore: Quota backoff window expired. Cloud state active.');
   }
   return isQuotaExhausted;
 }
 
+export function isFirestoreAvailable(): boolean {
+  return isCloudDbAvailable && !isFirestoreQuotaExhausted();
+}
+
+/**
+ * Validates connection to Cloud Firestore using getDocFromServer with timeout
+ * Probes the configured database ID, falling back to default database if needed.
+ */
+export async function verifyFirestoreConnection(): Promise<boolean> {
+  const now = Date.now();
+  if (isConnectionVerified && (now - lastConnectionCheckTime < CONNECTION_RETRY_INTERVAL_MS)) {
+    return isCloudDbAvailable;
+  }
+
+  if (connectionCheckPromise) {
+    return connectionCheckPromise;
+  }
+
+  connectionCheckPromise = (async () => {
+    lastConnectionCheckTime = Date.now();
+
+    const probe = async (testDb: Firestore): Promise<boolean> => {
+      try {
+        const promise = getDocFromServer(doc(testDb, 'test', 'connection'));
+        const timeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Connection probe timeout')), 2500)
+        );
+        await Promise.race([promise, timeout]);
+        return true;
+      } catch (err: any) {
+        const msg = String(err?.message || err?.code || err);
+        // If the document doesn't exist, the connection to the database itself succeeded!
+        if (msg.includes('not-found') || err?.code === 'not-found') {
+          // Document not found on server means database is reachable and alive
+          return true;
+        }
+        return false;
+      }
+    };
+
+    // 1. Probe primary configured database
+    let ok = await probe(db);
+
+    // 2. If primary failed and was a custom database ID, test default database
+    if (!ok && firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') {
+      const fallbackDb = createFirestoreInstance('(default)');
+      const fallbackOk = await probe(fallbackDb);
+      if (fallbackOk) {
+        db = fallbackDb;
+        STORE_DOC = doc(db, 'settings', 'master_database');
+        ok = true;
+        console.log('⚡ Firestore: Connected using (default) database.');
+      }
+    }
+
+    isCloudDbAvailable = ok;
+    isConnectionVerified = true;
+
+    if (ok) {
+      console.log('⚡ Firestore: Cloud database connection verified.');
+    } else {
+      console.log('⚡ Firestore: Cloud database not reachable (offline / auth restricted). System operating seamlessly on high-speed persistent disk database.');
+    }
+
+    return ok;
+  })().finally(() => {
+    connectionCheckPromise = null;
+  });
+
+  return connectionCheckPromise;
+}
+
 export async function loadStateFromFirestore(): Promise<any | null> {
-  if (isFirestoreQuotaExhausted()) {
+  const isConnected = await verifyFirestoreConnection();
+  if (!isConnected || isFirestoreQuotaExhausted()) {
     return null;
   }
 
   try {
-    console.log('⚡ Firestore: Connecting & retrieving persistent database snapshot...');
-    const snap = await getDoc(STORE_DOC);
+    console.log('⚡ Firestore: Retrieving persistent database snapshot...');
+    const promise = getDoc(STORE_DOC);
+    const timeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Read timeout')), 4000)
+    );
+    const snap = await Promise.race([promise, timeout]);
+
     if (snap.exists()) {
       const data = snap.data();
       console.log('⚡ Firestore: Successfully loaded persistent state from Cloud Firestore!');
@@ -75,20 +179,15 @@ export async function loadStateFromFirestore(): Promise<any | null> {
     if (
       msg.includes('RESOURCE_EXHAUSTED') ||
       msg.includes('Quota limit exceeded') ||
-      err?.code === 'resource-exhausted' ||
-      msg.includes('8 RESOURCE_EXHAUSTED')
+      err?.code === 'resource-exhausted'
     ) {
       isQuotaExhausted = true;
-      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
-      console.warn('⚡ Firestore: Daily quota limit reached on cloud project. Operating securely with local high-speed disk database.');
-    } else if (
-      msg.includes('NOT_FOUND') ||
-      msg.includes('Code: 5') ||
-      err?.code === 'not-found' ||
-      msg.includes('5 NOT_FOUND')
-    ) {
-      console.log('⚡ Firestore: Master document does not exist yet. Local disk store is active and will create it on save.');
+      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+      console.warn('⚡ Firestore: Daily quota limit reached. Disk store active.');
+    } else if (msg.includes('NOT_FOUND') || msg.includes('Code: 5') || err?.code === 'not-found') {
+      console.log('⚡ Firestore: Master document does not exist yet. Disk store active.');
     } else {
+      isCloudDbAvailable = false;
       console.warn('⚡ Firestore load notice:', msg);
     }
   }
@@ -96,7 +195,7 @@ export async function loadStateFromFirestore(): Promise<any | null> {
 }
 
 async function performActualFirestoreSave(data: any): Promise<void> {
-  if (isFirestoreQuotaExhausted()) {
+  if (!isCloudDbAvailable || isFirestoreQuotaExhausted()) {
     return;
   }
 
@@ -109,38 +208,42 @@ async function performActualFirestoreSave(data: any): Promise<void> {
   lastSaveTime = Date.now();
 
   try {
-    // Sanitize data for Firestore (JSON stringifiable)
     const cleanData = JSON.parse(JSON.stringify(data));
-    await setDoc(STORE_DOC, {
+    const writePromise = setDoc(STORE_DOC, {
       ...cleanData,
       last_synced_at: new Date().toISOString()
     });
-    // Clear any previous error flag on success
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Write timeout')), 5000)
+    );
+
+    await Promise.race([writePromise, timeoutPromise]);
     isQuotaExhausted = false;
   } catch (err: any) {
     const msg = String(err?.message || err?.code || err);
     if (
       msg.includes('RESOURCE_EXHAUSTED') ||
       msg.includes('Quota limit exceeded') ||
-      err?.code === 'resource-exhausted' ||
-      msg.includes('8 RESOURCE_EXHAUSTED')
+      err?.code === 'resource-exhausted'
     ) {
       isQuotaExhausted = true;
-      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000; // Pause cloud writes for 15 minutes
-      console.warn('⚡ Firestore Notice: Cloud write quota limit reached. Local disk database is 100% active and maintaining all state.');
+      quotaExhaustedUntil = Date.now() + 15 * 60 * 1000;
+      console.warn('⚡ Firestore Notice: Quota limit reached. Local disk database maintaining all state.');
     } else if (
-      msg.includes('NOT_FOUND') ||
-      msg.includes('Code: 5') ||
-      err?.code === 'not-found' ||
-      msg.includes('5 NOT_FOUND')
+      msg.includes('NOT_FOUND') || 
+      msg.includes('Code: 5') || 
+      msg.includes('PERMISSION_DENIED') ||
+      msg.includes('unavailable') ||
+      msg.includes('timeout')
     ) {
-      console.warn('⚡ Firestore Notice: Document location not found or created yet.');
+      isCloudDbAvailable = false;
+      console.warn('⚡ Firestore Notice: Cloud database currently offline. Local disk maintaining 100% of state.');
     } else {
       console.warn('⚡ Firestore save notice:', msg);
     }
   } finally {
     isSaving = false;
-    if (pendingDataToSave && !isFirestoreQuotaExhausted()) {
+    if (pendingDataToSave && isCloudDbAvailable && !isFirestoreQuotaExhausted()) {
       const nextData = pendingDataToSave;
       pendingDataToSave = null;
       saveStateToFirestore(nextData);
@@ -149,7 +252,7 @@ async function performActualFirestoreSave(data: any): Promise<void> {
 }
 
 export async function saveStateToFirestore(data: any, forceImmediate: boolean = false): Promise<void> {
-  if (isFirestoreQuotaExhausted()) {
+  if (!isCloudDbAvailable || isFirestoreQuotaExhausted()) {
     return;
   }
 
@@ -184,30 +287,35 @@ export async function saveStateToFirestore(data: any, forceImmediate: boolean = 
  * Real-Time Firestore Individual Document Handlers for Products
  */
 export async function syncProductToFirestore(product: any): Promise<void> {
-  if (isFirestoreQuotaExhausted() || !product || product.id === undefined) return;
+  if (!isCloudDbAvailable || isFirestoreQuotaExhausted() || !product || product.id === undefined) return;
   try {
     const cleanProd = JSON.parse(JSON.stringify(product));
-    await setDoc(doc(db, 'products', String(product.id)), cleanProd);
-    console.log(`⚡ Firestore: Real-time product #${product.id} synced to 'products' collection.`);
-  } catch (err: any) {
-    console.warn('⚡ Firestore notice (syncProductToFirestore):', err?.message || err);
+    const writePromise = setDoc(doc(db, 'products', String(product.id)), cleanProd);
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Product sync timeout')), 4000)
+    );
+    await Promise.race([writePromise, timeoutPromise]);
+  } catch {
+    // Graceful handling without throwing
   }
 }
 
 export async function deleteProductFromFirestore(productId: string | number): Promise<void> {
-  if (isFirestoreQuotaExhausted() || productId === undefined) return;
+  if (!isCloudDbAvailable || isFirestoreQuotaExhausted() || productId === undefined) return;
   try {
-    await deleteDoc(doc(db, 'products', String(productId)));
-    console.log(`⚡ Firestore: Real-time product #${productId} deleted from 'products' collection.`);
-  } catch (err: any) {
-    console.warn('⚡ Firestore notice (deleteProductFromFirestore):', err?.message || err);
+    const deletePromise = deleteDoc(doc(db, 'products', String(productId)));
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Product delete timeout')), 4000)
+    );
+    await Promise.race([deletePromise, timeoutPromise]);
+  } catch {
+    // Graceful handling without throwing
   }
 }
 
 export async function deleteProductsFromFirestore(productIds: (string | number)[]): Promise<void> {
-  if (isFirestoreQuotaExhausted() || !Array.isArray(productIds)) return;
+  if (!isCloudDbAvailable || isFirestoreQuotaExhausted() || !Array.isArray(productIds)) return;
   for (const id of productIds) {
     await deleteProductFromFirestore(id);
   }
 }
-
