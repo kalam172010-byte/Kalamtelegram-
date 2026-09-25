@@ -2495,34 +2495,22 @@ class TelegramEngine {
       }
 
       const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
-        `Select your desired operating environment or product category below:\n\n` +
+        `Select your desired operating environment and panel category below:\n\n` +
         `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
         `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
         `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
 
-      const hasNonRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'nonroot'));
-      const hasRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'root') && !isCategoryMatch(p.category, 'nonroot'));
-      const hasPc = allActiveProds.some(p => isCategoryMatch(p.category, 'pc'));
-
       const inline_keyboard: any[][] = [
-        [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }]
+        [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
+        [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
+        [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
       ];
 
-      if (hasNonRoot) {
-        inline_keyboard.push([{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }]);
-      }
-      if (hasRoot) {
-        inline_keyboard.push([{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }]);
-      }
-      if (hasPc) {
-        inline_keyboard.push([{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]);
-      }
-
-      // Add dynamic category buttons for custom categories added by user/admin
+      // Add dynamic category buttons for any custom categories added by user/admin
       for (const cat of uniqueCats) {
         if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
           inline_keyboard.push([
-            { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_${encodeURIComponent(cat)}`, style: 'primary' }
+            { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_custom_${encodeURIComponent(cat)}`, style: 'primary' }
           ]);
         }
       }
@@ -2536,12 +2524,8 @@ class TelegramEngine {
     if (data.startsWith('cat_')) {
       let categoryName = 'ANDROID NON ROOT PANEL';
       let catCode = 'cat_nonroot';
-      const rawPayload = data.replace('cat_', '');
 
-      if (data === 'cat_all') {
-        categoryName = 'ALL PRODUCTS';
-        catCode = 'cat_all';
-      } else if (data === 'cat_root') {
+      if (data === 'cat_root') {
         categoryName = 'ANDROID ROOT PANEL';
         catCode = 'cat_root';
       } else if (data === 'cat_pc') {
@@ -2550,22 +2534,31 @@ class TelegramEngine {
       } else if (data === 'cat_nonroot') {
         categoryName = 'ANDROID NON ROOT PANEL';
         catCode = 'cat_nonroot';
-      } else {
+      } else if (data.startsWith('cat_custom_')) {
+        const rawPayload = data.replace('cat_custom_', '');
         try {
           categoryName = decodeURIComponent(rawPayload);
         } catch {
           categoryName = rawPayload;
         }
         catCode = data;
+      } else {
+        const rawPayload = data.replace('cat_', '');
+        try {
+          categoryName = decodeURIComponent(rawPayload);
+        } catch {
+          categoryName = rawPayload;
+        }
+        catCode = `cat_custom_${encodeURIComponent(categoryName)}`;
       }
 
       let allCatProducts = dbStore.getData().products.filter(p => 
-        p.is_active !== 0 && (data === 'cat_all' || isCategoryMatch(p.category, categoryName))
+        p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
 
       let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
       if (allCatProducts.length === 0) {
-        text += `<i>❌ No products currently available in this category. Check back soon!</i>`;
+        text += `<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`;
         const keyboard = {
           inline_keyboard: [
             [{ text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' }],
@@ -2591,7 +2584,7 @@ class TelegramEngine {
         panelMap.set(pName, sortProductsByDuration(plans));
       }
 
-      text += `👉 <b>Select a Product / Panel to view its available plan durations:</b>\n\n`;
+      text += `👉 <b>Select a Product / Panel below to view its duration plans & keys:</b>\n\n`;
       
       let pIdx = 1;
       for (const [pName, plans] of panelMap.entries()) {
@@ -2615,6 +2608,7 @@ class TelegramEngine {
         if (!firstProd || firstProd.id === undefined) continue;
 
         const isUnderMaint = sortedPlans.some(p => Boolean(p.is_maintenance));
+        const lowestPrice = Math.min(...plans.map(p => this.getUserPrice(user, p)));
 
         if (isUnderMaint) {
           buttons.push([{
@@ -2624,7 +2618,7 @@ class TelegramEngine {
           }]);
         } else {
           buttons.push([{
-            text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'})`,
+            text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'} • From ₹${lowestPrice})`,
             callback_data: `pnl_${firstProd.id}`,
             style: 'primary'
           }]);
@@ -2708,7 +2702,7 @@ class TelegramEngine {
       } else if (targetCategory.toLowerCase().includes('pc')) {
         catCode = 'cat_pc';
       } else {
-        catCode = `cat_${targetCategory}`;
+        catCode = `cat_custom_${encodeURIComponent(targetCategory)}`;
       }
 
       const isPanelUnderMaint = panelPlans.some(p => Boolean(p.is_maintenance)) || Boolean(refProduct.is_maintenance);
@@ -2781,6 +2775,9 @@ class TelegramEngine {
       buttons.push([
         { text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode, style: 'danger' },
         { text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }
+      ]);
+      buttons.push([
+        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
       ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
@@ -3804,29 +3801,17 @@ class TelegramEngine {
       `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
       `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
 
-    const hasNonRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'nonroot'));
-    const hasRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'root') && !isCategoryMatch(p.category, 'nonroot'));
-    const hasPc = allActiveProds.some(p => isCategoryMatch(p.category, 'pc'));
-
     const inline_keyboard: any[][] = [
-      [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }]
+      [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
+      [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
+      [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
     ];
-
-    if (hasNonRoot) {
-      inline_keyboard.push([{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }]);
-    }
-    if (hasRoot) {
-      inline_keyboard.push([{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }]);
-    }
-    if (hasPc) {
-      inline_keyboard.push([{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]);
-    }
 
     // Add dynamic category buttons for custom categories added by user/admin
     for (const cat of uniqueCats) {
       if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
         inline_keyboard.push([
-          { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_${encodeURIComponent(cat)}`, style: 'primary' }
+          { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_custom_${encodeURIComponent(cat)}`, style: 'primary' }
         ]);
       }
     }

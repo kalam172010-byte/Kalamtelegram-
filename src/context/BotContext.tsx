@@ -2240,12 +2240,20 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       ));
 
       if (availablePanels.length === 0) {
-        // Direct to products if no panels
-        const prods = products.filter(p => p.is_active !== 0);
-        if (prods.length === 0) {
-          pushBotMessage("❌ No products available in this category yet.", getBackKeyboard('menu_shop'));
-          return;
-        }
+        editLastBotMessage(
+          `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━\n\n<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`,
+          [
+            [
+              {
+                text: "BACK TO PANELS",
+                callback_data: "menu_shop",
+                icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
+                style: "danger"
+              }
+            ]
+          ]
+        );
+        return;
       }
 
       const kb: InlineKeyboardButton[][] = availablePanels.map(panel => {

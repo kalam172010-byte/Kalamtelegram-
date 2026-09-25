@@ -111,62 +111,9 @@
       "role": "Regular"
     }
   ],
-  "products": [
-    {
-      "name": "1 Day",
-      "panel_name": "TEST PANEL",
-      "category": "ANDROID NON ROOT PANEL",
-      "price_inr": 100,
-      "reseller_price": 80,
-      "validity": "1 Day",
-      "is_active": 1,
-      "id": 1790297431005,
-      "reseller_price_inr": 100,
-      "stock": 3
-    }
-  ],
-  "productKeys": [
-    {
-      "id": 1790333886147,
-      "product_id": 1790297431005,
-      "key_text": "KALAM-TEST-VIP-KEY-3",
-      "is_used": 0
-    },
-    {
-      "id": 1790333884236,
-      "product_id": 1790297431005,
-      "key_text": "KALAM-TEST-VIP-KEY-2",
-      "is_used": 0
-    },
-    {
-      "id": 1790333883511,
-      "product_id": 1790297431005,
-      "key_text": "KALAM-TEST-VIP-KEY-1",
-      "is_used": 0
-    },
-    {
-      "id": 1790297423312,
-      "product_id": 1790297431005,
-      "key_text": "KEY2",
-      "is_used": 1
-    },
-    {
-      "id": 1790297428794,
-      "product_id": 1790297431005,
-      "key_text": "KEY1",
-      "is_used": 0
-    }
-  ],
-  "orders": [
-    {
-      "id": 1790333870782,
-      "user_id": 12846461,
-      "product_name": "TEST PANEL - 1 Day",
-      "price_paid": 100,
-      "delivered_key": "KEY2",
-      "purchase_date": "2026-09-25T10:57:50.782Z"
-    }
-  ],
+  "products": [],
+  "productKeys": [],
+  "orders": [],
   "tickets": [],
   "coupons": [
     {
@@ -212,6 +159,13 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790352296158,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 16:04:56"
+    },
     {
       "id": 1790334336695,
       "user_id": 12846461,
@@ -1348,6 +1302,9 @@
   },
   "fsmStates": {
     "5255460348": {
+      "state": ""
+    },
+    "8282895979": {
       "state": ""
     }
   },
