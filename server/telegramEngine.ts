@@ -2328,16 +2328,19 @@ class TelegramEngine {
         );
       }
 
-      // If still not found, gracefully open the store catalog instead of showing dead-end error
+      // If product not found by ID or panel name, it was deleted or deactivated
       if (!refProduct || refProduct.is_active === 0) {
-        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
-        if (anyActive) {
-          refProduct = anyActive;
-        } else {
-          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
-          await this.sendShopCategories(chatId, user, messageId);
-          return;
-        }
+        await this.answerCallback(cb.id, '❌ This panel is no longer available.', true);
+        const text = `❌ <b>PANEL NOT AVAILABLE</b>\n\n` +
+          `<i>This panel or package has been removed from the store catalog.</i>`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Browse Store Catalog', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
       }
 
       const targetCategory = refProduct.category;
@@ -2459,14 +2462,17 @@ class TelegramEngine {
       }
 
       if (!product || product.is_active === 0) {
-        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
-        if (anyActive) {
-          product = anyActive;
-        } else {
-          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
-          await this.sendShopCategories(chatId, user, messageId);
-          return;
-        }
+        await this.answerCallback(cb.id, '❌ This product plan is no longer available.', true);
+        const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
+          `<i>This package plan has been removed from the store catalog.</i>`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Browse Store Catalog', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
       }
 
       const userPrice = this.getUserPrice(user, product);
@@ -2616,14 +2622,17 @@ class TelegramEngine {
       }
 
       if (!product || product.is_active === 0) {
-        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
-        if (anyActive) {
-          product = anyActive;
-        } else {
-          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
-          await this.sendShopCategories(chatId, user, messageId);
-          return;
-        }
+        await this.answerCallback(cb.id, '❌ This product is no longer available to buy.', true);
+        const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
+          `<i>This package has been removed or is no longer available for order.</i>`;
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🛒 Browse Store Catalog', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, text, keyboard);
+        return;
       }
 
       if (product.is_maintenance) {

@@ -11,7 +11,7 @@ import {
   setDoc as rawSetDoc, 
   updateDoc as rawUpdateDoc, 
   deleteDoc as rawDeleteDoc, 
-  onSnapshot, 
+  onSnapshot as rawOnSnapshot, 
   query, 
   where,
   type Firestore,
@@ -150,17 +150,14 @@ function handleFirestoreWriteError(err: any) {
   }
 }
 
-// Safe onSnapshot wrapper to prevent unhandled gRPC Write/Listen stream errors
+// Safe onSnapshot wrapper to ensure real-time listeners are always active with graceful error handling
 export function onSnapshotSafe(
   reference: any,
   onNext: (snapshot: any) => void,
   onError?: (error: any) => void
 ): () => void {
-  if (isClientFirestoreDisabled()) {
-    return () => {};
-  }
   try {
-    return onSnapshot(
+    return rawOnSnapshot(
       reference,
       onNext,
       (err: any) => {
@@ -178,13 +175,12 @@ export function onSnapshotSafe(
 
 // Resilient wrapper around setDoc with timeout race
 export async function setDoc<T>(documentRef: DocumentReference<T, any>, data: any, options?: SetOptions): Promise<void> {
-  if (isClientFirestoreDisabled()) return;
   try {
     const writePromise = options 
       ? rawSetDoc(documentRef as any, data, options) 
       : rawSetDoc(documentRef as any, data);
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Write timeout')), 3500)
+      setTimeout(() => reject(new Error('Write timeout')), 5000)
     );
     await Promise.race([writePromise, timeoutPromise]);
   } catch (err: any) {
@@ -194,11 +190,10 @@ export async function setDoc<T>(documentRef: DocumentReference<T, any>, data: an
 
 // Resilient wrapper around updateDoc with timeout race
 export async function updateDoc<T extends Record<string, any>>(documentRef: DocumentReference<T, any>, data: UpdateData<T>): Promise<void> {
-  if (isClientFirestoreDisabled()) return;
   try {
     const writePromise = rawUpdateDoc(documentRef as any, data as any);
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Update timeout')), 3500)
+      setTimeout(() => reject(new Error('Update timeout')), 5000)
     );
     await Promise.race([writePromise, timeoutPromise]);
   } catch (err: any) {
@@ -208,11 +203,10 @@ export async function updateDoc<T extends Record<string, any>>(documentRef: Docu
 
 // Resilient wrapper around deleteDoc with timeout race
 export async function deleteDoc(documentRef: DocumentReference<any, any>): Promise<void> {
-  if (isClientFirestoreDisabled()) return;
   try {
     const writePromise = rawDeleteDoc(documentRef);
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Delete timeout')), 3500)
+      setTimeout(() => reject(new Error('Delete timeout')), 5000)
     );
     await Promise.race([writePromise, timeoutPromise]);
   } catch (err: any) {

@@ -636,7 +636,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2.1 Firestore onSnapshot Real-Time Listener for Products Catalog
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
-      if (snapshot && !snapshot.empty) {
+      if (snapshot) {
         const cloudProducts: Product[] = [];
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
@@ -649,12 +649,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         });
-        if (cloudProducts.length > 0) {
-          setProducts(cloudProducts);
-          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
-          offlineStorage.saveProducts(cloudProducts);
-          setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
-        }
+        setProducts(cloudProducts);
+        localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
+        offlineStorage.saveProducts(cloudProducts);
+        setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
       }
     }, (err: any) => {
       console.warn('Firestore products onSnapshot notice:', err?.message || err);
@@ -662,7 +660,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2.2 Firestore onSnapshot Real-Time Listener for Product Keys
     const unsubKeys = onSnapshot(collection(db, 'keys'), (snapshot: any) => {
-      if (snapshot && !snapshot.empty) {
+      if (snapshot) {
         const cloudKeys: ProductKey[] = [];
         snapshot.forEach((docSnap: any) => {
           const k = docSnap.data() as ProductKey;
@@ -670,10 +668,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             cloudKeys.push(k);
           }
         });
-        if (cloudKeys.length > 0) {
-          setProductKeys(cloudKeys);
-          localStorage.setItem('kalam_bot_keys', JSON.stringify(cloudKeys));
-        }
+        setProductKeys(cloudKeys);
+        localStorage.setItem('kalam_bot_keys', JSON.stringify(cloudKeys));
       }
     }, (err: any) => {
       console.warn('Firestore keys onSnapshot notice:', err?.message || err);
@@ -722,6 +718,86 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore settings sync notice:', err?.message || err);
     });
 
+    // 4. Firestore Sync for Users
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudUsers: User[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const u = docSnap.data() as User;
+          if (u && u.user_id) cloudUsers.push(u);
+        });
+        if (cloudUsers.length > 0) {
+          setUsers(prev => {
+            const map = new Map<number, User>();
+            prev.forEach(u => map.set(u.user_id, u));
+            cloudUsers.forEach(cu => map.set(cu.user_id, { ...(map.get(cu.user_id) || {}), ...cu }));
+            const merged = Array.from(map.values());
+            localStorage.setItem('kalam_bot_users', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore users sync notice:', err?.message || err);
+    });
+
+    // 5. Firestore Sync for Orders
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudOrders: Order[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const o = docSnap.data() as Order;
+          if (o && o.id) cloudOrders.push(o);
+        });
+        if (cloudOrders.length > 0) {
+          setOrders(prev => {
+            const map = new Map<number, Order>();
+            prev.forEach(o => map.set(o.id, o));
+            cloudOrders.forEach(co => map.set(co.id, co));
+            const merged = Array.from(map.values()).sort((a, b) => (new Date(b.purchase_date).getTime() || b.id) - (new Date(a.purchase_date).getTime() || a.id));
+            localStorage.setItem('kalam_bot_orders', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore orders sync notice:', err?.message || err);
+    });
+
+    // 6. Firestore Sync for Tickets
+    const unsubTickets = onSnapshot(collection(db, 'tickets'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudTickets: Ticket[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const t = docSnap.data() as Ticket;
+          if (t && t.id) cloudTickets.push(t);
+        });
+        if (cloudTickets.length > 0) {
+          setTickets(cloudTickets);
+          localStorage.setItem('kalam_bot_tickets', JSON.stringify(cloudTickets));
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore tickets sync notice:', err?.message || err);
+    });
+
+    // 7. Firestore Sync for Coupons
+    const unsubCoupons = onSnapshot(collection(db, 'coupons'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudCoupons: Coupon[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const c = docSnap.data() as Coupon;
+          if (c && c.code) cloudCoupons.push(c);
+        });
+        if (cloudCoupons.length > 0) {
+          setCoupons(cloudCoupons);
+          localStorage.setItem('kalam_bot_coupons', JSON.stringify(cloudCoupons));
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore coupons sync notice:', err?.message || err);
+    });
+
     return () => {
       clearInterval(syncInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -731,6 +807,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubProducts();
       unsubKeys();
       unsubSettings();
+      unsubUsers();
+      unsubOrders();
+      unsubTickets();
+      unsubCoupons();
       if (eventSource) {
         eventSource.close();
       }
@@ -4140,6 +4220,19 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     if (!key.is_used) {
       setProducts(prev => prev.map(p => String(p.id) === String(key.product_id) ? { ...p, stock: Math.max(0, (p.stock || 0) - 1) } : p));
     }
+
+    // Direct Firestore Delete
+    deleteDoc(doc(db, 'keys', strKeyId)).catch(() => {});
+
+    // Sync to Backend Server & Telegram Bot Engine
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete_key',
+        keyId: strKeyId
+      })
+    }).catch(err => console.warn('Failed to delete key from server:', err));
   };
 
   const updateUserBalance = (userId: number, delta: number, reason = 'Admin Adjustment', notifyTelegram = true) => {
@@ -4260,31 +4353,83 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const toggleUserBan = (userId: number) => {
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_banned: u.is_banned ? 0 : 1 } : u));
+    let newStatus = 0;
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newStatus = u.is_banned ? 0 : 1;
+        return { ...u, is_banned: newStatus };
+      }
+      return u;
+    }));
     logActivity(12846461, 'ADMIN_TOGGLE_BAN', `User #${userId}`);
+    setDoc(doc(db, 'users', String(userId)), { is_banned: newStatus, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_role', userId, is_banned: newStatus })
+    }).catch(() => {});
   };
 
   const warnUser = (userId: number, message: string) => {
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, warnings: u.warnings + 1 } : u));
+    let count = 1;
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        count = (u.warnings || 0) + 1;
+        return { ...u, warnings: count };
+      }
+      return u;
+    }));
     logActivity(12846461, 'ADMIN_WARN_USER', `User #${userId}: ${message}`);
+    setDoc(doc(db, 'users', String(userId)), { warnings: count, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_role', userId, warning_count: count })
+    }).catch(() => {});
   };
 
   const toggleUserVip = (userId: number) => {
-    setUsers(prev => prev.map(u => u.user_id === userId ? {
-      ...u,
-      is_vip: u.is_vip ? 0 : 1,
-      vip_since: u.is_vip ? undefined : new Date().toISOString().substring(0, 10),
-      account_type: 'Regular'
-    } : u));
+    let newVip = 0;
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newVip = u.is_vip ? 0 : 1;
+        return {
+          ...u,
+          is_vip: newVip,
+          vip_since: newVip ? new Date().toISOString().substring(0, 10) : undefined,
+          account_type: 'Regular'
+        };
+      }
+      return u;
+    }));
+    setDoc(doc(db, 'users', String(userId)), { is_vip: newVip, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_role', userId, is_vip: newVip })
+    }).catch(() => {});
   };
 
   const toggleUserReseller = (userId: number) => {
-    setUsers(prev => prev.map(u => u.user_id === userId ? {
-      ...u,
-      is_reseller: u.is_reseller ? 0 : 1,
-      reseller_since: u.is_reseller ? undefined : new Date().toISOString().substring(0, 10),
-      account_type: u.is_reseller ? 'Regular' : 'Reseller'
-    } : u));
+    let newReseller = 0;
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newReseller = u.is_reseller ? 0 : 1;
+        return {
+          ...u,
+          is_reseller: newReseller,
+          reseller_since: newReseller ? new Date().toISOString().substring(0, 10) : undefined,
+          account_type: newReseller ? 'Reseller' : 'Regular'
+        };
+      }
+      return u;
+    }));
+    setDoc(doc(db, 'users', String(userId)), { is_reseller: newReseller, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_role', userId, is_reseller: newReseller })
+    }).catch(() => {});
   };
 
   const createNewCoupon = (code: string, amount: number, uses: number) => {
@@ -4297,24 +4442,30 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     };
     setCoupons(prev => [newCoupon, ...prev.filter(c => c.code !== cleanCode)]);
     logActivity(12846461, 'ADMIN_CREATE_COUPON', `Code: ${cleanCode}, Amount: ${amount}, Uses: ${uses}`);
+    setDoc(doc(db, 'coupons', cleanCode), newCoupon, { merge: true }).catch(() => {});
   };
 
   const deleteCoupon = (code: string) => {
-    setCoupons(prev => prev.filter(c => c.code !== code));
+    const cleanCode = code.trim().toUpperCase();
+    setCoupons(prev => prev.filter(c => c.code !== cleanCode));
+    deleteDoc(doc(db, 'coupons', cleanCode)).catch(() => {});
   };
 
   const replyToTicket = (ticketId: number, replyText: string) => {
+    const repliedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
     setTickets(prev => prev.map(t => t.id === ticketId ? {
       ...t,
       status: 'Closed',
       admin_reply: replyText,
-      replied_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+      replied_at: repliedAt
     } : t));
     logActivity(12846461, 'ADMIN_REPLY_TICKET', `Ticket #${ticketId}`);
+    setDoc(doc(db, 'tickets', String(ticketId)), { status: 'Closed', admin_reply: replyText, replied_at: repliedAt }, { merge: true }).catch(() => {});
   };
 
   const closeTicket = (ticketId: number) => {
     setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: 'Closed' } : t));
+    setDoc(doc(db, 'tickets', String(ticketId)), { status: 'Closed' }, { merge: true }).catch(() => {});
   };
 
   const [botStatus, setBotStatus] = useState<any>(null);
