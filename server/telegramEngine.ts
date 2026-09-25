@@ -48,29 +48,40 @@ export function normalizeCategoryName(str: string): string {
   return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-export function isCategoryMatch(prodCategory: string, targetCategory: string): boolean {
-  if (!targetCategory || !prodCategory) return true;
-  const c2 = normalizeCategoryName(targetCategory);
-  if (!c2 || c2.includes('all') || c2.includes('general')) return true;
-  const c1 = normalizeCategoryName(prodCategory);
-  if (!c1) return true;
-  if (c1 === c2) return true;
+export function isCategoryMatch(prodCategory?: string, targetCategory?: string): boolean {
+  if (!targetCategory || !prodCategory) return false;
+  const p = (prodCategory || '').trim().toLowerCase();
+  const t = (targetCategory || '').trim().toLowerCase();
+  if (p === t) return true;
 
-  // Strict non-root vs root separation so Non-Root products never leak into Root categories
-  const isNonRoot1 = c1.includes('nonroot') || c1.includes('non');
-  const isNonRoot2 = c2.includes('nonroot') || c2.includes('non');
-  if (isNonRoot1 && isNonRoot2) return true;
-  if (isNonRoot1 !== isNonRoot2) return false;
+  const pNorm = normalizeCategoryName(p);
+  const tNorm = normalizeCategoryName(t);
+  if (!pNorm || !tNorm) return false;
+  if (pNorm === tNorm) return true;
 
-  const isRoot1 = c1.includes('root');
-  const isRoot2 = c2.includes('root');
-  if (isRoot1 && isRoot2) return true;
+  // Strict non-root vs root separation
+  const isNonRootP = pNorm.includes('nonroot') || (pNorm.includes('non') && pNorm.includes('root'));
+  const isNonRootT = tNorm.includes('nonroot') || (tNorm.includes('non') && tNorm.includes('root')) || tNorm === 'catnonroot' || tNorm === 'nonroot';
+  if (isNonRootP || isNonRootT) {
+    return Boolean(isNonRootP && isNonRootT);
+  }
 
-  const isPc1 = c1.includes('pc') || c1.includes('emulator') || c1.includes('windows');
-  const isPc2 = c2.includes('pc') || c2.includes('emulator') || c2.includes('windows');
-  if (isPc1 && isPc2) return true;
+  // Strict root separation (pure root, NOT non-root)
+  const isRootP = pNorm.includes('root') && !pNorm.includes('non');
+  const isRootT = (tNorm.includes('root') && !tNorm.includes('non')) || tNorm === 'catroot' || tNorm === 'root';
+  if (isRootP || isRootT) {
+    return Boolean(isRootP && isRootT);
+  }
 
-  return c1 === c2 || c1.includes(c2) || c2.includes(c1);
+  // Strict PC / Emulator separation
+  const isPcP = pNorm.includes('pc') || pNorm.includes('emulator') || pNorm.includes('windows');
+  const isPcT = tNorm.includes('pc') || tNorm.includes('emulator') || tNorm.includes('windows') || tNorm === 'catpc';
+  if (isPcP || isPcT) {
+    return Boolean(isPcP && isPcT);
+  }
+
+  // Custom categories must match exact normalized names
+  return pNorm === tNorm;
 }
 
 class TelegramEngine {
@@ -2676,11 +2687,7 @@ class TelegramEngine {
 
       let panelPlans = dbStore.getData().products.filter(p =>
         p.is_active !== 0 &&
-        (
-          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
-          normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName) ||
-          isCategoryMatch(p.category, targetCategory)
-        ) &&
+        isCategoryMatch(p.category, targetCategory) &&
         (
           (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
           normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)

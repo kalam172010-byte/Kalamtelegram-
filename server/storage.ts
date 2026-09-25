@@ -31,36 +31,50 @@ import {
   INITIAL_BOTS
 } from '../src/data/defaultData';
 
-function matchCategoryFlexible(c1Str: string, c2Str: string): boolean {
+export function matchCategoryFlexible(c1Str?: string, c2Str?: string): boolean {
   if (!c1Str || !c2Str) return false;
-  const c1 = (c1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const c2 = (c2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!c1 || !c2) return false;
-  if (c1 === c2) return true;
+  const p = (c1Str || '').trim().toLowerCase();
+  const t = (c2Str || '').trim().toLowerCase();
+  if (p === t) return true;
 
-  // Strict non-root vs root separation
-  const isNonRoot1 = c1.includes('nonroot') || c1.includes('non');
-  const isNonRoot2 = c2.includes('nonroot') || c2.includes('non');
-  if (isNonRoot1 && isNonRoot2) return true;
-  if (isNonRoot1 !== isNonRoot2) return false;
+  const pNorm = (p || '').replace(/[^a-z0-9]/g, '');
+  const tNorm = (t || '').replace(/[^a-z0-9]/g, '');
+  if (!pNorm || !tNorm) return false;
+  if (pNorm === tNorm) return true;
 
-  const isRoot1 = c1.includes('root');
-  const isRoot2 = c2.includes('root');
-  if (isRoot1 && isRoot2) return true;
+  // Strict Non-Root
+  const isNonRootP = pNorm.includes('nonroot') || (pNorm.includes('non') && pNorm.includes('root'));
+  const isNonRootT = tNorm.includes('nonroot') || (tNorm.includes('non') && tNorm.includes('root')) || tNorm === 'catnonroot' || tNorm === 'nonroot';
+  if (isNonRootP || isNonRootT) {
+    return Boolean(isNonRootP && isNonRootT);
+  }
 
-  const isPc1 = c1.includes('pc') || c1.includes('emulator') || c1.includes('windows');
-  const isPc2 = c2.includes('pc') || c2.includes('emulator') || c2.includes('windows');
-  if (isPc1 && isPc2) return true;
+  // Strict Root
+  const isRootP = pNorm.includes('root') && !pNorm.includes('non');
+  const isRootT = (tNorm.includes('root') && !tNorm.includes('non')) || tNorm === 'catroot' || tNorm === 'root';
+  if (isRootP || isRootT) {
+    return Boolean(isRootP && isRootT);
+  }
 
-  return c1 === c2 || c1.includes(c2) || c2.includes(c1);
+  // Strict PC / Emulator
+  const isPcP = pNorm.includes('pc') || pNorm.includes('emulator') || pNorm.includes('windows');
+  const isPcT = tNorm.includes('pc') || tNorm.includes('emulator') || tNorm.includes('windows') || tNorm === 'catpc';
+  if (isPcP || isPcT) {
+    return Boolean(isPcP && isPcT);
+  }
+
+  return pNorm === tNorm;
 }
 
-function matchNameFlexible(n1Str: string, n2Str: string): boolean {
+export function matchNameFlexible(n1Str?: string, n2Str?: string): boolean {
   if (!n1Str || !n2Str) return false;
-  const n1 = (n1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const n2 = (n2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!n1 || !n2) return false;
-  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+  const n1 = (n1Str || '').trim().toLowerCase();
+  const n2 = (n2Str || '').trim().toLowerCase();
+  if (n1 === n2) return true;
+  const n1Norm = n1.replace(/[^a-z0-9]/g, '');
+  const n2Norm = n2.replace(/[^a-z0-9]/g, '');
+  if (!n1Norm || !n2Norm) return false;
+  return n1Norm === n2Norm;
 }
 
 export interface DatabaseSchema {

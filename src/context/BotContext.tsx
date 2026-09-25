@@ -55,6 +55,7 @@ import { DEFAULT_EMOJIS,
 } from '../data/defaultData';
 import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
 import { offlineStorage } from '../utils/offlineStorage';
+import { sortProductsByDuration, isCategoryMatch, normalizeCategoryName } from '../utils/durationSorter';
 
 export function isMaintenanceActive(settings?: { bot_status?: string; maintenance_mode?: boolean | string | number } | null): boolean {
   if (!settings) return false;
@@ -2207,6 +2208,9 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       setCurrentFsmState(null);
       logActivity(currentUser.user_id, 'VIEW_SHOP');
 
+      const activeProds = products.filter(p => p.is_active !== 0);
+      const uniqueCats = Array.from(new Set(activeProds.map(p => (p.category || '').trim()).filter(Boolean)));
+
       const kb: InlineKeyboardButton[][] = FIXED_CATEGORIES.map(cat => ({
         text: cat,
         callback_data: `cat_${cat}`,
@@ -2214,9 +2218,21 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         style: 'primary' as const
       })).map(btn => [btn]);
 
+      // Add custom categories dynamically if present
+      for (const customCat of uniqueCats) {
+        if (!isCategoryMatch(customCat, 'nonroot') && !isCategoryMatch(customCat, 'root') && !isCategoryMatch(customCat, 'pc')) {
+          kb.push([{
+            text: `📦 ${customCat.toUpperCase()}`,
+            callback_data: `cat_${customCat}`,
+            icon_custom_emoji_id: DEFAULT_EMOJIS.product_store,
+            style: 'primary' as const
+          }]);
+        }
+      }
+
       kb.push(getBackKeyboard('back_main')[0]);
 
-      const text = `${getEmojiTag('product_store')} <b><u>SELECT PRODUCT PANEL</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a panel to view its packages:</b>`;
+      const text = `${getEmojiTag('product_store')} <b><u>SELECT PRODUCT PANEL</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a category below to view panels:</b>`;
       editLastBotMessage(text, kb);
       return;
     }
@@ -2224,20 +2240,19 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     // 3. Category Selected: View Panels
     if (callbackData.startsWith('cat_')) {
       const category = callbackData.replace('cat_', '');
-      const catNorm = category.toLowerCase().trim();
-      const availablePanels = Array.from(new Set(
-        products
-          .filter(p => {
-            const pCat = (p.category || '').toLowerCase().trim();
-            const matchCat = pCat === catNorm ||
-              (catNorm === 'all' || catNorm === 'all products') ||
-              (pCat.includes('nonroot') && catNorm.includes('nonroot')) ||
-              (!pCat.includes('non') && pCat.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
-              (pCat.includes('pc') && catNorm.includes('pc'));
-            return matchCat && p.is_active !== 0 && (p.panel_name || p.name);
-          })
-          .map(p => p.panel_name || p.name)
-      ));
+      const catProds = products.filter(p => p.is_active !== 0 && isCategoryMatch(p.category, category));
+
+      // Group panels strictly within this category
+      const panelMap = new Map<string, Product[]>();
+      for (const prod of catProds) {
+        const pName = (prod.panel_name || prod.name || 'VIP PANEL').trim();
+        if (!panelMap.has(pName)) {
+          panelMap.set(pName, []);
+        }
+        panelMap.get(pName)!.push(prod);
+      }
+
+      const availablePanels = Array.from(panelMap.keys());
 
       if (availablePanels.length === 0) {
         editLastBotMessage(
@@ -2245,7 +2260,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
           [
             [
               {
-                text: "BACK TO PANELS",
+                text: "BACK TO CATEGORIES",
                 callback_data: "menu_shop",
                 icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
                 style: "danger"
@@ -2256,27 +2271,24 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         return;
       }
 
-      const kb: InlineKeyboardButton[][] = availablePanels.map(panel => {
-        const panelProds = products.filter(p =>
-          (p.panel_name || p.name || '').toLowerCase().trim() === panel.toLowerCase().trim() &&
-          p.is_active !== 0
-        );
+      const kb: InlineKeyboardButton[][] = availablePanels.map(panelName => {
+        const panelProds = sortProductsByDuration(panelMap.get(panelName) || []);
         const firstProd = panelProds[0];
         const isAllMaint = panelProds.length > 0 && panelProds.every(p => Boolean(p.is_maintenance));
         const refId = firstProd ? firstProd.id : 0;
 
         if (isAllMaint) {
           return [{
-            text: `🛠️ ${panel} (Under Maintenance)`,
-            callback_data: `maint_pnl_${refId || encodeURIComponent(panel)}`,
+            text: `🛠️ ${panelName} (Under Maintenance)`,
+            callback_data: `maint_pnl_${refId || encodeURIComponent(panelName)}`,
             icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
             style: 'danger' as const
           }];
         }
 
         return [{
-          text: `📦 ${panel} (${panelProds.length} ${panelProds.length === 1 ? 'Plan' : 'Plans'})`,
-          callback_data: refId ? `pnl_${refId}` : `pnl_${encodeURIComponent(panel)}`,
+          text: `📦 ${panelName} (${panelProds.length} ${panelProds.length === 1 ? 'Plan' : 'Plans'})`,
+          callback_data: refId ? `pnl_${refId}` : `pnl_${encodeURIComponent(panelName)}`,
           icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
           style: 'primary' as const
         }];
@@ -2284,7 +2296,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       kb.push([
         {
-          text: "BACK TO PANELS",
+          text: "BACK TO CATEGORIES",
           callback_data: "menu_shop",
           icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
           style: "danger"
@@ -2307,11 +2319,12 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       const refProd = products.find(p => String(p.id) === String(rawPayload) || Number(p.id) === Number(rawPayload));
       if (refProd) {
         category = refProd.category;
-        panelName = refProd.panel_name || refProd.name;
-        const targetPanelNorm = panelName.toLowerCase().trim();
+        panelName = (refProd.panel_name || refProd.name).trim();
+        const targetPanelNorm = panelName.toLowerCase();
         prods = products.filter(p =>
-          (p.panel_name || p.name || '').toLowerCase().trim() === targetPanelNorm &&
-          p.is_active !== 0
+          p.is_active !== 0 &&
+          isCategoryMatch(p.category, category) &&
+          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelNorm
         );
         if (prods.length === 0) {
           prods = [refProd];
@@ -2319,15 +2332,16 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       } else {
         const decodedPayload = decodeURIComponent(rawPayload).toLowerCase().trim();
         prods = products.filter(p =>
-          (p.panel_name || p.name || '').toLowerCase().trim() === decodedPayload &&
-          p.is_active !== 0
+          p.is_active !== 0 &&
+          (p.panel_name || p.name || '').trim().toLowerCase() === decodedPayload
         );
         if (prods.length > 0) {
-          panelName = prods[0].panel_name || prods[0].name;
+          panelName = (prods[0].panel_name || prods[0].name).trim();
           category = prods[0].category;
         }
       }
 
+      prods = sortProductsByDuration(prods);
       console.log(`[BotContext] [TRACE] Found ${prods.length} duration plans:`, prods.map(p => ({ id: p.id, name: p.name, validity: p.validity, price: p.price_inr })));
 
       if (prods.length === 0) {

@@ -76,3 +76,43 @@ export function sortProductsByDuration<T extends { validity?: string; name?: str
     return (a.price_inr || 0) - (b.price_inr || 0);
   });
 }
+
+export function normalizeCategoryName(str?: string): string {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function isCategoryMatch(prodCategory?: string, targetCategory?: string): boolean {
+  if (!targetCategory || !prodCategory) return false;
+  const p = (prodCategory || '').trim().toLowerCase();
+  const t = (targetCategory || '').trim().toLowerCase();
+  if (p === t) return true;
+
+  const pNorm = normalizeCategoryName(p);
+  const tNorm = normalizeCategoryName(t);
+  if (!pNorm || !tNorm) return false;
+  if (pNorm === tNorm) return true;
+
+  // Strict non-root vs root separation
+  const isNonRootP = pNorm.includes('nonroot') || (pNorm.includes('non') && pNorm.includes('root'));
+  const isNonRootT = tNorm.includes('nonroot') || (tNorm.includes('non') && tNorm.includes('root')) || tNorm === 'catnonroot' || tNorm === 'nonroot';
+  if (isNonRootP || isNonRootT) {
+    return Boolean(isNonRootP && isNonRootT);
+  }
+
+  // Strict root separation (pure root, NOT non-root)
+  const isRootP = pNorm.includes('root') && !pNorm.includes('non');
+  const isRootT = (tNorm.includes('root') && !tNorm.includes('non')) || tNorm === 'catroot' || tNorm === 'root';
+  if (isRootP || isRootT) {
+    return Boolean(isRootP && isRootT);
+  }
+
+  // Strict PC / Emulator separation
+  const isPcP = pNorm.includes('pc') || pNorm.includes('emulator') || pNorm.includes('windows');
+  const isPcT = tNorm.includes('pc') || tNorm.includes('emulator') || tNorm.includes('windows') || tNorm === 'catpc';
+  if (isPcP || isPcT) {
+    return Boolean(isPcP && isPcT);
+  }
+
+  // Custom categories must match exact normalized names
+  return pNorm === tNorm;
+}
