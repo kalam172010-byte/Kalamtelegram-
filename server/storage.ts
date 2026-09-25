@@ -36,10 +36,22 @@ function matchCategoryFlexible(c1Str: string, c2Str: string): boolean {
   const c2 = (c2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!c1 || !c2) return false;
   if (c1 === c2) return true;
-  if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
-  if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
-  if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
-  return false;
+
+  // Strict non-root vs root separation
+  const isNonRoot1 = c1.includes('nonroot') || c1.includes('non');
+  const isNonRoot2 = c2.includes('nonroot') || c2.includes('non');
+  if (isNonRoot1 && isNonRoot2) return true;
+  if (isNonRoot1 !== isNonRoot2) return false;
+
+  const isRoot1 = c1.includes('root');
+  const isRoot2 = c2.includes('root');
+  if (isRoot1 && isRoot2) return true;
+
+  const isPc1 = c1.includes('pc') || c1.includes('emulator') || c1.includes('windows');
+  const isPc2 = c2.includes('pc') || c2.includes('emulator') || c2.includes('windows');
+  if (isPc1 && isPc2) return true;
+
+  return c1 === c2 || c1.includes(c2) || c2.includes(c1);
 }
 
 function matchNameFlexible(n1Str: string, n2Str: string): boolean {
@@ -47,7 +59,7 @@ function matchNameFlexible(n1Str: string, n2Str: string): boolean {
   const n1 = (n1Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const n2 = (n2Str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!n1 || !n2) return false;
-  return n1 === n2;
+  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
 }
 
 export interface DatabaseSchema {
@@ -90,12 +102,7 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        let products: Product[] = Array.isArray(parsed.products)
-          ? parsed.products.filter((p: any) => {
-              const name = ((p.panel_name || p.name || '') + '').toLowerCase();
-              return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
-            })
-          : [];
+        let products: Product[] = Array.isArray(parsed.products) ? parsed.products : [];
         let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
 
         // Deduplicate and ensure stable unique IDs for all duration plans
@@ -109,6 +116,7 @@ export class DatabaseStore {
           return {
             ...p,
             id: currentId,
+            is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
             reseller_price: p.reseller_price ?? p.price_inr,
             reseller_price_inr: p.reseller_price_inr ?? p.price_inr
           };
@@ -246,26 +254,24 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Sync Products & Keys (Remote is source of truth for Cloud Firestore state)
-      if (Array.isArray(remote.products)) {
-        const cleanRemoteProducts = remote.products
-          .filter((p: any) => {
-            const name = ((p.panel_name || p.name || '') + '').toLowerCase();
-            return !name.includes('drip client') && !name.includes('mst panel') && !name.includes('drip panel');
-          })
-          .map((p: any, idx: number) => ({
+      // 3. Sync Products & Keys (Only restore from remote if local disk is empty)
+      if (Array.isArray(remote.products) && remote.products.length > 0) {
+        if (!this.data.products || this.data.products.length === 0) {
+          console.log(`⚡ Firestore: Restoring ${remote.products.length} products to fresh disk store...`);
+          this.data.products = remote.products.map((p: any, idx: number) => ({
             ...p,
-            id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+            id: p.id !== undefined && p.id !== null ? p.id : (1000 + idx),
             reseller_price: p.reseller_price ?? p.price_inr,
             reseller_price_inr: p.reseller_price_inr ?? p.price_inr
           }));
-
-        this.data.products = cleanRemoteProducts;
+        }
       }
 
       if (Array.isArray(remote.productKeys)) {
-        const validProductIds = new Set(this.data.products.map(p => String(p.id)));
-        this.data.productKeys = remote.productKeys.filter((k: any) => validProductIds.has(String(k.product_id)));
+        if (!this.data.productKeys || this.data.productKeys.length === 0) {
+          const validProductIds = new Set(this.data.products.map(p => String(p.id)));
+          this.data.productKeys = remote.productKeys.filter((k: any) => validProductIds.has(String(k.product_id)));
+        }
       }
 
       // 4. Merge Orders, Transactions, Tickets, Bots, Emojis, FSM States
@@ -444,31 +450,94 @@ export class DatabaseStore {
       ? product.id
       : (Date.now() + Math.floor(Math.random() * 10000));
 
+    const cleanKeys = Array.isArray(keys) ? keys.map(k => k.trim()).filter(Boolean) : [];
+    const stockCount = cleanKeys.length > 0 ? cleanKeys.length : (product.stock || 0);
+
     const finalProduct: Product = {
       ...product,
       id: finalId,
+      panel_name: (product.panel_name || product.name || 'VIP PANEL').trim(),
+      name: (product.name || 'Plan').trim(),
+      category: (product.category || 'ANDROID NON ROOT PANEL').trim(),
+      stock: stockCount,
+      is_active: product.is_active !== undefined ? (product.is_active === 0 ? 0 : 1) : 1,
       reseller_price: product.reseller_price ?? product.price_inr,
       reseller_price_inr: product.reseller_price_inr ?? product.price_inr
     };
-    this.data.products.unshift(finalProduct);
 
-    if (Array.isArray(keys) && keys.length > 0) {
-      for (const k of keys) {
-        const cleanK = k.trim();
-        if (cleanK) {
-          this.data.productKeys.unshift({
-            id: Date.now() + Math.floor(Math.random() * 10000),
-            product_id: finalProduct.id,
-            key_text: cleanK,
-            is_used: 0
-          });
-        }
+    const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId));
+    if (existingIdx !== -1) {
+      this.data.products[existingIdx] = finalProduct;
+    } else {
+      this.data.products.unshift(finalProduct);
+    }
+
+    if (cleanKeys.length > 0) {
+      for (const cleanK of cleanKeys) {
+        this.data.productKeys.unshift({
+          id: Date.now() + Math.floor(Math.random() * 10000),
+          product_id: finalProduct.id,
+          key_text: cleanK,
+          is_used: 0
+        });
       }
     }
 
     syncProductToFirestore(finalProduct).catch(() => {});
     this.saveData(undefined, true);
     return finalProduct;
+  }
+
+  public addProductsBatch(products: Product[], keysMap?: Record<string, string[]>): Product[] {
+    const addedProducts: Product[] = [];
+    if (!Array.isArray(products) || products.length === 0) return addedProducts;
+
+    for (let i = 0; i < products.length; i++) {
+      const prod = products[i];
+      const finalId = (prod.id !== undefined && prod.id !== null)
+        ? prod.id
+        : (Date.now() + i + Math.floor(Math.random() * 10000));
+
+      const rawKeys = keysMap?.[String(prod.id)] || keysMap?.[String(finalId)] || keysMap?.[prod.name] || (prod as any).keys || [];
+      const cleanKeys = Array.isArray(rawKeys) ? rawKeys.map(k => String(k).trim()).filter(Boolean) : [];
+      const stockCount = cleanKeys.length > 0 ? cleanKeys.length : (prod.stock || 0);
+
+      const finalProduct: Product = {
+        ...prod,
+        id: finalId,
+        panel_name: (prod.panel_name || prod.name || 'VIP PANEL').trim(),
+        name: (prod.name || 'Plan').trim(),
+        category: (prod.category || 'ANDROID NON ROOT PANEL').trim(),
+        stock: stockCount,
+        is_active: prod.is_active !== undefined ? (prod.is_active === 0 ? 0 : 1) : 1,
+        reseller_price: prod.reseller_price ?? prod.price_inr,
+        reseller_price_inr: prod.reseller_price_inr ?? prod.price_inr
+      };
+
+      const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId));
+      if (existingIdx !== -1) {
+        this.data.products[existingIdx] = finalProduct;
+      } else {
+        this.data.products.unshift(finalProduct);
+      }
+
+      if (cleanKeys.length > 0) {
+        for (const cleanK of cleanKeys) {
+          this.data.productKeys.unshift({
+            id: Date.now() + i + Math.floor(Math.random() * 10000),
+            product_id: finalProduct.id,
+            key_text: cleanK,
+            is_used: 0
+          });
+        }
+      }
+
+      syncProductToFirestore(finalProduct).catch(() => {});
+      addedProducts.push(finalProduct);
+    }
+
+    this.saveData(undefined, true);
+    return addedProducts;
   }
 
   public updateProduct(id: number | string, updates: Partial<Product>): Product | null {
@@ -559,7 +628,7 @@ export class DatabaseStore {
           added++;
         }
       }
-      const prod = this.data.products.find(p => p.id === productId);
+      const prod = this.data.products.find(p => String(p.id) === String(productId));
       if (prod) {
         prod.stock = (prod.stock || 0) + added;
       }
@@ -573,7 +642,7 @@ export class DatabaseStore {
     if (!key) return false;
     this.data.productKeys = this.data.productKeys.filter(k => k.id !== keyId);
     if (!key.is_used) {
-      const prod = this.data.products.find(p => p.id === key.product_id);
+      const prod = this.data.products.find(p => String(p.id) === String(key.product_id));
       if (prod) {
         prod.stock = Math.max(0, (prod.stock || 0) - 1);
       }
@@ -650,6 +719,10 @@ export class DatabaseStore {
   }
 
   public resetToDefaults() {
+    const prevToken = this.data.settings?.bot_token || process.env.TELEGRAM_BOT_TOKEN || DEFAULT_SETTINGS.bot_token;
+    const prevUsername = this.data.settings?.bot_username || DEFAULT_SETTINGS.bot_username;
+    const prevAdminId = this.data.settings?.admin_id || (process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id);
+
     this.data = {
       users: INITIAL_USERS,
       products: INITIAL_PRODUCTS,
@@ -662,14 +735,15 @@ export class DatabaseStore {
       logs: [],
       settings: {
         ...DEFAULT_SETTINGS,
-        bot_token: process.env.TELEGRAM_BOT_TOKEN || DEFAULT_SETTINGS.bot_token,
-        admin_id: process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : DEFAULT_SETTINGS.admin_id
+        bot_token: prevToken,
+        bot_username: prevUsername,
+        admin_id: prevAdminId
       },
       emojis: DEFAULT_EMOJIS,
       fsmStates: {},
       bots: []
     };
-    this.saveData();
+    this.saveData(undefined, true);
   }
 }
 

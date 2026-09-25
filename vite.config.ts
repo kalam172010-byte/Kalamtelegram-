@@ -113,21 +113,19 @@ export default defineConfig(() => {
           ]
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
-          suppressWarnings: true
+          enabled: false,
         }
       })
     ],
     resolve: {
       alias: {
-        '@': path.resolve(import.meta.dirname, '.'),
+        '@': path.resolve(process.cwd(), '.'),
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // HMR is disabled in AI Studio iFrame / preview environment
+      hmr: false,
+      watch: null,
     },
   };
 });

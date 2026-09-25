@@ -111,8 +111,33 @@
       "role": "Regular"
     }
   ],
-  "products": [],
-  "productKeys": [],
+  "products": [
+    {
+      "name": "1 Day",
+      "panel_name": "TEST PANEL",
+      "category": "ANDROID NON ROOT PANEL",
+      "price_inr": 100,
+      "reseller_price": 80,
+      "validity": "1 Day",
+      "is_active": 1,
+      "id": 1790297431005,
+      "reseller_price_inr": 100
+    }
+  ],
+  "productKeys": [
+    {
+      "id": 1790297423312,
+      "product_id": 1790297431005,
+      "key_text": "KEY2",
+      "is_used": 0
+    },
+    {
+      "id": 1790297428794,
+      "product_id": 1790297431005,
+      "key_text": "KEY1",
+      "is_used": 0
+    }
+  ],
   "orders": [],
   "tickets": [],
   "coupons": [
@@ -159,6 +184,132 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790298610548,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 01:10:10"
+    },
+    {
+      "id": 1790297791741,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:56:31"
+    },
+    {
+      "id": 1790297774744,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:56:14"
+    },
+    {
+      "id": 1790297421382,
+      "user_id": 12846461,
+      "action": "CREATE_PRODUCT",
+      "details": "Created product: 1 Day",
+      "timestamp": "2026-09-25 00:50:21"
+    },
+    {
+      "id": 1790297203868,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:46:43"
+    },
+    {
+      "id": 1790297203129,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:46:43"
+    },
+    {
+      "id": 1790297031113,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:43:51"
+    },
+    {
+      "id": 1790297030380,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:43:50"
+    },
+    {
+      "id": 1790296824371,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:40:24"
+    },
+    {
+      "id": 1790296823645,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:40:23"
+    },
+    {
+      "id": 1790296809334,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:40:09"
+    },
+    {
+      "id": 1790296808578,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:40:08"
+    },
+    {
+      "id": 1790296755822,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:39:15"
+    },
+    {
+      "id": 1790296754595,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:39:14"
+    },
+    {
+      "id": 1790296723847,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:38:43"
+    },
+    {
+      "id": 1790296722635,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:38:42"
+    },
+    {
+      "id": 1790296709090,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 00:38:29"
+    },
+    {
+      "id": 1790296708359,
+      "user_id": 0,
+      "action": "BOT_AUTO_RESTART",
+      "details": "Auto-reinitialized bot engine without user intervention (Trigger #1)",
+      "timestamp": "2026-09-25 00:38:28"
+    },
     {
       "id": 1790256615775,
       "user_id": 12846461,
@@ -1063,74 +1214,16 @@
       },
       "productKeys": [
         {
-          "key_string": "KALAM-NONROOT-1DAY-9A8B7C",
-          "id": "key_1_1",
-          "created_at": "2026-01-01",
-          "product_id": 1,
+          "id": 1790297423312,
+          "product_id": 1790297431005,
+          "key_text": "KEY2",
           "is_used": 0
         },
         {
-          "id": "key_1_2",
-          "created_at": "2026-01-01",
-          "product_id": 1,
-          "key_string": "KALAM-NONROOT-1DAY-6F5E4D",
+          "id": 1790297428794,
+          "product_id": 1790297431005,
+          "key_text": "KEY1",
           "is_used": 0
-        },
-        {
-          "is_used": 0,
-          "key_string": "KALAM-NONROOT-7DAYS-112233",
-          "id": "key_2_1",
-          "created_at": "2026-01-01",
-          "product_id": 2
-        },
-        {
-          "is_used": 0,
-          "id": "key_3_1",
-          "key_string": "KALAM-NONROOT-30DAYS-445566",
-          "product_id": 3,
-          "created_at": "2026-01-01"
-        },
-        {
-          "key_string": "KALAM-ROOT-1DAY-778899",
-          "is_used": 0,
-          "id": "key_4_1",
-          "created_at": "2026-01-01",
-          "product_id": 4
-        },
-        {
-          "product_id": 5,
-          "created_at": "2026-01-01",
-          "id": "key_5_1",
-          "is_used": 0,
-          "key_string": "KALAM-ROOT-7DAYS-AABBCC"
-        },
-        {
-          "created_at": "2026-01-01",
-          "is_used": 0,
-          "product_id": 6,
-          "id": "key_6_1",
-          "key_string": "KALAM-ROOT-30DAYS-DDEEFF"
-        },
-        {
-          "is_used": 0,
-          "id": "key_7_1",
-          "key_string": "KALAM-PC-1DAY-990011",
-          "created_at": "2026-01-01",
-          "product_id": 7
-        },
-        {
-          "key_string": "KALAM-PC-7DAYS-223344",
-          "is_used": 0,
-          "id": "key_8_1",
-          "product_id": 8,
-          "created_at": "2026-01-01"
-        },
-        {
-          "created_at": "2026-01-01",
-          "product_id": 9,
-          "is_used": 0,
-          "id": "key_9_1",
-          "key_string": "KALAM-PC-30DAYS-556677"
         }
       ],
       "bot_token": "8154680797:AAH_I4DztaFRJurNXMoekMo8hORZ4x2b7DM",
@@ -1190,121 +1283,15 @@
       "name": "𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇",
       "products": [
         {
-          "device_limit": "1 Device HWID",
-          "panel_name": "KALAM NON-ROOT VIP PANEL",
-          "is_maintenance": 0,
-          "reseller_price_inr": 35,
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "duration": "1 Day",
-          "price_inr": 50,
-          "is_active": 1,
+          "name": "1 Day",
+          "panel_name": "TEST PANEL",
           "category": "ANDROID NON ROOT PANEL",
-          "name": "1 Day Pass",
-          "id": 1
-        },
-        {
-          "price_inr": 200,
-          "is_active": 1,
-          "reseller_price_inr": 140,
-          "id": 2,
-          "name": "7 Days Pass",
-          "is_maintenance": 0,
-          "duration": "7 Days",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "category": "ANDROID NON ROOT PANEL",
-          "panel_name": "KALAM NON-ROOT VIP PANEL",
-          "device_limit": "1 Device HWID"
-        },
-        {
-          "duration": "30 Days",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "name": "30 Days Pass",
-          "is_maintenance": 0,
-          "id": 3,
-          "device_limit": "1 Device HWID",
-          "reseller_price_inr": 350,
-          "panel_name": "KALAM NON-ROOT VIP PANEL",
-          "category": "ANDROID NON ROOT PANEL",
-          "is_active": 1,
-          "price_inr": 500
-        },
-        {
-          "duration": "1 Day",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_active": 1,
-          "price_inr": 80,
-          "is_maintenance": 0,
-          "name": "1 Day Pass",
-          "id": 4,
-          "panel_name": "KALAM ROOT ULTRA BYPASS PANEL",
-          "reseller_price_inr": 55,
-          "device_limit": "1 Device HWID",
-          "category": "ANDROID ROOT PANEL"
-        },
-        {
-          "reseller_price_inr": 200,
-          "is_maintenance": 0,
-          "name": "7 Days Pass",
-          "id": 5,
-          "is_active": 1,
-          "category": "ANDROID ROOT PANEL",
-          "device_limit": "1 Device HWID",
-          "price_inr": 300,
-          "duration": "7 Days",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "panel_name": "KALAM ROOT ULTRA BYPASS PANEL"
-        },
-        {
-          "price_inr": 750,
-          "is_active": 1,
-          "reseller_price_inr": 500,
-          "name": "30 Days Pass",
-          "is_maintenance": 0,
-          "duration": "30 Days",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "category": "ANDROID ROOT PANEL",
-          "panel_name": "KALAM ROOT ULTRA BYPASS PANEL",
-          "device_limit": "1 Device HWID",
-          "id": 6
-        },
-        {
-          "category": "PC PANEL",
-          "reseller_price_inr": 70,
-          "id": 7,
           "price_inr": 100,
+          "reseller_price": 80,
+          "validity": "1 Day",
           "is_active": 1,
-          "is_maintenance": 0,
-          "panel_name": "KALAM PC EMULATOR INJECTOR",
-          "device_limit": "1 Device HWID",
-          "name": "1 Day Pass",
-          "duration": "1 Day",
-          "apk_link": "https://t.me/KalamFFPanelAPKs"
-        },
-        {
-          "reseller_price_inr": 280,
-          "device_limit": "1 Device HWID",
-          "name": "7 Days Pass",
-          "category": "PC PANEL",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "id": 8,
-          "duration": "7 Days",
-          "is_maintenance": 0,
-          "panel_name": "KALAM PC EMULATOR INJECTOR",
-          "is_active": 1,
-          "price_inr": 400
-        },
-        {
-          "device_limit": "1 Device HWID",
-          "panel_name": "KALAM PC EMULATOR INJECTOR",
-          "id": 9,
-          "reseller_price_inr": 600,
-          "category": "PC PANEL",
-          "name": "30 Days Pass",
-          "is_active": 1,
-          "duration": "30 Days",
-          "price_inr": 900,
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
+          "id": 1790297431005,
+          "reseller_price_inr": 100
         }
       ],
       "status": "ONLINE",

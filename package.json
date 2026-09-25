@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "postinstall": "node -e \"const fs=require('fs'),p='node_modules/vite-plugin-pwa/dist/index.js';if(fs.existsSync(p)){let c=fs.readFileSync(p,'utf8');c=c.replace(/typeof __dirname !== \\\"undefined\\\" \\? __dirname :/g,'');fs.writeFileSync(p,c);}\""
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

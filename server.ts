@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
@@ -1083,8 +1084,23 @@ async function startServer() {
   // VITE & STATIC FILES
   // ---------------------------------------------------------------------------
   if (process.env.NODE_ENV !== 'production') {
+    try {
+      const pwaIndexPath = path.join(process.cwd(), 'node_modules/vite-plugin-pwa/dist/index.js');
+      if (fs.existsSync(pwaIndexPath)) {
+        let code = fs.readFileSync(pwaIndexPath, 'utf8');
+        if (code.includes('typeof __dirname !== "undefined" ? __dirname :')) {
+          code = code.replace(/typeof __dirname !== "undefined" \? __dirname :/g, '');
+          fs.writeFileSync(pwaIndexPath, code, 'utf8');
+        }
+      }
+    } catch {}
+
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        watch: null,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -1096,27 +1112,25 @@ async function startServer() {
     });
   }
 
-  // 1. Sync persistent Cloud Firestore state on startup to restore bot token & user balances
-  console.log('⚡ Initializing Kalam FF Panel Server boot sequence...');
-  await dbStore.syncWithFirestore();
-
-  // 2. Start Telegram Engine with restored credentials
-  await telegramEngine.start().catch(err => {
-    console.error('Failed to start Telegram Engine on boot:', err);
-  });
-
-  // Start HTTP Server
+  // Start HTTP Server immediately on port 3000 so readiness checks pass promptly
   app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 Kalam FF Panel Server running on http://0.0.0.0:${PORT}`);
 
-    // 24/7 Global Keep-Alive Server Heartbeat
-    setInterval(() => {
-      const status = telegramEngine.getStatus();
-      if (!status.isRunning) {
-        console.log('⚡ Server Keep-Alive: Restarting standby Telegram Bot Engine...');
-        telegramEngine.start().catch(() => {});
+    // Asynchronous background initializations (Firestore cloud sync & Telegram Bot engine)
+    (async () => {
+      try {
+        console.log('⚡ Initializing Kalam FF Panel Server sync sequence...');
+        await dbStore.syncWithFirestore();
+      } catch (err) {
+        console.warn('Notice: Background Firestore sync deferred:', err);
       }
-    }, 15000);
+
+      try {
+        await telegramEngine.start();
+      } catch (err) {
+        console.warn('Notice: Background Telegram Engine start deferred:', err);
+      }
+    })();
 
     // 24/7 Render Anti-Sleep Self-Ping Loop (every 8 minutes)
     setInterval(async () => {

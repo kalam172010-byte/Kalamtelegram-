@@ -44,7 +44,7 @@ export const ProductCatalog: React.FC = () => {
   const groupedPanels: GroupedPanel[] = useMemo(() => {
     const map = new Map<string, GroupedPanel>();
 
-    products.filter(p => p.is_active === 1).forEach(prod => {
+    products.filter(p => p.is_active !== 0).forEach(prod => {
       const cat = prod.category || 'GENERAL';
       const pName = prod.panel_name || prod.name;
       const key = `${cat}__${pName}`;

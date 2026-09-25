@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !import.meta.env.DEV) {
   registerSW({ immediate: true });
 }
 

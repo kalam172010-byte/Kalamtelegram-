@@ -253,14 +253,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Filter out legacy dummy demo panels
-          const clean = parsed.filter(p => {
-            const pName = (p.panel_name || p.name || '').toLowerCase();
-            return !pName.includes('drip client') && !pName.includes('mst panel') && !pName.includes('drip panel');
-          });
-          return clean.map((p, idx) => ({
+          return parsed.map((p, idx) => ({
             ...p,
             id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+            is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
             reseller_price: p.reseller_price ?? p.price_inr,
             reseller_price_inr: p.reseller_price_inr ?? p.price_inr
           }));
@@ -277,10 +273,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.some(k => k.key_text?.includes('MST-24H'))) {
-          return [];
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
-        return parsed;
       } catch (e) {
         console.error('Error parsing product keys', e);
       }
@@ -503,6 +498,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const cleanProds = serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
+                is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
                 reseller_price: p.reseller_price ?? p.price_inr,
                 reseller_price_inr: p.reseller_price_inr ?? p.price_inr
               }));
@@ -3474,6 +3470,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     const newProduct: Product = {
       ...prodData,
       id: newId,
+      is_active: prodData.is_active !== undefined ? (prodData.is_active === 0 ? 0 : 1) : 1,
       stock: cleanKeys.length
     };
 

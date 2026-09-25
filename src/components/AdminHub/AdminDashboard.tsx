@@ -1884,7 +1884,7 @@ export const AdminDashboard: React.FC = () => {
                     const isExpanded = Boolean(expandedPanels[group.key]);
                     const isPanelMaintenance = group.plans.length > 0 && group.plans.every(p => Boolean(p.is_maintenance));
                     const isAnyPlanMaintenance = group.plans.some(p => Boolean(p.is_maintenance));
-                    const isPanelActive = group.plans.length > 0 && group.plans.some(p => p.is_active === 1);
+                    const isPanelActive = group.plans.length > 0 && group.plans.some(p => p.is_active !== 0);
 
                     return (
                       <div

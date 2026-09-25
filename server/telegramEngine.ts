@@ -49,22 +49,35 @@ export function normalizeCategoryName(str: string): string {
 }
 
 export function isCategoryMatch(prodCategory: string, targetCategory: string): boolean {
-  if (!targetCategory) return true;
-  if (!prodCategory || !prodCategory.trim()) return true;
-  const c1 = normalizeCategoryName(prodCategory);
+  if (!targetCategory || !prodCategory) return true;
   const c2 = normalizeCategoryName(targetCategory);
-  if (!c1 || !c2) return true;
-  if (c1 === c2 || c1.includes(c2) || c2.includes(c1)) return true;
-  if (c1.includes('all') || c1.includes('general')) return true;
-  if (c1.includes('nonroot') && c2.includes('nonroot')) return true;
-  if (!c1.includes('non') && c1.includes('root') && !c2.includes('non') && c2.includes('root')) return true;
-  if ((c1.includes('pc') || c1.includes('emulator')) && (c2.includes('pc') || c2.includes('emulator'))) return true;
-  return false;
+  if (!c2 || c2.includes('all') || c2.includes('general')) return true;
+  const c1 = normalizeCategoryName(prodCategory);
+  if (!c1) return true;
+  if (c1 === c2) return true;
+
+  // Strict non-root vs root separation so Non-Root products never leak into Root categories
+  const isNonRoot1 = c1.includes('nonroot') || c1.includes('non');
+  const isNonRoot2 = c2.includes('nonroot') || c2.includes('non');
+  if (isNonRoot1 && isNonRoot2) return true;
+  if (isNonRoot1 !== isNonRoot2) return false;
+
+  const isRoot1 = c1.includes('root');
+  const isRoot2 = c2.includes('root');
+  if (isRoot1 && isRoot2) return true;
+
+  const isPc1 = c1.includes('pc') || c1.includes('emulator') || c1.includes('windows');
+  const isPc2 = c2.includes('pc') || c2.includes('emulator') || c2.includes('windows');
+  if (isPc1 && isPc2) return true;
+
+  return c1 === c2 || c1.includes(c2) || c2.includes(c1);
 }
 
 class TelegramEngine {
   private isRunning: boolean = false;
+  private isStarting: boolean = false;
   private isConnected: boolean = false;
+  private currentPollSessionId: number = 0;
   private botInfo: any = null;
   private lastError: string | null = null;
   private lastPollTimestamp: string | null = null;
@@ -111,7 +124,7 @@ class TelegramEngine {
     if (this.watchdogTimer) {
       clearInterval(this.watchdogTimer);
     }
-    // High-frequency 24/7 Connection Guard Watchdog runs every 10 seconds
+    // High-frequency 24/7 Connection Guard Watchdog runs every 20 seconds
     this.watchdogTimer = setInterval(async () => {
       try {
         const token = this.getValidTokenFromStore();
@@ -124,25 +137,31 @@ class TelegramEngine {
         const timeSinceLastPollSec = lastPollMs > 0 ? (now - lastPollMs) / 1000 : 999;
 
         // Auto-Detect Connection Drop / Timeout / Stopped Loop:
-        // Automatically re-initialize the bot process if:
-        // 1. Engine is stopped
-        // 2. Heartbeat missing for > 60 seconds (Telegram long-polling takes 12-20s per cycle)
-        // 3. Consecutive network/polling errors >= 3
-        if (!this.isRunning || (this.lastPollTimestamp && timeSinceLastPollSec > 60) || this.consecutiveErrors >= 3) {
+        // 1. If engine is stopped, restart it
+        if (!this.isRunning) {
           this.autoRestartCount++;
           this.lastAutoRestartTime = new Date().toISOString();
-          console.log(`⚡ Telegram 24/7 Connection Guard: Detected connection drop/stale poll [isRunning=${this.isRunning}, lastPoll=${Math.round(timeSinceLastPollSec)}s ago, errors=${this.consecutiveErrors}]. Auto-reinitializing bot process (Attempt #${this.autoRestartCount})...`);
-
-          dbStore.logActivity(0, 'BOT_AUTO_RESTART', `Auto-reinitialized bot engine without user intervention (Trigger #${this.autoRestartCount})`);
-          
+          this.consecutiveErrors = 0;
+          this.lastPollTimestamp = new Date().toISOString();
+          console.log(`⚡ Telegram 24/7 Connection Guard: Bot was stopped, auto-starting (Attempt #${this.autoRestartCount})...`);
+          await this.start().catch((err: any) => {
+            console.warn('Telegram Watchdog auto-start notice:', err.message);
+          });
+        } else if (timeSinceLastPollSec > 180 && this.consecutiveErrors >= 5) {
+          // If stuck for over 3 minutes with NO poll completion AND 5+ consecutive real errors, gently reconnect
+          this.autoRestartCount++;
+          this.lastAutoRestartTime = new Date().toISOString();
+          this.consecutiveErrors = 0;
+          this.lastPollTimestamp = new Date().toISOString();
+          console.log(`⚡ Telegram 24/7 Connection Guard: Stale poll (${Math.round(timeSinceLastPollSec)}s, errors=${this.consecutiveErrors}). Reconnecting safely...`);
           await this.restart().catch((err: any) => {
-            console.warn('Telegram Watchdog auto-restart notice:', err.message);
+            console.warn('Telegram Watchdog reconnect notice:', err.message);
           });
         }
       } catch (e: any) {
         console.warn('Telegram Watchdog loop tick notice:', e.message);
       }
-    }, 10000);
+    }, 20000);
   }
 
   public getStatus(): BotStatus {
@@ -245,7 +264,7 @@ class TelegramEngine {
    * Helper to make calls to Telegram Bot API
    */
   public async callApi(method: string, payload: any = {}): Promise<any> {
-    const token = dbStore.getData().settings.bot_token;
+    const token = this.getValidTokenFromStore();
     if (!token || token.includes('exampleToken')) {
       throw new Error('Valid Telegram Bot Token is required');
     }
@@ -421,6 +440,8 @@ class TelegramEngine {
     }
   }
 
+  private startPromise: Promise<void> | null = null;
+
   /**
    * Start long polling engine
    */
@@ -428,42 +449,60 @@ class TelegramEngine {
     if (this.isRunning) {
       return;
     }
-
-    // Auto-heal missing settings token from bots storage or process.env if available
-    this.getValidTokenFromStore();
-
-    this.isRunning = true;
-    this.pollingAbortController = new AbortController();
-
-    const conn = await this.testConnection();
-    if (!conn.success) {
-      console.log('Telegram Bot Token standby mode: Waiting for token configuration...');
-    } else {
-      try {
-        await this.callApi('deleteWebhook', { drop_pending_updates: false });
-        const settings = dbStore.getData().settings;
-        if (settings.bot_commands_enabled === false) {
-          await this.deleteMyCommands().catch(() => {});
-        } else {
-          await this.syncBotCommands().catch(() => {});
-        }
-      } catch (e) {
-        // ignore
-      }
-      console.log(`⚡ Telegram Bot Polling Engine started for @${this.botInfo?.username}`);
+    if (this.startPromise) {
+      return this.startPromise;
     }
 
-    this.pollLoop();
+    this.startPromise = (async () => {
+      try {
+        // Auto-heal missing settings token from bots storage or process.env if available
+        this.getValidTokenFromStore();
+
+        this.currentPollSessionId++;
+        const sessionId = this.currentPollSessionId;
+        this.isRunning = true;
+
+        const conn = await this.testConnection();
+        if (!conn.success) {
+          console.log('Telegram Bot Token standby mode: Waiting for token configuration...');
+        } else {
+          try {
+            await this.callApi('deleteWebhook', { drop_pending_updates: false });
+            const settings = dbStore.getData().settings;
+            if (settings.bot_commands_enabled === false) {
+              await this.deleteMyCommands().catch(() => {});
+            } else {
+              await this.syncBotCommands().catch(() => {});
+            }
+          } catch (e) {
+            // ignore
+          }
+          console.log(`⚡ Telegram Bot Polling Engine started for @${this.botInfo?.username}`);
+        }
+
+        // Run poll loop without awaiting so start() completes and reports running
+        this.pollLoop(sessionId).catch(err => {
+          console.error('Unhandled pollLoop error:', err);
+        });
+      } finally {
+        this.startPromise = null;
+      }
+    })();
+
+    return this.startPromise;
   }
 
   /**
    * Stop long polling engine
    */
   public async stop(): Promise<void> {
+    this.currentPollSessionId++; // Invalidate active loop
     this.isRunning = false;
     this.isConnected = false;
     if (this.pollingAbortController) {
-      this.pollingAbortController.abort();
+      try {
+        this.pollingAbortController.abort();
+      } catch {}
       this.pollingAbortController = null;
     }
     console.log('Telegram Bot Polling Engine stopped');
@@ -474,15 +513,16 @@ class TelegramEngine {
    */
   public async restart(): Promise<void> {
     await this.stop();
+    await new Promise(r => setTimeout(r, 500));
     await this.start();
   }
 
   /**
    * Continuous long polling loop with 24/7 resilience & auto-recovery
    */
-  private async pollLoop() {
+  private async pollLoop(sessionId: number) {
     try {
-      while (this.isRunning) {
+      while (this.isRunning && this.currentPollSessionId === sessionId) {
         try {
           const token = this.getValidTokenFromStore();
           if (!token) {
@@ -494,32 +534,47 @@ class TelegramEngine {
           this.lastPollTimestamp = new Date().toISOString();
           const url = `https://api.telegram.org/bot${token}/getUpdates`;
           
-          // Use 20s hard timeout per poll request so fetch can never hang infinitely
-          const pollSignal = AbortSignal.timeout(20000);
+          this.pollingAbortController = new AbortController();
+          const pollSignal = AbortSignal.any
+            ? AbortSignal.any([this.pollingAbortController.signal, AbortSignal.timeout(25000)])
+            : this.pollingAbortController.signal;
 
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               offset: this.updateOffset,
-              timeout: 12, // 12 seconds Telegram long polling window
+              timeout: 15, // 15 seconds Telegram long polling window
               allowed_updates: ['message', 'callback_query']
             }),
             signal: pollSignal
           });
 
+          // Check if session was invalidated while awaiting network response
+          if (this.currentPollSessionId !== sessionId || !this.isRunning) {
+            break;
+          }
+
           if (response.status === 409) {
-            // Conflict resolution: delete any lingering Telegram webhooks
-            try {
-              await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
-            } catch {}
-            await new Promise(r => setTimeout(r, 1500));
+            console.warn('⚠️ Telegram 409 Conflict: Waiting 4s for existing connection release...');
+            this.lastPollTimestamp = new Date().toISOString();
+            this.consecutiveErrors = 0;
+            await new Promise(r => setTimeout(r, 4000));
+            continue;
+          }
+
+          if (response.status === 429) {
+            console.warn('⚠️ Telegram 429 Rate Limit: Polling paused for 5s...');
+            this.lastPollTimestamp = new Date().toISOString();
+            this.consecutiveErrors = 0;
+            await new Promise(r => setTimeout(r, 5000));
             continue;
           }
 
           if (!response.ok) {
             const errBody = await response.text();
             this.lastError = `HTTP ${response.status}: ${errBody || response.statusText}`;
+            this.consecutiveErrors++;
             await new Promise(r => setTimeout(r, 2000));
             continue;
           }
@@ -531,6 +586,7 @@ class TelegramEngine {
             this.lastError = null;
             this.consecutiveErrors = 0;
             for (const update of data.result) {
+              if (this.currentPollSessionId !== sessionId || !this.isRunning) break;
               this.updateOffset = update.update_id + 1;
               this.updatesProcessed++;
               await this.handleUpdate(update);
@@ -541,19 +597,32 @@ class TelegramEngine {
             await new Promise(r => setTimeout(r, 2000));
           }
         } catch (err: any) {
-          if (!this.isRunning) {
+          if (!this.isRunning || this.currentPollSessionId !== sessionId) {
             break;
           }
+          // Normal timeout or abort during long polling is expected and healthy
+          const isTimeoutOrAbort = err.name === 'TimeoutError' || err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('timeout'));
+          if (isTimeoutOrAbort) {
+            this.lastPollTimestamp = new Date().toISOString();
+            this.consecutiveErrors = 0;
+            this.isConnected = true;
+            // Immediate seamless next poll iteration
+            continue;
+          }
+
           this.consecutiveErrors++;
           this.lastError = err.message || 'Polling request interrupted';
-          // Seamless retry on network fluctuation or timeout
-          await new Promise(r => setTimeout(r, 1000));
+          // Seamless retry on network fluctuation
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
     } finally {
-      this.isRunning = false;
-      this.isConnected = false;
-      console.warn('⚠️ Telegram pollLoop exited. 24/7 Watchdog will auto-heal in 5s if active token exists.');
+      // ONLY reset flags if this session is STILL the active session!
+      if (this.currentPollSessionId === sessionId) {
+        this.isRunning = false;
+        this.isConnected = false;
+        console.warn('⚠️ Telegram pollLoop exited. 24/7 Watchdog will auto-heal if active token exists.');
+      }
     }
   }
 
@@ -2069,33 +2138,55 @@ class TelegramEngine {
       const allActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
       const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
 
+      if (allActiveProds.length === 0) {
+        const emptyText = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
+          `📦 No products are currently available in the catalog.\n` +
+          `Please check back soon or contact support!`;
+        const emptyKb = {
+          inline_keyboard: [
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          ]
+        };
+        await this.editMessageText(chatId, messageId, emptyText, emptyKb);
+        return;
+      }
+
       const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
         `Select your desired operating environment or product category below:\n\n` +
         `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
         `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
         `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
 
-      const keyboard: { inline_keyboard: any[][] } = {
-        inline_keyboard: [
-          [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }],
-          [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
-          [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
-          [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
-        ]
-      };
+      const hasNonRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'nonroot'));
+      const hasRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'root') && !isCategoryMatch(p.category, 'nonroot'));
+      const hasPc = allActiveProds.some(p => isCategoryMatch(p.category, 'pc'));
+
+      const inline_keyboard: any[][] = [
+        [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }]
+      ];
+
+      if (hasNonRoot) {
+        inline_keyboard.push([{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }]);
+      }
+      if (hasRoot) {
+        inline_keyboard.push([{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }]);
+      }
+      if (hasPc) {
+        inline_keyboard.push([{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]);
+      }
 
       // Add dynamic category buttons for custom categories added by user/admin
       for (const cat of uniqueCats) {
         if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
-          keyboard.inline_keyboard.push([
+          inline_keyboard.push([
             { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_${encodeURIComponent(cat)}`, style: 'primary' }
           ]);
         }
       }
 
-      keyboard.inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
+      inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
 
-      await this.editMessageText(chatId, messageId, text, keyboard);
+      await this.editMessageText(chatId, messageId, text, { inline_keyboard });
       return;
     }
 
@@ -2344,7 +2435,7 @@ class TelegramEngine {
 
       console.log(`[TelegramEngine] [TRACE] Resolved Product:`, product ? { id: product.id, panel: product.panel_name, name: product.name, validity: product.validity, price: product.price_inr } : 'NOT FOUND');
 
-      if (!product || !product.is_active) {
+      if (!product || product.is_active === 0) {
         await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
         const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
         const keyboard = {
@@ -2503,7 +2594,7 @@ class TelegramEngine {
         product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       }
 
-      if (!product || !product.is_active) {
+      if (!product || product.is_active === 0) {
         await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
         const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
         const keyboard = {
@@ -3083,21 +3174,57 @@ class TelegramEngine {
   }
 
   private async sendShopCategories(chatId: number, user: User) {
+    const allActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
+    const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
+
+    if (allActiveProds.length === 0) {
+      const emptyText = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
+        `📦 No products are currently available in the catalog.\n` +
+        `Please check back soon or contact support!`;
+      const emptyKb = {
+        inline_keyboard: [
+          [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+        ]
+      };
+      await this.sendMessage(chatId, emptyText, emptyKb);
+      return;
+    }
+
     const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
       `Select your desired operating environment and panel category below:\n\n` +
       `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
       `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
       `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
 
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
-        [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
-        [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }],
-        [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
-      ]
-    };
-    await this.sendMessage(chatId, text, keyboard);
+    const hasNonRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'nonroot'));
+    const hasRoot = allActiveProds.some(p => isCategoryMatch(p.category, 'root') && !isCategoryMatch(p.category, 'nonroot'));
+    const hasPc = allActiveProds.some(p => isCategoryMatch(p.category, 'pc'));
+
+    const inline_keyboard: any[][] = [
+      [{ text: '🛍️ All Products Catalog', callback_data: 'cat_all', style: 'primary' }]
+    ];
+
+    if (hasNonRoot) {
+      inline_keyboard.push([{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }]);
+    }
+    if (hasRoot) {
+      inline_keyboard.push([{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }]);
+    }
+    if (hasPc) {
+      inline_keyboard.push([{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]);
+    }
+
+    // Add dynamic category buttons for custom categories added by user/admin
+    for (const cat of uniqueCats) {
+      if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
+        inline_keyboard.push([
+          { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_${encodeURIComponent(cat)}`, style: 'primary' }
+        ]);
+      }
+    }
+
+    inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
+    await this.sendMessage(chatId, text, { inline_keyboard });
   }
 
   public async getUserProfilePhotoFileId(userId: number): Promise<string | null> {
