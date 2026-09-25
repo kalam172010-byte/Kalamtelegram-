@@ -53,7 +53,9 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
-  Power
+  Power,
+  Wallet,
+  AlertCircle
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
 import { sortProductsByDuration } from '../../utils/durationSorter';
@@ -141,6 +143,9 @@ export const AdminDashboard: React.FC = () => {
     testFamGatewayKey,
     createFamGatewayOrder,
     checkFamGatewayStatus,
+    providerBalance,
+    isProviderBalanceLoading,
+    fetchProviderBalance,
     testProviderConnection,
     buyProviderKeyDirect,
     sendBroadcastMessage,
@@ -706,34 +711,42 @@ export const AdminDashboard: React.FC = () => {
     if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
 
     try {
-      // Process each duration plan sequentially to ensure every product plan is safely persisted without race conditions
+      const category = multiProdForm.category.trim() || 'ANDROID NON ROOT PANEL';
+      const panelName = multiProdForm.panel_name.trim();
+      const productsToCreate: Product[] = [];
+      const keysMap: Record<string, string[]> = {};
+
       for (let planIdx = 0; planIdx < multiProdForm.plans.length; planIdx++) {
         const plan = multiProdForm.plans[planIdx];
         const keysArray = plan.keys.split('\n').map(k => k.trim()).filter(Boolean);
         const uniquePlanId = Date.now() + planIdx + Math.floor(Math.random() * 100000);
-        await addProduct(
-          {
-            id: uniquePlanId,
-            category: multiProdForm.category.trim() || 'ANDROID NON ROOT PANEL',
-            panel_name: multiProdForm.panel_name.trim(),
-            name: plan.name.trim() || plan.validity.trim(),
-            price_inr: Number(plan.price_inr),
-            reseller_price: Number(plan.reseller_price),
-            validity: plan.validity.trim() || plan.name.trim(),
-            device_limit: multiProdForm.device_limit || '1 Device HWID',
-            apk_link: multiProdForm.apk_link,
-            is_active: 1,
-            is_maintenance: plan.is_maintenance ? 1 : 0,
-            maintenance_note: '',
-            delivery_mode: multiProdForm.delivery_mode,
-            provider_product_id: multiProdForm.provider_product_id,
-            provider_duration: plan.provider_duration?.trim() || plan.validity?.trim() || plan.name?.trim(),
-            requires_android_id: Boolean(multiProdForm.requires_android_id)
-          },
-          keysArray
-        );
+        const planName = plan.name.trim() || plan.validity.trim() || 'Plan';
+        const validity = plan.validity.trim() || plan.name.trim() || '1 Day';
+
+        const newProd: Product = {
+          id: uniquePlanId,
+          category: category,
+          panel_name: panelName,
+          name: planName,
+          price_inr: Number(plan.price_inr) || 100,
+          reseller_price: Number(plan.reseller_price) || Number(plan.price_inr) || 80,
+          validity: validity,
+          device_limit: multiProdForm.device_limit || '1 Device HWID',
+          apk_link: multiProdForm.apk_link || '',
+          is_active: 1,
+          is_maintenance: plan.is_maintenance ? 1 : 0,
+          maintenance_note: '',
+          delivery_mode: multiProdForm.delivery_mode,
+          provider_product_id: multiProdForm.provider_product_id,
+          provider_duration: plan.provider_duration?.trim() || validity,
+          requires_android_id: Boolean(multiProdForm.requires_android_id)
+        };
+
+        productsToCreate.push(newProd);
+        keysMap[String(uniquePlanId)] = keysArray;
       }
 
+      await addProductsBatch(productsToCreate, keysMap);
       setShowAddProductModal(false);
     } catch (err) {
       console.error('Error in database submission for new product:', err);
@@ -744,19 +757,24 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreateProduct = handleAddProduct;
 
-  const handleAddPlanToExistingProductSubmit = (e: React.FormEvent) => {
+  const handleAddPlanToExistingProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddPlanToPanelModal || !singlePlanForm.validity) return;
 
     const keysArray = singlePlanForm.keys.split('\n').map(k => k.trim()).filter(Boolean);
-    addProduct(
+    const uniquePlanId = Date.now() + Math.floor(Math.random() * 100000);
+    const planName = singlePlanForm.name.trim() || singlePlanForm.validity.trim() || 'Plan';
+    const validity = singlePlanForm.validity.trim() || '1 Day';
+
+    await addProduct(
       {
+        id: uniquePlanId,
         category: showAddPlanToPanelModal.category,
         panel_name: showAddPlanToPanelModal.panel_name,
-        name: singlePlanForm.name.trim() || singlePlanForm.validity.trim(),
-        price_inr: Number(singlePlanForm.price_inr),
-        reseller_price: Number(singlePlanForm.reseller_price),
-        validity: singlePlanForm.validity.trim(),
+        name: planName,
+        price_inr: Number(singlePlanForm.price_inr) || 100,
+        reseller_price: Number(singlePlanForm.reseller_price) || Number(singlePlanForm.price_inr) || 80,
+        validity: validity,
         device_limit: showAddPlanToPanelModal.device_limit || '1 Device HWID',
         apk_link: showAddPlanToPanelModal.apk_link || '',
         is_active: 1,
@@ -764,7 +782,7 @@ export const AdminDashboard: React.FC = () => {
         maintenance_note: singlePlanForm.maintenance_note || '',
         delivery_mode: showAddPlanToPanelModal.delivery_mode || 'api_provider',
         provider_product_id: showAddPlanToPanelModal.provider_product_id || '',
-        provider_duration: singlePlanForm.provider_duration?.trim() || singlePlanForm.validity.trim(),
+        provider_duration: singlePlanForm.provider_duration?.trim() || validity,
         requires_android_id: Boolean(showAddPlanToPanelModal.requires_android_id)
       },
       keysArray
@@ -784,9 +802,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteEntirePanel = (category: string, panelName: string) => {
-    if (window.confirm(`⚠️ Are you sure you want to delete "${panelName}" (${category}) and ALL of its duration plans?`)) {
-      deletePanel(category, panelName);
-    }
+    deletePanel(category, panelName);
   };
 
   const handleOpenEditProduct = (prod: Product) => {
@@ -4844,6 +4860,83 @@ export const AdminDashboard: React.FC = () => {
                     Provider: {settings.bantibhaiya_status}
                   </button>
                 </div>
+              </div>
+
+              {/* REAL-TIME BANTIBHAIYA RESELLER BALANCE CARD */}
+              <div className="bg-gradient-to-br from-[#0c0d1e] via-[#12112b] to-[#181138] border-2 border-indigo-500/40 rounded-2xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
+                {/* Background Glow */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-indigo-400" />
+                        BantiBhaiya Reseller Live Account Balance
+                      </span>
+                      {providerBalance.status === 'CONNECTED' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          LIVE CONNECTED
+                        </span>
+                      ) : providerBalance.status === 'UNCONFIGURED' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                          NOT CONFIGURED
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          {providerBalance.message || 'DISCONNECTED'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Big Typography Balance Display */}
+                    <div className="flex items-baseline gap-3 pt-1">
+                      <div className="text-3xl sm:text-4xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-200 to-cyan-300 tracking-tight drop-shadow-sm">
+                        {providerBalance.formatted || '₹0.00'}
+                      </div>
+                      <span className="text-xs text-slate-400 font-mono font-bold">INR Credits</span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 flex items-center gap-1.5 pt-0.5">
+                      <span>⚡ Upstream Reseller Wallet Available for Auto-Key Generation</span>
+                      {providerBalance.latencyMs > 0 && (
+                        <span className="text-cyan-400 font-mono font-bold">({providerBalance.latencyMs}ms Ping)</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Real-time actions & info */}
+                  <div className="flex flex-col sm:flex-row md:flex-col items-start md:items-end justify-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isProviderBalanceLoading}
+                      onClick={() => fetchProviderBalance()}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isProviderBalanceLoading ? 'animate-spin text-cyan-300' : ''}`} />
+                      <span>{isProviderBalanceLoading ? 'Fetching Live Balance...' : '🔄 Instant Balance Refresh'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        Auto-Sync: 5s Real-Time
+                      </span>
+                      <span>•</span>
+                      <span>Synced: {new Date(providerBalance.lastChecked).toLocaleTimeString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Low Balance Warning Alert */}
+                {providerBalance.status === 'CONNECTED' && providerBalance.balance < 200 && (
+                  <div className="mt-3 p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl text-xs text-amber-200 flex items-center gap-2 animate-pulse">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span><b>Low Provider Balance Notice:</b> Your BantiBhaiya balance is below ₹200. Please top up your upstream master wallet to ensure non-stop auto-key generation for users.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4 text-xs">

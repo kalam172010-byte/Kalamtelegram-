@@ -27,6 +27,9 @@ export const ResellerApiManager: React.FC = () => {
     switchActiveBot,
     setActiveTab,
     updateActiveBotResellerApi,
+    providerBalance,
+    isProviderBalanceLoading,
+    fetchProviderBalance,
     testProviderConnection,
     buyProviderKeyDirect,
     products
@@ -192,22 +195,38 @@ export const ResellerApiManager: React.FC = () => {
 
         {/* Provider Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="liquid-glass-interactive rounded-2xl p-4 flex items-center justify-between">
+          <div className="liquid-glass-interactive rounded-2xl p-4 flex items-center justify-between group">
             <div>
-              <div className="text-xs text-slate-400 font-medium">Provider Balance</div>
-              <div className="text-lg font-black text-emerald-300 mt-0.5 font-mono">
-                ₹{reseller.sync_balance?.toFixed(2) || '14,250.00'}
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                <span>Provider Live Balance</span>
+                <button
+                  type="button"
+                  onClick={() => fetchProviderBalance()}
+                  className="text-cyan-400 hover:text-cyan-300 transition"
+                  title="Refresh Live Balance"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isProviderBalanceLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              <div className="text-xl font-black text-emerald-300 mt-0.5 font-mono">
+                {providerBalance.formatted || '₹0.00'}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                {providerBalance.latencyMs > 0 ? `${providerBalance.latencyMs}ms Ping` : 'Live Polling'}
               </div>
             </div>
-            <Wallet className="w-8 h-8 text-emerald-400/50" />
+            <Wallet className="w-8 h-8 text-emerald-400/50 group-hover:scale-110 transition-transform" />
           </div>
 
           <div className="liquid-glass-interactive rounded-2xl p-4 flex items-center justify-between">
             <div>
               <div className="text-xs text-slate-400 font-medium">Provider Status</div>
               <div className="text-sm font-bold text-purple-300 mt-0.5 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                ONLINE (Auto-Sync)
+                <span className={`w-2 h-2 rounded-full ${providerBalance.status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                {providerBalance.status === 'CONNECTED' ? 'LIVE (5s Auto-Sync)' : (providerBalance.message || 'Connecting...')}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Last checked: {new Date(providerBalance.lastChecked).toLocaleTimeString()}
               </div>
             </div>
             <Activity className="w-8 h-8 text-purple-400/50" />
@@ -218,6 +237,9 @@ export const ResellerApiManager: React.FC = () => {
               <div className="text-xs text-slate-400 font-medium">Auto Key Fallback</div>
               <div className="text-sm font-bold text-cyan-300 mt-0.5">
                 {autoFallback ? 'ENABLED (Zero Out-of-Stock)' : 'DISABLED'}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Local Key Vault Backup Active
               </div>
             </div>
             <Shield className="w-8 h-8 text-cyan-400/50" />

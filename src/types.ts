@@ -323,3 +323,19 @@ export interface ChatMessage {
 export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
 export type AdminTab = 'overview' | 'appinstall' | 'bots' | 'health' | 'products' | 'users' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'gateways' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine';
+
+export interface ProviderBalanceState {
+  success: boolean;
+  balance: number;
+  currency: string;
+  formatted: string;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'UNCONFIGURED';
+  latencyMs: number;
+  lastChecked: string;
+  message: string;
+  apiUrl?: string;
+  apiKeyMasked?: string;
+  raw?: any;
+  error?: string;
+}
+

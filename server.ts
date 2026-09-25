@@ -77,7 +77,10 @@ async function startServer() {
   // 2. Fetch All Data
   app.get('/api/data', (req, res) => {
     const data = dbStore.getData();
-    res.json(data);
+    res.json({
+      ...data,
+      providerBalance: bantiResellerService.getLatestBalanceState()
+    });
   });
 
   // 2.1 Bot Management Endpoints
@@ -811,6 +814,26 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // 19.1 BantiBhaiya Provider: Real-Time Live Balance Query & Refresh
+  app.get('/api/provider/balance', async (req, res) => {
+    try {
+      const state = await bantiResellerService.fetchLiveBalance();
+      res.json(state);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/provider/balance/refresh', async (req, res) => {
+    try {
+      const { apiKey, masterKey, apiUrl } = req.body || {};
+      const state = await bantiResellerService.fetchLiveBalance(apiKey, masterKey, apiUrl);
+      res.json(state);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 

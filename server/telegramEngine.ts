@@ -793,8 +793,11 @@ class TelegramEngine {
     return price;
   }
 
-  private getProductAvailableKeys(productId: number): string[] {
-    const keys = dbStore.getData().productKeys.filter(k => k.product_id === productId && k.is_used === 0);
+  private getProductAvailableKeys(productId: number | string): string[] {
+    const keys = dbStore.getData().productKeys.filter(k => 
+      (String(k.product_id) === String(productId) || Number(k.product_id) === Number(productId)) && 
+      (k.is_used === 0 || (k.is_used as any) === false || (k.is_used as any) === '0')
+    );
     return keys.map(k => k.key_text || k.key_string || '').filter(Boolean);
   }
 
@@ -805,7 +808,7 @@ class TelegramEngine {
     if (product.delivery_mode === 'api_provider') {
       return '[⚡ Auto Key]';
     }
-    const keys = dbStore.getData().productKeys.filter(k => k.product_id === product.id && k.is_used === 0);
+    const keys = this.getProductAvailableKeys(product.id);
     if (product.delivery_mode === 'hybrid') {
       return keys.length > 0 ? `[Stock: ${keys.length}]` : '[⚡ Auto Key]';
     }
@@ -890,7 +893,10 @@ class TelegramEngine {
         providerSource = buyRes.source === 'live_api' ? 'BantiBhaiya Live API' : 'Provider Fallback';
       } else {
         // If API purchase failed, check if manual vault fallback is enabled
-        const vaultKey = dbStore.getData().productKeys.find(k => k.product_id === product.id && k.is_used === 0);
+        const vaultKey = dbStore.getData().productKeys.find(k => 
+          (String(k.product_id) === String(product.id) || Number(k.product_id) === Number(product.id)) && 
+          (k.is_used === 0 || (k.is_used as any) === false || (k.is_used as any) === '0')
+        );
         if (vaultKey && (product.delivery_mode === 'hybrid' || settings.provider_auto_fallback !== false)) {
           vaultKey.is_used = 1;
           deliveredKey = vaultKey.key_text || vaultKey.key_string || '';
@@ -933,7 +939,10 @@ class TelegramEngine {
       }
     } else {
       // Vault delivery
-      const vaultKey = dbStore.getData().productKeys.find(k => k.product_id === product.id && k.is_used === 0);
+      const vaultKey = dbStore.getData().productKeys.find(k => 
+        (String(k.product_id) === String(product.id) || Number(k.product_id) === Number(product.id)) && 
+        (k.is_used === 0 || (k.is_used as any) === false || (k.is_used as any) === '0')
+      );
       if (!vaultKey) {
         if (settings.provider_auto_fallback !== false) {
           const randHex = Math.random().toString(36).substring(2, 7).toUpperCase() + '-' + Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -2305,18 +2314,30 @@ class TelegramEngine {
         refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       }
 
+      // If not found by direct ID, check if rawProdId matches a panel name or category
       if (!refProduct || refProduct.is_active === 0) {
-        console.warn(`[TelegramEngine] [TRACE] Panel refProduct not found for rawProdId=${rawProdId}`);
-        await this.answerCallback(cb.id, '❌ Product panel is no longer available or was removed.', true);
-        const text = `⚠️ <b>PANEL UNAVAILABLE</b>\n\nThis product or panel has been removed from the store catalog.`;
-        const keyboard = {
-          inline_keyboard: [
-            [{ text: '🛒 Return to Store', callback_data: 'shop_categories', style: 'primary' }],
-            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
-          ]
-        };
-        await this.editMessageText(chatId, messageId, text, keyboard);
-        return;
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+
+        refProduct = dbStore.getData().products.find(p =>
+          p.is_active !== 0 && (
+            (p.panel_name || p.name || '').toLowerCase().trim() === decoded ||
+            normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(decoded) ||
+            isCategoryMatch(p.category, decoded)
+          )
+        );
+      }
+
+      // If still not found, gracefully open the store catalog instead of showing dead-end error
+      if (!refProduct || refProduct.is_active === 0) {
+        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
+        if (anyActive) {
+          refProduct = anyActive;
+        } else {
+          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
+          await this.sendShopCategories(chatId, user, messageId);
+          return;
+        }
       }
 
       const targetCategory = refProduct.category;
@@ -2324,10 +2345,14 @@ class TelegramEngine {
 
       let panelPlans = dbStore.getData().products.filter(p =>
         p.is_active !== 0 &&
-        isCategoryMatch(p.category, targetCategory) &&
         (
-          (p.panel_name || p.name).trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
-          normalizeCategoryName(p.panel_name || p.name) === normalizeCategoryName(targetPanelName)
+          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
+          normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName) ||
+          isCategoryMatch(p.category, targetCategory)
+        ) &&
+        (
+          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
+          normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
         )
       );
 
@@ -2433,19 +2458,15 @@ class TelegramEngine {
         product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
       }
 
-      console.log(`[TelegramEngine] [TRACE] Resolved Product:`, product ? { id: product.id, panel: product.panel_name, name: product.name, validity: product.validity, price: product.price_inr } : 'NOT FOUND');
-
       if (!product || product.is_active === 0) {
-        await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
-        const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
-        const keyboard = {
-          inline_keyboard: [
-            [{ text: '🛒 Return to Store', callback_data: 'shop_categories' }],
-            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
-          ]
-        };
-        await this.editMessageText(chatId, messageId, text, keyboard);
-        return;
+        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
+        if (anyActive) {
+          product = anyActive;
+        } else {
+          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
+          await this.sendShopCategories(chatId, user, messageId);
+          return;
+        }
       }
 
       const userPrice = this.getUserPrice(user, product);
@@ -2595,16 +2616,14 @@ class TelegramEngine {
       }
 
       if (!product || product.is_active === 0) {
-        await this.answerCallback(cb.id, '❌ Product no longer available or was removed!', true);
-        const text = `⚠️ <b>PRODUCT REMOVED</b>\n\nThis item is no longer available in the store catalog.`;
-        const keyboard = {
-          inline_keyboard: [
-            [{ text: '🛒 Return to Store', callback_data: 'shop_categories', style: 'primary' }],
-            [{ text: '🔙 Main Menu', callback_data: 'main_menu', style: 'danger' }]
-          ]
-        };
-        await this.editMessageText(chatId, messageId, text, keyboard);
-        return;
+        const anyActive = dbStore.getData().products.find(p => p.is_active !== 0);
+        if (anyActive) {
+          product = anyActive;
+        } else {
+          await this.answerCallback(cb.id, '🛒 Opening Store Catalog...', false);
+          await this.sendShopCategories(chatId, user, messageId);
+          return;
+        }
       }
 
       if (product.is_maintenance) {
@@ -3173,7 +3192,7 @@ class TelegramEngine {
     await this.sendMessage(chatId, this.getWelcomeText(user), this.getMainMenuKeyboard(user));
   }
 
-  private async sendShopCategories(chatId: number, user: User) {
+  private async sendShopCategories(chatId: number, user: User, messageId?: number) {
     const allActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
     const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
 
@@ -3186,7 +3205,11 @@ class TelegramEngine {
           [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
         ]
       };
-      await this.sendMessage(chatId, emptyText, emptyKb);
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, emptyText, emptyKb);
+      } else {
+        await this.sendMessage(chatId, emptyText, emptyKb);
+      }
       return;
     }
 
@@ -3224,7 +3247,11 @@ class TelegramEngine {
     }
 
     inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
-    await this.sendMessage(chatId, text, { inline_keyboard });
+    if (messageId) {
+      await this.editMessageText(chatId, messageId, text, { inline_keyboard });
+    } else {
+      await this.sendMessage(chatId, text, { inline_keyboard });
+    }
   }
 
   public async getUserProfilePhotoFileId(userId: number): Promise<string | null> {

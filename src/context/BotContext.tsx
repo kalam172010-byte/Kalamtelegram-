@@ -38,7 +38,8 @@ import {
   AdminTab,
   BotInstance,
   PaymentGatewayConfig,
-  ResellerApiConfig
+  ResellerApiConfig,
+  ProviderBalanceState
 } from '../types';
 import { DEFAULT_EMOJIS,
   DEFAULT_SETTINGS,
@@ -160,8 +161,11 @@ export interface BotContextType {
   createFamGatewayOrder: (amount: number) => Promise<{ success: boolean; order_id?: string; payment_url?: string; qr_url?: string; error?: string; raw?: any }>;
   checkFamGatewayStatus: (orderId: string) => Promise<{ success: boolean; isPaid: boolean; status: string; error?: string }>;
 
-  // BantiBhaiya Reseller Provider Key Delivery
-  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; raw?: any }>;
+  // BantiBhaiya Reseller Provider Key Delivery & Real-Time Balance
+  providerBalance: ProviderBalanceState;
+  isProviderBalanceLoading: boolean;
+  fetchProviderBalance: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<ProviderBalanceState>;
+  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; balance?: number; formatted?: string; raw?: any }>;
   buyProviderKeyDirect: (params: { productId: string; duration: string; androidId?: string; apiKey?: string; masterKey?: string; apiUrl?: string }) => Promise<{ success: boolean; key?: string; orderId?: string | number; error?: string; raw?: any; message?: string }>;
 
   // Admin Broadcast
@@ -359,6 +363,21 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : DEFAULT_EMOJIS;
   });
 
+  // BantiBhaiya Real-Time Live Reseller Balance State
+  const [providerBalance, setProviderBalance] = useState<ProviderBalanceState>({
+    success: false,
+    balance: 0,
+    currency: 'INR',
+    formatted: '₹0.00',
+    status: 'UNCONFIGURED',
+    latencyMs: 0,
+    lastChecked: new Date().toISOString(),
+    message: 'Checking BantiBhaiya Gateway...',
+    apiUrl: 'https://bantibhaiya.to/api/reseller_v1.php',
+    apiKeyMasked: 'Not Set'
+  });
+  const [isProviderBalanceLoading, setIsProviderBalanceLoading] = useState<boolean>(false);
+
   // Multi-Bot Management State
   const [bots, setBots] = useState<BotInstance[]>(() => {
     const saved = localStorage.getItem('kalam_bot_instances');
@@ -546,6 +565,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             if (serverData.settings) {
               setSettings(prev => ({ ...prev, ...serverData.settings }));
+            }
+            if (serverData.providerBalance) {
+              setProviderBalance(prev => ({ ...prev, ...serverData.providerBalance }));
             }
           }
         }
@@ -1471,23 +1493,98 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // BantiBhaiya Reseller Provider Key Delivery Helpers
+  // BantiBhaiya Reseller Provider Key Delivery & Real-Time Balance Helpers
+  const fetchProviderBalance = async (apiKey?: string, masterKey?: string, apiUrl?: string): Promise<ProviderBalanceState> => {
+    setIsProviderBalanceLoading(true);
+    try {
+      const activeBotReseller = activeBot?.reseller_api;
+      const res = await fetch('/api/provider/balance/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: apiKey || settings.bantibhaiya_api_key || activeBotReseller?.api_key,
+          masterKey: masterKey || settings.bantibhaiya_master_key || activeBotReseller?.master_key,
+          apiUrl: apiUrl || settings.bantibhaiya_api_url || activeBotReseller?.api_url
+        })
+      });
+      const data = await res.json();
+      if (data) {
+        setProviderBalance(data);
+        return data;
+      }
+      return providerBalance;
+    } catch (err: any) {
+      const errState: ProviderBalanceState = {
+        success: false,
+        balance: providerBalance.balance || 0,
+        currency: 'INR',
+        formatted: providerBalance.formatted || '₹0.00',
+        status: 'ERROR',
+        latencyMs: 0,
+        lastChecked: new Date().toISOString(),
+        message: err.message || 'Error querying balance',
+        error: err.message
+      };
+      setProviderBalance(errState);
+      return errState;
+    } finally {
+      setIsProviderBalanceLoading(false);
+    }
+  };
+
   const testProviderConnection = async (apiKey?: string, masterKey?: string, apiUrl?: string) => {
     try {
+      const activeBotReseller = activeBot?.reseller_api;
       const res = await fetch('/api/provider/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: apiKey || settings.bantibhaiya_api_key,
-          masterKey: masterKey || settings.bantibhaiya_master_key,
-          apiUrl: apiUrl || settings.bantibhaiya_api_url
+          apiKey: apiKey || settings.bantibhaiya_api_key || activeBotReseller?.api_key,
+          masterKey: masterKey || settings.bantibhaiya_master_key || activeBotReseller?.master_key,
+          apiUrl: apiUrl || settings.bantibhaiya_api_url || activeBotReseller?.api_url
         })
       });
-      return await res.json();
+      const data = await res.json();
+      if (data && data.balance !== undefined) {
+        setProviderBalance(prev => ({
+          ...prev,
+          success: data.success,
+          balance: data.balance,
+          formatted: data.formatted || `₹${Number(data.balance).toFixed(2)}`,
+          status: data.success ? 'CONNECTED' : 'ERROR',
+          lastChecked: new Date().toISOString(),
+          message: data.message || 'Connected',
+          raw: data.raw
+        }));
+      }
+      return data;
     } catch (err: any) {
       return { success: false, message: err.message };
     }
   };
+
+  // Real-Time BantiBhaiya Reseller Balance Continuous Polling (Real-time live updater)
+  useEffect(() => {
+    const currentKey = settings.bantibhaiya_api_key || activeBot?.reseller_api?.api_key;
+    if (!currentKey) {
+      setProviderBalance(prev => ({
+        ...prev,
+        status: 'UNCONFIGURED',
+        message: 'Reseller API Key not configured'
+      }));
+      return;
+    }
+
+    // Immediate initial sync
+    fetchProviderBalance();
+
+    // Real-time polling every 5 seconds
+    const interval = setInterval(() => {
+      fetchProviderBalance();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [settings.bantibhaiya_api_key, settings.bantibhaiya_master_key, settings.bantibhaiya_api_url, activeBot?.id, activeBot?.reseller_api?.api_key]);
 
   const buyProviderKeyDirect = async (params: {
     productId: string;
@@ -1807,10 +1904,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deliverySource = 'BantiBhaiya Reseller Gateway';
       } else {
         // Check fallback vault
-        const availableKey = productKeys.find(k => k.product_id === prodId && !k.is_used);
+        const availableKey = productKeys.find(k => String(k.product_id) === String(prodId) && !k.is_used);
         if (availableKey && (prod.delivery_mode === 'hybrid' || settings.provider_auto_fallback !== false)) {
           setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
-          setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
+          setProducts(prev => prev.map(p => String(p.id) === String(prodId) ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
           deliveredKey = availableKey.key_text || availableKey.key_string || '';
           deliverySource = 'Local Key Vault (API Fallback)';
         } else {
@@ -1824,14 +1921,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } else {
       // Find available key in vault
-      const availableKey = productKeys.find(k => k.product_id === prodId && !k.is_used);
+      const availableKey = productKeys.find(k => String(k.product_id) === String(prodId) && !k.is_used);
       if (!availableKey) {
         setIsBotTyping(false);
         pushBotMessage(`❌ <b>OUT OF STOCK</b>\n\nThis item is currently sold out in the key vault.`, getBackKeyboard('menu_shop'));
         return;
       }
       setProductKeys(prev => prev.map(k => k.id === availableKey.id ? { ...k, is_used: 1 } : k));
-      setProducts(prev => prev.map(p => p.id === prodId ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
+      setProducts(prev => prev.map(p => String(p.id) === String(prodId) ? { ...p, stock: Math.max(0, (p.stock ?? 0) - 1) } : p));
       deliveredKey = availableKey.key_text || availableKey.key_string || '';
       deliverySource = 'Local Key Vault';
     }
@@ -1967,15 +2064,24 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
     // 3. Category Selected: View Panels
     if (callbackData.startsWith('cat_')) {
       const category = callbackData.replace('cat_', '');
+      const catNorm = category.toLowerCase().trim();
       const availablePanels = Array.from(new Set(
         products
-          .filter(p => p.category.toLowerCase() === category.toLowerCase() && p.is_active === 1 && p.panel_name)
-          .map(p => p.panel_name)
+          .filter(p => {
+            const pCat = (p.category || '').toLowerCase().trim();
+            const matchCat = pCat === catNorm ||
+              (catNorm === 'all' || catNorm === 'all products') ||
+              (pCat.includes('nonroot') && catNorm.includes('nonroot')) ||
+              (!pCat.includes('non') && pCat.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
+              (pCat.includes('pc') && catNorm.includes('pc'));
+            return matchCat && p.is_active !== 0 && (p.panel_name || p.name);
+          })
+          .map(p => p.panel_name || p.name)
       ));
 
       if (availablePanels.length === 0) {
         // Direct to products if no panels
-        const prods = products.filter(p => p.category.toLowerCase() === category.toLowerCase() && p.is_active === 1);
+        const prods = products.filter(p => p.is_active !== 0);
         if (prods.length === 0) {
           pushBotMessage("❌ No products available in this category yet.", getBackKeyboard('menu_shop'));
           return;
@@ -1984,9 +2090,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       const kb: InlineKeyboardButton[][] = availablePanels.map(panel => {
         const panelProds = products.filter(p =>
-          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
-          (p.panel_name || p.name).toLowerCase().trim() === panel.toLowerCase().trim() &&
-          p.is_active === 1
+          (p.panel_name || p.name || '').toLowerCase().trim() === panel.toLowerCase().trim() &&
+          p.is_active !== 0
         );
         const firstProd = panelProds[0];
         const isAllMaint = panelProds.length > 0 && panelProds.every(p => Boolean(p.is_maintenance));
@@ -2002,8 +2107,8 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         }
 
         return [{
-          text: `📦 ${panel}`,
-          callback_data: refId ? `pnl_${refId}` : `pnl_${category}_${panel}`,
+          text: `📦 ${panel} (${panelProds.length} ${panelProds.length === 1 ? 'Plan' : 'Plans'})`,
+          callback_data: refId ? `pnl_${refId}` : `pnl_${encodeURIComponent(panel)}`,
           icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
           style: 'primary' as const
         }];
@@ -2031,32 +2136,34 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       let category = '';
       let panelName = '';
 
-      const refProd = products.find(p => String(p.id) === String(rawPayload));
+      const refProd = products.find(p => String(p.id) === String(rawPayload) || Number(p.id) === Number(rawPayload));
       if (refProd) {
         category = refProd.category;
         panelName = refProd.panel_name || refProd.name;
+        const targetPanelNorm = panelName.toLowerCase().trim();
         prods = products.filter(p =>
-          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
-          (p.panel_name || p.name).toLowerCase().trim() === panelName.toLowerCase().trim() &&
-          p.is_active === 1
+          (p.panel_name || p.name || '').toLowerCase().trim() === targetPanelNorm &&
+          p.is_active !== 0
         );
-      }
-
-      if (prods.length === 0) {
-        const parts = rawPayload.split('_');
-        category = parts[0];
-        panelName = parts.slice(1).join('_');
+        if (prods.length === 0) {
+          prods = [refProd];
+        }
+      } else {
+        const decodedPayload = decodeURIComponent(rawPayload).toLowerCase().trim();
         prods = products.filter(p =>
-          p.category.toLowerCase().trim() === category.toLowerCase().trim() &&
-          (p.panel_name || p.name).toLowerCase().trim() === panelName.toLowerCase().trim() &&
-          p.is_active === 1
+          (p.panel_name || p.name || '').toLowerCase().trim() === decodedPayload &&
+          p.is_active !== 0
         );
+        if (prods.length > 0) {
+          panelName = prods[0].panel_name || prods[0].name;
+          category = prods[0].category;
+        }
       }
 
       console.log(`[BotContext] [TRACE] Found ${prods.length} duration plans:`, prods.map(p => ({ id: p.id, name: p.name, validity: p.validity, price: p.price_inr })));
 
       if (prods.length === 0) {
-        pushBotMessage("No products found for this panel.", getBackKeyboard('menu_shop'));
+        pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
         return;
       }
 
@@ -2133,7 +2240,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       console.log(`[BotContext] [TRACE] Resolved Plan Object:`, prod ? { id: prod.id, panel: prod.panel_name, name: prod.name, validity: prod.validity, price: prod.price_inr } : 'NOT FOUND');
 
-      if (!prod || !prod.is_active) {
+      if (!prod || prod.is_active === 0) {
         pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
         return;
       }
@@ -2939,10 +3046,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     if (callbackData.startsWith('admin_view_p_')) {
-      const pId = Number(callbackData.replace('admin_view_p_', ''));
-      const prod = products.find(p => p.id === pId);
+      const rawPid = callbackData.replace('admin_view_p_', '');
+      const prod = products.find(p => String(p.id) === String(rawPid) || Number(p.id) === Number(rawPid));
       if (!prod) return;
 
+      const pId = prod.id;
       const text = `📦 <b><u>NODE DEEP DIVE DETAILS</u></b>
 ━━━━━━━━━━━━━━━━━━
 <b>ID:</b> <code>${prod.id}</code>
@@ -2955,10 +3063,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 <b>Payload Link:</b> ${prod.apk_link || 'None'}
 <b>Time Config:</b> ${prod.validity}
 <b>HWID Limit:</b> ${prod.device_limit}
-<b>Visibility:</b> ${prod.is_active ? 'Active' : 'Hidden'}
+<b>Visibility:</b> ${prod.is_active !== 0 ? 'Active' : 'Hidden'}
 ━━━━━━━━━━━━━━━━━━`;
 
-      const toggleBtnText = prod.is_active ? "Hide Product 👁‍🗨" : "Unhide Product 👁";
+      const toggleBtnText = prod.is_active !== 0 ? "Hide Product 👁‍🗨" : "Unhide Product 👁";
       const kb: InlineKeyboardButton[][] = [
         [
           { text: toggleBtnText, callback_data: `toggle_p_${pId}`, style: "danger" },
@@ -2972,17 +3080,19 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     if (callbackData.startsWith('toggle_p_')) {
-      const pId = Number(callbackData.replace('toggle_p_', ''));
-      setProducts(prev => prev.map(p => p.id === pId ? { ...p, is_active: p.is_active ? 0 : 1 } : p));
-      handleCallbackQuery(`admin_view_p_${pId}`);
+      const rawPid = callbackData.replace('toggle_p_', '');
+      const prod = products.find(p => String(p.id) === String(rawPid) || Number(p.id) === Number(rawPid));
+      if (!prod) return;
+      const newActive = prod.is_active !== 0 ? 0 : 1;
+      updateProduct(prod.id as any, { is_active: newActive });
+      pushBotMessage(`✅ Product status updated to ${newActive ? 'Active' : 'Hidden'}.`, getMainMenuKeyboard(currentUser));
       return;
     }
 
     if (callbackData.startsWith('delete_p_')) {
-      const pId = Number(callbackData.replace('delete_p_', ''));
-      setProducts(prev => prev.filter(p => p.id !== pId));
-      setProductKeys(prev => prev.filter(k => k.product_id !== pId));
-      handleCallbackQuery('admin_manage_prods');
+      const rawPid = callbackData.replace('delete_p_', '');
+      deleteProduct(rawPid);
+      pushBotMessage(`🗑 Product #${rawPid} deleted from catalog.`, getMainMenuKeyboard(currentUser));
       return;
     }
 
@@ -3609,11 +3719,12 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
   };
 
-  const updateProduct = (id: number, fields: Partial<Product>) => {
+  const updateProduct = (id: number | string, fields: Partial<Product>) => {
     let updatedProduct: Product | undefined;
+    const strId = String(id);
     setProducts(prev => {
       const updated = prev.map(p => {
-        if (p.id === id) {
+        if (String(p.id) === strId) {
           updatedProduct = { ...p, ...fields };
           return updatedProduct;
         }
@@ -3626,7 +3737,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).map(p => p.id === id ? { ...p, ...fields } : p)
+        products: (b.products || []).map(p => String(p.id) === strId ? { ...p, ...fields } : p)
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -3912,19 +4023,20 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     deleteProduct(id);
   };
 
-  const injectProductKeys = (productId: number, keys: string[]) => {
+  const injectProductKeys = (productId: number | string, keys: string[]) => {
     const cleanKeys = keys.map(k => k.trim()).filter(Boolean);
     if (cleanKeys.length === 0) return;
 
+    const strPid = String(productId);
     const newKeyEntities: ProductKey[] = cleanKeys.map((k, idx) => ({
       id: Date.now() + idx,
-      product_id: productId,
+      product_id: productId as any,
       key_text: k,
       is_used: 0
     }));
 
     setProductKeys(prev => [...newKeyEntities, ...prev]);
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: (p.stock || 0) + cleanKeys.length } : p));
+    setProducts(prev => prev.map(p => String(p.id) === strPid ? { ...p, stock: (p.stock || 0) + cleanKeys.length } : p));
     logActivity(12846461, 'ADMIN_INJECT_KEYS', `Added ${cleanKeys.length} keys to #${productId}`);
 
     // Sync injected keys to Backend Server (Live Telegram Engine Storage)
@@ -3939,13 +4051,14 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }).catch(err => console.warn('Failed to sync product keys to server:', err));
   };
 
-  const deleteProductKey = (keyId: number) => {
-    const key = productKeys.find(k => k.id === keyId);
+  const deleteProductKey = (keyId: number | string) => {
+    const strKeyId = String(keyId);
+    const key = productKeys.find(k => String(k.id) === strKeyId);
     if (!key) return;
 
-    setProductKeys(prev => prev.filter(k => k.id !== keyId));
+    setProductKeys(prev => prev.filter(k => String(k.id) !== strKeyId));
     if (!key.is_used) {
-      setProducts(prev => prev.map(p => p.id === key.product_id ? { ...p, stock: Math.max(0, (p.stock || 0) - 1) } : p));
+      setProducts(prev => prev.map(p => String(p.id) === String(key.product_id) ? { ...p, stock: Math.max(0, (p.stock || 0) - 1) } : p));
     }
   };
 
@@ -4859,6 +4972,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         testFamGatewayKey,
         createFamGatewayOrder,
         checkFamGatewayStatus,
+        providerBalance,
+        isProviderBalanceLoading,
+        fetchProviderBalance,
         testProviderConnection,
         buyProviderKeyDirect,
         sendBroadcastMessage,
