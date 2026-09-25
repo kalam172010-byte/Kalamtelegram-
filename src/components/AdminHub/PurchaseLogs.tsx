@@ -23,8 +23,11 @@ import {
   TrendingUp,
   Activity,
   Terminal,
-  Database
+  Database,
+  FileText
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useBot } from '../../context/BotContext';
 import { Order, Product, ProductKey, User } from '../../types';
 import { db, onSnapshot, collection } from '../../lib/firebase';
@@ -184,6 +187,113 @@ export const PurchaseLogs: React.FC = () => {
     setTimeout(() => setCopiedKeyId(null), 2000);
   };
 
+  const exportAsPDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+      // Title & Branding Header
+      doc.setFillColor(15, 23, 42); // #0f172a slate-900
+      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 70, 'F');
+
+      doc.setFontSize(16);
+      doc.setTextColor(56, 189, 248); // #38bdf8 cyan-400
+      doc.setFont('helvetica', 'bold');
+      doc.text("KALAM FF PANEL - OFFICIAL TRANSACTION & PURCHASE AUDIT STATEMENT", 30, 32);
+
+      doc.setFontSize(9);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFont('helvetica', 'normal');
+      const timeStr = new Date().toLocaleString('en-IN', { timeZoneName: 'short' });
+      doc.text(`Generated: ${timeStr} | Export Filter: ${categoryFilter} | Total Records: ${filteredPurchases.length}`, 30, 52);
+
+      // Financial Summary Box
+      doc.setFillColor(30, 41, 59); // slate-800
+      doc.roundedRect(30, 80, doc.internal.pageSize.getWidth() - 60, 45, 6, 6, 'F');
+
+      doc.setFontSize(9.5);
+      doc.setTextColor(241, 245, 249);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Revenue: INR ${stats.totalRevenue.toFixed(2)}`, 45, 106);
+      doc.text(`Total Keys Delivered: ${stats.totalKeys}`, 230, 106);
+      doc.text(`Vault Deliveries: ${stats.vaultCount}`, 410, 106);
+      doc.text(`API Deliveries: ${stats.providerCount}`, 560, 106);
+      doc.text(`Unique Buyers: ${stats.uniqueBuyers}`, 700, 106);
+
+      // Table Content
+      const tableHead = [["Order #", "Date & Time (IST)", "Buyer UID", "Username", "Product & Plan", "Type", "Delivered Key", "Paid (INR)"]];
+      const tableBody = filteredPurchases.map(p => [
+        `#${p.id}`,
+        new Date(p.purchase_date).toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        }),
+        String(p.user_id),
+        p.user?.username ? `@${p.user.username}` : (p.user?.first_name || 'N/A'),
+        p.product_name,
+        p.isProviderDelivery ? "Banti API" : "Vault Key",
+        p.delivered_key,
+        `₹${p.price_paid.toFixed(2)}`
+      ]);
+
+      autoTable(doc, {
+        head: tableHead,
+        body: tableBody,
+        startY: 135,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [14, 116, 144], // cyan-700
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: 4.5,
+          overflow: 'linebreak'
+        },
+        columnStyles: {
+          0: { cellWidth: 55, fontStyle: 'bold' },
+          1: { cellWidth: 95 },
+          2: { cellWidth: 65 },
+          3: { cellWidth: 80 },
+          4: { cellWidth: 160 },
+          5: { cellWidth: 65 },
+          6: { cellWidth: 190, font: 'courier' },
+          7: { cellWidth: 60, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] }
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        foot: [[
+          "TOTAL",
+          "",
+          "",
+          "",
+          "",
+          "",
+          `${filteredPurchases.length} Orders`,
+          `₹${filteredPurchases.reduce((s, p) => s + p.price_paid, 0).toFixed(2)}`
+        ]],
+        footStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [56, 189, 248],
+          fontStyle: 'bold'
+        },
+        didDrawPage: () => {
+          const pageStr = `Page ${doc.getNumberOfPages()}`;
+          doc.setFontSize(8);
+          doc.setTextColor(100);
+          doc.text("Kalam FF Panel Automated Transaction Ledger • Confidential Accounting Record", 30, doc.internal.pageSize.getHeight() - 15);
+          doc.text(pageStr, doc.internal.pageSize.getWidth() - 65, doc.internal.pageSize.getHeight() - 15);
+        }
+      });
+
+      doc.save(`kalam_purchase_statement_${Date.now()}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+    }
+  };
+
   const exportAsJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredPurchases, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -253,8 +363,16 @@ export const PurchaseLogs: React.FC = () => {
             </div>
 
             <button
+              onClick={exportAsPDF}
+              className="px-3 py-2 bg-gradient-to-r from-rose-600/90 to-red-600/90 hover:from-rose-500 hover:to-red-500 text-white border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/20 active:scale-95"
+              title="Download Statement as PDF"
+            >
+              <FileText className="w-3.5 h-3.5 text-white" />
+              <span>Download PDF</span>
+            </button>
+            <button
               onClick={exportAsCSV}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="Export as CSV"
             >
               <Download className="w-3.5 h-3.5 text-cyan-400" />
@@ -262,7 +380,7 @@ export const PurchaseLogs: React.FC = () => {
             </button>
             <button
               onClick={exportAsJSON}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="Export as JSON"
             >
               <Database className="w-3.5 h-3.5 text-purple-400" />

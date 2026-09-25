@@ -58,6 +58,8 @@ import {
   AlertCircle,
   ShoppingBag
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Product, BotInstance } from '../../types';
 import { sortProductsByDuration } from '../../utils/durationSorter';
 import { SystemHealthWidget } from './SystemHealthWidget';
@@ -884,6 +886,199 @@ export const AdminDashboard: React.FC = () => {
     a.click();
   };
 
+  const handleBackupDatabasePDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const timeStr = new Date().toLocaleString('en-IN', { timeZoneName: 'short' });
+
+      // Title & Branding Header
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(0, 0, pageWidth, 75, 'F');
+
+      doc.setFontSize(16);
+      doc.setTextColor(56, 189, 248); // cyan-400
+      doc.setFont('helvetica', 'bold');
+      doc.text("KALAM FF PANEL - COMPREHENSIVE DATABASE BACKUP & APPLICATION STATE", 30, 32);
+
+      doc.setFontSize(9);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated At: ${timeStr} | Admin UID: ${settings.admin_id || 12846461} | Bot: @${settings.bot_username || 'KALAMFFPANEL1BOT'} | Format: Official Offline State Snapshot`, 30, 52);
+
+      // Financial & Operational Metrics Box
+      doc.setFillColor(30, 41, 59); // slate-800
+      doc.roundedRect(30, 85, pageWidth - 60, 45, 6, 6, 'F');
+
+      const totalBalAll = allUsers.reduce((s, u) => s + (u.balance || 0), 0);
+
+      doc.setFontSize(9);
+      doc.setTextColor(241, 245, 249);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Active Products: ${products.length} Plans`, 45, 111);
+      doc.text(`Available Keys: ${availableKeysCount} in Vault`, 200, 111);
+      doc.text(`Users: ${allUsers.length} (Total Bal: INR ${totalBalAll.toFixed(2)})`, 380, 111);
+      doc.text(`Orders: ${orders.length} (Total Rev: INR ${totalRevenue.toFixed(2)})`, 580, 111);
+      doc.text(`Bots: ${bots.length} Fleet`, 760, 111);
+
+      let currentY = 145;
+
+      // 1. PRODUCTS TABLE
+      doc.setFontSize(11);
+      doc.setTextColor(14, 165, 233); // sky-500
+      doc.setFont('helvetica', 'bold');
+      doc.text("1. PRODUCTS & PRICING CATALOG", 30, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 8,
+        theme: 'grid',
+        head: [["ID", "Category", "Panel Name", "Validity / Plan", "Price (INR)", "Reseller (INR)", "Stock", "Status"]],
+        body: products.map(p => {
+          const keysCount = productKeys.filter(k => String(k.product_id) === String(p.id) && !k.is_used).length;
+          return [
+            String(p.id),
+            p.category || 'General',
+            p.panel_name || p.name,
+            p.validity || p.name,
+            `INR ${p.price_inr.toFixed(2)}`,
+            `INR ${(p.reseller_price || p.price_inr).toFixed(2)}`,
+            `${keysCount} Keys`,
+            p.is_active !== 0 ? 'ACTIVE' : 'INACTIVE'
+          ];
+        }),
+        headStyles: { fillColor: [14, 116, 144], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 3.5 },
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 140 },
+          2: { cellWidth: 150 },
+          3: { cellWidth: 90 },
+          4: { cellWidth: 75, halign: 'right' },
+          5: { cellWidth: 85, halign: 'right' },
+          6: { cellWidth: 70, halign: 'center' },
+          7: { cellWidth: 65, halign: 'center' }
+        }
+      });
+
+      // 2. USERS & WALLET BALANCES TABLE
+      doc.addPage();
+      currentY = 40;
+      doc.setFontSize(11);
+      doc.setTextColor(16, 185, 129); // emerald-500
+      doc.setFont('helvetica', 'bold');
+      doc.text("2. REGISTERED USERS & WALLET BALANCES", 30, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 8,
+        theme: 'grid',
+        head: [["User ID", "First Name", "Username", "Balance (INR)", "Spent (INR)", "Orders", "Role / Status", "Joined Date"]],
+        body: allUsers.map(u => [
+          String(u.user_id),
+          u.first_name || 'N/A',
+          u.username ? `@${u.username}` : 'none',
+          `INR ${u.balance.toFixed(2)}`,
+          `INR ${u.spent.toFixed(2)}`,
+          String(u.orders_count || 0),
+          u.is_banned ? 'BANNED' : (u.is_vip ? 'VIP USER' : (u.is_reseller ? 'RESELLER' : 'REGULAR')),
+          u.joined_date || 'N/A'
+        ]),
+        headStyles: { fillColor: [5, 150, 105], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 3.5 },
+        columnStyles: {
+          0: { cellWidth: 70, fontStyle: 'bold' },
+          1: { cellWidth: 110 },
+          2: { cellWidth: 100 },
+          3: { cellWidth: 85, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] },
+          4: { cellWidth: 80, halign: 'right' },
+          5: { cellWidth: 55, halign: 'center' },
+          6: { cellWidth: 90, halign: 'center' },
+          7: { cellWidth: 130 }
+        }
+      });
+
+      // 3. ORDERS & DELIVERED LICENSE KEYS TABLE
+      doc.addPage();
+      currentY = 40;
+      doc.setFontSize(11);
+      doc.setTextColor(147, 51, 234); // purple-600
+      doc.setFont('helvetica', 'bold');
+      doc.text("3. PURCHASE ORDERS & LICENSE KEYS FULFILLMENT", 30, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 8,
+        theme: 'grid',
+        head: [["Order ID", "Date IST", "Buyer UID", "Product Plan", "Delivered Key", "Paid (INR)"]],
+        body: orders.slice(0, 100).map(o => [
+          `#${o.id}`,
+          new Date(o.purchase_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          String(o.user_id),
+          o.product_name,
+          o.delivered_key,
+          `INR ${o.price_paid.toFixed(2)}`
+        ]),
+        headStyles: { fillColor: [126, 34, 206], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 3.5 },
+        columnStyles: {
+          0: { cellWidth: 65, fontStyle: 'bold' },
+          1: { cellWidth: 110 },
+          2: { cellWidth: 75 },
+          3: { cellWidth: 170 },
+          4: { cellWidth: 220, font: 'courier' },
+          5: { cellWidth: 80, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] }
+        }
+      });
+
+      // 4. BOT FLEET & GATEWAY CONFIGURATION
+      doc.addPage();
+      currentY = 40;
+      doc.setFontSize(11);
+      doc.setTextColor(217, 119, 6); // amber-600
+      doc.setFont('helvetica', 'bold');
+      doc.text("4. BOT FLEET & PAYMENT GATEWAY CONFIGURATIONS", 30, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 8,
+        theme: 'grid',
+        head: [["Bot ID", "Name", "Username", "Status", "UPI ID", "Merchant", "Provider Gateway"]],
+        body: bots.map(b => [
+          b.id,
+          b.name,
+          `@${b.username}`,
+          b.status,
+          b.payment_gateway?.upi_id || settings.fampay_upi_id || 'N/A',
+          b.payment_gateway?.merchant_name || 'N/A',
+          b.reseller_api?.api_url || settings.bantibhaiya_api_url || 'N/A'
+        ]),
+        headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 3.5 },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 120 },
+          2: { cellWidth: 110 },
+          3: { cellWidth: 65, halign: 'center' },
+          4: { cellWidth: 120 },
+          5: { cellWidth: 100 },
+          6: { cellWidth: 130 }
+        }
+      });
+
+      // Add page numbers and confidential footer to all pages
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(120);
+        doc.text("Kalam FF Panel Automated Master State Snapshot • Confidential Administrative Backup", 30, pageHeight - 15);
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 70, pageHeight - 15);
+      }
+
+      doc.save(`kalam_database_backup_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error('Failed to generate master backup PDF:', err);
+    }
+  };
+
   return (
     <div className="min-h-full w-full text-slate-100 p-2 sm:p-4 md:p-6 pb-28 md:pb-12 space-y-4 max-w-7xl mx-auto flex flex-col">
       {/* Top Admin Header Bar - Compact & Highly Visible */}
@@ -954,6 +1149,17 @@ export const AdminDashboard: React.FC = () => {
               )}
             </select>
           </div>
+
+          {/* Master Backup Database (PDF) Button */}
+          <button
+            type="button"
+            onClick={handleBackupDatabasePDF}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border border-cyan-400/40 min-h-[38px] active:scale-95 shadow-lg shadow-cyan-600/20"
+            title="Export complete application state as official PDF snapshot"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-200" />
+            <span>Backup Database (PDF)</span>
+          </button>
         </div>
       </div>
 
@@ -1548,8 +1754,16 @@ export const AdminDashboard: React.FC = () => {
                 <div className="pt-2 flex flex-col gap-2">
                   <button
                     type="button"
+                    onClick={handleBackupDatabasePDF}
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer transition active:scale-95 border border-cyan-400/30"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Backup Full Database (PDF)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowAddProductModal(true)}
-                    className="w-full py-2.5 px-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow cursor-pointer transition"
+                    className="w-full py-2 px-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow cursor-pointer transition"
                   >
                     <Plus className="w-4 h-4" />
                     Add New Product Package
