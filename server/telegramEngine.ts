@@ -1362,6 +1362,216 @@ class TelegramEngine {
       return;
     }
 
+    if (fsm && fsm.state === 'admin_wait_add_product') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) return;
+
+      const rawInput = text.trim();
+      const parts = rawInput.split('|').map((s: string) => s.trim());
+
+      if (parts.length < 3) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid Product Format</b>\n\n` +
+          `Format:\n<code>Category | Panel Name | Plan Name | Price | Reseller Price | Mode(vault/api) | PID | Duration</code>\n\n` +
+          `📌 <b>Example:</b>\n` +
+          `<code>Android Non-Root | MST VIP | 1 Day | 50 | 35 | api | 5489 | 1 Day</code>`,
+          {
+            inline_keyboard: [
+              [{ text: '➕ Try Again', callback_data: 'admin_add_prod_menu' }],
+              [{ text: '🔙 Products Hub', callback_data: 'admin_prods_hub' }]
+            ]
+          }
+        );
+        return;
+      }
+
+      let category = 'ANDROID NON ROOT PANEL';
+      let panelName = 'VIP PANEL';
+      let planName = '1 Day Plan';
+      let price = 50;
+      let resellerPrice = 35;
+      let deliveryMode: 'manual_vault' | 'api_provider' = 'manual_vault';
+      let providerPid = '';
+      let providerDuration = '';
+      let validity = '24 Hours';
+
+      if (parts.length >= 4) {
+        category = parts[0] || 'ANDROID NON ROOT PANEL';
+        panelName = parts[1] || 'VIP PANEL';
+        planName = parts[2] || '1 Day Plan';
+        price = parseFloat(parts[3]) || 50;
+        resellerPrice = parts[4] ? parseFloat(parts[4]) : Math.round(price * 0.7);
+
+        const modeStr = (parts[5] || '').toLowerCase();
+        if (modeStr.includes('api') || modeStr.includes('provider') || modeStr.includes('banti')) {
+          deliveryMode = 'api_provider';
+        }
+        providerPid = parts[6] || '';
+        providerDuration = parts[7] || planName;
+        validity = parts[7] || parts[5] || planName;
+      } else {
+        panelName = parts[0];
+        planName = parts[1];
+        price = parseFloat(parts[2]) || 50;
+        resellerPrice = Math.round(price * 0.7);
+      }
+
+      // Format category standard names
+      const catUpper = category.toUpperCase();
+      if (catUpper.includes('PC')) {
+        category = 'PC PANEL';
+      } else if (catUpper.includes('ROOT') && !catUpper.includes('NON')) {
+        category = 'ANDROID ROOT PANEL';
+      } else {
+        category = 'ANDROID NON ROOT PANEL';
+      }
+
+      const newId = Date.now();
+      const newProduct: Product = {
+        id: newId,
+        category: category,
+        panel_name: panelName,
+        name: planName,
+        price_inr: price,
+        reseller_price: resellerPrice,
+        reseller_price_inr: resellerPrice,
+        validity: validity,
+        device_limit: category.includes('PC') ? '1 PC' : '1 Device',
+        apk_link: 'https://t.me/KalamFFPanelAPKs',
+        delivery_mode: deliveryMode,
+        provider_product_id: providerPid || undefined,
+        provider_duration: providerDuration || undefined,
+        is_active: 1,
+        stock: 0,
+        requires_android_id: false
+      };
+
+      dbStore.addProduct(newProduct);
+
+      await this.sendMessage(
+        chatId,
+        `🎉 <b>NEW PRODUCT & PLAN CREATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `🆔 <b>Product ID:</b> <code>${newId}</code>\n` +
+        `📂 <b>Category:</b> ${category}\n` +
+        `📦 <b>Panel Name:</b> ${panelName}\n` +
+        `⏱ <b>Plan / Duration:</b> ${planName}\n` +
+        `💰 <b>Price:</b> ₹${price.toFixed(2)}\n` +
+        `👑 <b>Reseller Price:</b> ₹${resellerPrice.toFixed(2)}\n` +
+        `⚡ <b>Delivery Mode:</b> ${deliveryMode === 'api_provider' ? `Banti API (PID: <code>${providerPid}</code>)` : 'Local Key Vault'}\n\n` +
+        `<i>Immediately live in the Telegram Shop Catalog and synced to Cloud Firestore!</i>`,
+        {
+          inline_keyboard: [
+            [{ text: '🔑 Add Vault Keys', callback_data: 'admin_inject_keys_menu', style: 'success' }],
+            [{ text: '📦 Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+          ]
+        }
+      );
+      return;
+    }
+
+    if (fsm && fsm.state === 'admin_wait_set_provider') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) return;
+
+      const parts = text.trim().split(/\s+/);
+      const prodId = parts[0];
+      const providerPid = parts[1];
+      const providerDuration = parts.slice(2).join(' ') || '1 Day';
+
+      if (!prodId || !providerPid) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Invalid Format</b>\n\nUsage: <code>&lt;Product_ID&gt; &lt;Provider_PID&gt; &lt;Duration&gt;</code>\n\nExample:\n<code>101 5489 1 Day</code>`,
+          { inline_keyboard: [[{ text: '🔙 Back to Reseller Setup', callback_data: 'admin_reseller_pid_menu' }]] }
+        );
+        return;
+      }
+
+      const product = dbStore.getProduct(prodId);
+      if (!product) {
+        await this.sendMessage(chatId, `❌ Product with ID <code>${prodId}</code> not found.`);
+        return;
+      }
+
+      dbStore.updateProduct(prodId, {
+        delivery_mode: 'api_provider',
+        provider_product_id: providerPid,
+        provider_duration: providerDuration
+      });
+
+      await this.sendMessage(
+        chatId,
+        `⚡ <b>BANTIBHAIYA RESELLER PID CONFIGURED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Product:</b> ${product.panel_name} (${product.name})\n` +
+        `🆔 <b>Local ID:</b> <code>${product.id}</code>\n` +
+        `🔗 <b>Provider PID:</b> <code>${providerPid}</code>\n` +
+        `⏱ <b>Duration:</b> ${providerDuration}\n` +
+        `🚚 <b>Delivery Mode:</b> ⚡ BantiBhaiya Reseller Direct Fulfillment\n\n` +
+        `<i>Orders for this plan will now be generated and delivered via BantiBhaiya API in real time!</i>`,
+        {
+          inline_keyboard: [
+            [{ text: '📦 Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+          ]
+        }
+      );
+      return;
+    }
+
+    if (fsm && fsm.state === 'admin_wait_add_keys') {
+      dbStore.setFsmState(user.user_id, 'idle');
+      if (!this.isAdmin(user, chatId)) return;
+
+      const rawInput = text.trim();
+      let prodId: any;
+      let keysList: string[] = [];
+
+      if (rawInput.includes('|')) {
+        const parts = rawInput.split('|').map((s: string) => s.trim());
+        prodId = parts[0];
+        keysList = (parts[1] || '').split(/[\n,]+/).map((k: string) => k.trim()).filter(Boolean);
+      } else {
+        const lines = rawInput.split(/[\n,]+/).map((k: string) => k.trim()).filter(Boolean);
+        prodId = lines[0];
+        keysList = lines.slice(1);
+      }
+
+      const product = dbStore.getProduct(prodId);
+      if (!product) {
+        await this.sendMessage(
+          chatId,
+          `❌ <b>Product Not Found</b>\n\nProduct ID <code>${prodId}</code> does not exist in the database.`,
+          { inline_keyboard: [[{ text: '🔙 Back to Keys Menu', callback_data: 'admin_inject_keys_menu' }]] }
+        );
+        return;
+      }
+
+      if (keysList.length === 0) {
+        await this.sendMessage(chatId, `❌ No valid keys detected. Please provide at least one key.`);
+        return;
+      }
+
+      const added = dbStore.injectProductKeys(Number(product.id), keysList);
+
+      await this.sendMessage(
+        chatId,
+        `🔑 <b>${added} KEYS INJECTED SUCCESSFULLY!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Product:</b> ${product.panel_name} (${product.name})\n` +
+        `🆔 <b>Product ID:</b> <code>${product.id}</code>\n` +
+        `📊 <b>Updated Vault Stock:</b> <b>${product.stock} keys ready</b>\n\n` +
+        `<i>Keys are now available for instant automated delivery in the Telegram shop!</i>`,
+        {
+          inline_keyboard: [
+            [{ text: '📦 Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+          ]
+        }
+      );
+      return;
+    }
+
     if (fsm && fsm.state === 'wait_for_redeem') {
       dbStore.setFsmState(user.user_id, 'idle');
       const couponCode = text.toUpperCase();
@@ -1644,17 +1854,133 @@ class TelegramEngine {
 
     // Admin Quick Commands
     if (this.isAdmin(user, chatId)) {
+      if (lowerText.startsWith('/delproduct') || lowerText.startsWith('/delprod')) {
+        const prodId = text.replace(/^\/(delproduct|delprod)\s*/i, '').trim();
+        if (prodId) {
+          const prod = dbStore.getProduct(prodId);
+          const pName = prod ? `${prod.panel_name} (${prod.name})` : `ID #${prodId}`;
+          const deleted = dbStore.deleteProduct(prodId);
+          if (deleted) {
+            await this.sendMessage(
+              chatId,
+              `🗑️ <b>PRODUCT PLAN DELETED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+              `✅ <b>Deleted:</b> ${pName}\n` +
+              `🆔 <b>ID:</b> <code>${prodId}</code>\n\n` +
+              `<i>Successfully removed from Firestore & Telegram Store Catalog!</i>`,
+              { inline_keyboard: [[{ text: '📦 Products Hub', callback_data: 'admin_prods_hub' }]] }
+            );
+          } else {
+            await this.sendMessage(chatId, `❌ Product ID <code>${prodId}</code> not found.`);
+          }
+          return;
+        }
+        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/delproduct &lt;Product_ID&gt;</code>\nExample: <code>/delproduct 101</code>`);
+        return;
+      }
+
+      if (lowerText.startsWith('/delpanel')) {
+        const panelName = text.replace(/^\/delpanel\s*/i, '').trim();
+        if (panelName) {
+          const count = dbStore.deletePanel('', panelName);
+          await this.sendMessage(
+            chatId,
+            `❌ <b>ENTIRE PANEL DELETED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+            `📦 <b>Panel Name:</b> ${panelName}\n` +
+            `🗑️ <b>Plans Removed:</b> ${count} packages\n\n` +
+            `<i>All plans under this panel have been purged from Firestore & Store!</i>`,
+            { inline_keyboard: [[{ text: '📦 Products Hub', callback_data: 'admin_prods_hub' }]] }
+          );
+          return;
+        }
+        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/delpanel &lt;Panel_Name&gt;</code>\nExample: <code>/delpanel MST VIP</code>`);
+        return;
+      }
+
+      if (lowerText.startsWith('/setprovider') || lowerText.startsWith('/setpid')) {
+        const line = text.replace(/^\/(setprovider|setpid)\s*/i, '').trim();
+        const parts = line.split(/\s+/);
+        if (parts.length >= 2) {
+          const prodId = parts[0];
+          const providerPid = parts[1];
+          const providerDuration = parts.slice(2).join(' ') || '1 Day';
+
+          const product = dbStore.getProduct(prodId);
+          if (product) {
+            dbStore.updateProduct(prodId, {
+              delivery_mode: 'api_provider',
+              provider_product_id: providerPid,
+              provider_duration: providerDuration
+            });
+
+            await this.sendMessage(
+              chatId,
+              `⚡ <b>BANTIBHAIYA RESELLER PID CONFIGURED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+              `📦 <b>Product:</b> ${product.panel_name} (${product.name})\n` +
+              `🆔 <b>Local ID:</b> <code>${product.id}</code>\n` +
+              `🔗 <b>Provider PID:</b> <code>${providerPid}</code>\n` +
+              `⏱ <b>Duration:</b> ${providerDuration}\n` +
+              `🚚 <b>Mode:</b> ⚡ BantiBhaiya Direct API`,
+              { inline_keyboard: [[{ text: '📦 Products Hub', callback_data: 'admin_prods_hub' }]] }
+            );
+            return;
+          } else {
+            await this.sendMessage(chatId, `❌ Product ID <code>${prodId}</code> not found.`);
+            return;
+          }
+        }
+        await this.sendMessage(
+          chatId,
+          `⚡ <b>Set Banti API PID Usage:</b>\n` +
+          `<code>/setprovider &lt;Product_ID&gt; &lt;Provider_PID&gt; &lt;Duration&gt;</code>\n\n` +
+          `📌 <b>Example:</b>\n<code>/setprovider 101 5489 1 Day</code>`
+        );
+        return;
+      }
+
       if (lowerText.startsWith('/addproduct') || lowerText.startsWith('/addprod')) {
         const line = text.replace(/^\/(addproduct|addprod)\s*/i, '').trim();
         if (line.includes('|')) {
           const parts = line.split('|').map((s: string) => s.trim());
-          if (parts.length >= 4) {
-            const category = parts[0] || 'Android Non-Root';
-            const panelName = parts[1] || 'NEW PANEL';
-            const planName = parts[2] || '1 Day Plan';
-            const price = parseFloat(parts[3]) || 50;
-            const resellerPrice = parts[4] ? parseFloat(parts[4]) : Math.round(price * 0.7);
-            const validity = parts[5] || '24 Hours';
+          if (parts.length >= 3) {
+            let category = 'ANDROID NON ROOT PANEL';
+            let panelName = 'VIP PANEL';
+            let planName = '1 Day Plan';
+            let price = 50;
+            let resellerPrice = 35;
+            let deliveryMode: 'manual_vault' | 'api_provider' = 'manual_vault';
+            let providerPid = '';
+            let providerDuration = '';
+            let validity = '24 Hours';
+
+            if (parts.length >= 4) {
+              category = parts[0] || 'ANDROID NON ROOT PANEL';
+              panelName = parts[1] || 'NEW PANEL';
+              planName = parts[2] || '1 Day Plan';
+              price = parseFloat(parts[3]) || 50;
+              resellerPrice = parts[4] ? parseFloat(parts[4]) : Math.round(price * 0.7);
+
+              const modeStr = (parts[5] || '').toLowerCase();
+              if (modeStr.includes('api') || modeStr.includes('provider') || modeStr.includes('banti')) {
+                deliveryMode = 'api_provider';
+              }
+              providerPid = parts[6] || '';
+              providerDuration = parts[7] || planName;
+              validity = parts[7] || parts[5] || planName;
+            } else {
+              panelName = parts[0];
+              planName = parts[1];
+              price = parseFloat(parts[2]) || 50;
+              resellerPrice = Math.round(price * 0.7);
+            }
+
+            const catUpper = category.toUpperCase();
+            if (catUpper.includes('PC')) {
+              category = 'PC PANEL';
+            } else if (catUpper.includes('ROOT') && !catUpper.includes('NON')) {
+              category = 'ANDROID ROOT PANEL';
+            } else {
+              category = 'ANDROID NON ROOT PANEL';
+            }
 
             const newId = Date.now();
             const newProd: Product = {
@@ -1664,19 +1990,20 @@ class TelegramEngine {
               category: category,
               price_inr: price,
               reseller_price: resellerPrice,
+              reseller_price_inr: resellerPrice,
               validity: validity,
-              device_limit: '1 Device',
+              device_limit: category.includes('PC') ? '1 PC' : '1 Device',
               stock: 0,
-              delivery_mode: 'manual_vault',
+              delivery_mode: deliveryMode,
+              provider_product_id: providerPid || undefined,
+              provider_duration: providerDuration || undefined,
               is_active: 1,
               is_maintenance: 0,
               requires_android_id: false,
               apk_link: 'https://t.me/KalamFFPanelAPKs'
             };
 
-            const currentProds = dbStore.getData().products;
-            currentProds.push(newProd);
-            dbStore.saveData();
+            dbStore.addProduct(newProd);
 
             await this.sendMessage(
               chatId,
@@ -1687,9 +2014,15 @@ class TelegramEngine {
               `⏱ <b>Duration Plan:</b> ${planName}\n` +
               `💰 <b>Price:</b> ₹${price}\n` +
               `👑 <b>Reseller Price:</b> ₹${resellerPrice}\n` +
-              `⏳ <b>Validity:</b> ${validity}\n\n` +
-              `<i>It is now live in the Telegram Bot Store! You can add keys via <code>/addkey ${newId} | YOUR_KEY</code></i>`,
-              { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]] }
+              `⚡ <b>Delivery Mode:</b> ${deliveryMode === 'api_provider' ? `Banti API (PID: <code>${providerPid}</code>)` : 'Local Key Vault'}\n\n` +
+              `<i>It is now live in the Telegram Bot Store & Cloud Firestore!</i>`,
+              {
+                inline_keyboard: [
+                  [{ text: '🔑 Add Vault Keys', callback_data: 'admin_inject_keys_menu', style: 'success' }],
+                  [{ text: '📦 Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+                  [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+                ]
+              }
             );
             return;
           }
@@ -1698,13 +2031,14 @@ class TelegramEngine {
         await this.sendMessage(
           chatId,
           `➕ <b>ADD PRODUCT COMMAND USAGE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `Format:\n<code>/addproduct &lt;Category&gt; | &lt;Panel Name&gt; | &lt;Plan Name&gt; | &lt;Price&gt; | &lt;Reseller Price&gt; | &lt;Validity&gt;</code>\n\n` +
-          `📌 <b>Example:</b>\n` +
-          `<code>/addproduct Android Non-Root | MST PANEL | 1 Day Plan | 50 | 35 | 24 Hours</code>\n\n` +
-          `<i>Or launch the Mini App for full visual product creation!</i>`,
+          `Format:\n<code>/addproduct &lt;Category&gt; | &lt;Panel Name&gt; | &lt;Plan Name&gt; | &lt;Price&gt; | &lt;Reseller Price&gt; | &lt;Mode: vault/api&gt; | &lt;PID&gt; | &lt;Duration&gt;</code>\n\n` +
+          `📌 <b>Example 1 (Banti Reseller API):</b>\n` +
+          `<code>/addproduct Android Non-Root | MST VIP | 1 Day | 50 | 35 | api | 5489 | 1 Day</code>\n\n` +
+          `📌 <b>Example 2 (Vault Key):</b>\n` +
+          `<code>/addproduct PC Panel | ZERO PC | 7 Days | 250 | 180 | vault</code>`,
           {
             inline_keyboard: [
-              [{ text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() }, style: 'primary' }],
+              [{ text: '➕ In-Bot Product Wizard', callback_data: 'admin_add_prod_menu', style: 'success' }],
               [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
             ]
           }
@@ -3023,6 +3357,248 @@ class TelegramEngine {
       return;
     }
 
+    if (data === 'admin_prods_hub') {
+      if (!this.isAdmin(user, chatId)) return;
+      const d = dbStore.getData();
+      const prods = d.products;
+      const unusedKeys = d.productKeys.filter(k => k.is_used === 0);
+
+      let text = `📦 <b>IN-BOT PRODUCTS & PLANS MANAGER</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `Total Plans Configured: <b>${prods.length}</b>\n\n`;
+
+      if (prods.length === 0) {
+        text += `<i>No products currently in store! Click '➕ Add Product / Plan' below to create one.</i>\n\n`;
+      } else {
+        // Group by category
+        const categories = Array.from(new Set(prods.map(p => p.category || 'General')));
+        categories.forEach(cat => {
+          text += `📁 <b><u>${cat.toUpperCase()}</u></b>\n`;
+          const catProds = prods.filter(p => (p.category || 'General') === cat);
+          catProds.forEach(p => {
+            const avail = unusedKeys.filter(k => k.product_id === p.id).length;
+            const mode = p.delivery_mode === 'api_provider' ? `⚡ Banti API (PID: ${p.provider_product_id || 'N/A'})` : `📦 Vault (${avail} keys)`;
+            text += `• <b>${p.panel_name || p.name}</b> - <i>${p.name || p.validity}</i>\n` +
+              `  ID: <code>${p.id}</code> | ₹${p.price_inr} (Reseller: ₹${p.reseller_price || p.price_inr})\n` +
+              `  Delivery: ${mode}\n`;
+          });
+          text += `\n`;
+        });
+      }
+
+      text += `👇 <i>Choose an action below to add, delete, or configure API PIDs:</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '➕ Add Product / Plan', callback_data: 'admin_add_prod_menu', style: 'success' },
+            { text: '🗑️ Delete Product / Plan', callback_data: 'admin_del_prods_menu', style: 'danger' }
+          ],
+          [
+            { text: '⚡ Set Banti API PID', callback_data: 'admin_reseller_pid_menu', style: 'primary' },
+            { text: '🔑 + Add Vault Keys', callback_data: 'admin_inject_keys_menu', style: 'success' }
+          ],
+          [
+            { text: '🚀 Open Web Admin Hub', web_app: { url: this.getWebAppUrl() } },
+            { text: '🔙 Back to Terminal', callback_data: 'admin_panel', style: 'danger' }
+          ]
+        ]
+      };
+
+      await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
+    if (data === 'admin_add_prod_menu') {
+      if (!this.isAdmin(user, chatId)) return;
+      dbStore.setFsmState(user.user_id, 'admin_wait_add_product');
+
+      const text = `➕ <b>ADD NEW PRODUCT OR PLAN (IN-BOT)</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `👇 <b>Reply directly in chat with the product details in this format:</b>\n\n` +
+        `<code>Category | Panel Name | Plan Name | Price INR | Reseller Price | Mode(vault/api) | Provider PID | Duration</code>\n\n` +
+        `📌 <b>Example 1 (BantiBhaiya Reseller API Direct):</b>\n` +
+        `<code>Android Non-Root | MST VIP | 1 Day | 50 | 35 | api | 5489 | 1 Day</code>\n\n` +
+        `📌 <b>Example 2 (Local Vault Key Delivery):</b>\n` +
+        `<code>PC Panel | VIP ZERO | 7 Days | 250 | 180 | vault</code>\n\n` +
+        `📌 <b>Example 3 (Simple 4-part):</b>\n` +
+        `<code>Android Root | DRIP PANEL | 30 Days | 600 | 450</code>\n\n` +
+        `<i>Send /cancel to abort at any time.</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔙 Back to Products Hub', callback_data: 'admin_prods_hub' }],
+          [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      };
+
+      await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
+    if (data === 'admin_del_prods_menu') {
+      if (!this.isAdmin(user, chatId)) return;
+      const prods = dbStore.getData().products;
+
+      if (prods.length === 0) {
+        await this.editMessageText(
+          chatId,
+          messageId,
+          `🗑️ <b>DELETE PRODUCT / PLAN</b>\n\n<i>No products found in the database.</i>`,
+          { inline_keyboard: [[{ text: '🔙 Back to Products Hub', callback_data: 'admin_prods_hub' }]] }
+        );
+        return;
+      }
+
+      let text = `🗑️ <b>DELETE PRODUCT / PLAN FROM BOT</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `<i>Click any button below to instantly remove a plan or panel:</i>\n\n`;
+
+      const kbRows: any[] = [];
+
+      // List individual plan delete buttons
+      prods.slice(0, 15).forEach(p => {
+        text += `• <b>${p.panel_name || p.name}</b> (<code>${p.name || p.validity}</code>) - ID: <code>${p.id}</code>\n`;
+        kbRows.push([
+          {
+            text: `🗑️ Del: ${p.panel_name || 'Panel'} [${p.name || p.validity}] (₹${p.price_inr})`,
+            callback_data: `admin_del_plan_${p.id}`
+          }
+        ]);
+      });
+
+      // Also provide unique panel delete buttons
+      const uniquePanels = Array.from(new Set(prods.map(p => p.panel_name || p.name)));
+      if (uniquePanels.length > 0) {
+        uniquePanels.slice(0, 5).forEach(panelName => {
+          kbRows.push([
+            {
+              text: `❌ Delete Entire Panel: ${panelName} (All Plans)`,
+              callback_data: `admin_del_panel_${encodeURIComponent(panelName)}`
+            }
+          ]);
+        });
+      }
+
+      kbRows.push([
+        { text: '🔙 Back to Products Hub', callback_data: 'admin_prods_hub' },
+        { text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }
+      ]);
+
+      await this.editMessageText(chatId, messageId, text, { inline_keyboard: kbRows });
+      return;
+    }
+
+    if (data.startsWith('admin_del_plan_')) {
+      if (!this.isAdmin(user, chatId)) return;
+      const prodId = data.replace('admin_del_plan_', '');
+      const prod = dbStore.getProduct(prodId);
+      const prodName = prod ? `${prod.panel_name} (${prod.name})` : `ID #${prodId}`;
+
+      const deleted = dbStore.deleteProduct(prodId);
+      if (deleted) {
+        await this.answerCallback(cb.id, `✅ Deleted: ${prodName}`, true);
+        await this.sendMessage(
+          chatId,
+          `🗑️ <b>PRODUCT PLAN DELETED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+          `✅ <b>Removed:</b> ${prodName}\n` +
+          `🆔 <b>Product ID:</b> <code>${prodId}</code>\n\n` +
+          `<i>The plan and its unused vault keys have been completely removed from Cloud Firestore & Telegram Bot Store!</i>`,
+          {
+            inline_keyboard: [
+              [{ text: '📦 Manage Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+              [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+            ]
+          }
+        );
+      } else {
+        await this.answerCallback(cb.id, '❌ Product not found or already deleted.', true);
+      }
+      return;
+    }
+
+    if (data.startsWith('admin_del_panel_')) {
+      if (!this.isAdmin(user, chatId)) return;
+      const rawPanelName = decodeURIComponent(data.replace('admin_del_panel_', ''));
+      const count = dbStore.deletePanel('', rawPanelName);
+
+      await this.answerCallback(cb.id, `✅ Deleted ${count} plans for ${rawPanelName}`, true);
+      await this.sendMessage(
+        chatId,
+        `❌ <b>ENTIRE PANEL DELETED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Panel Name:</b> ${rawPanelName}\n` +
+        `🗑️ <b>Plans Removed:</b> ${count} duration packages\n\n` +
+        `<i>All plans under this panel and their vault keys have been purged from Firestore & Store Catalog!</i>`,
+        {
+          inline_keyboard: [
+            [{ text: '📦 Manage Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
+            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
+          ]
+        }
+      );
+      return;
+    }
+
+    if (data === 'admin_reseller_pid_menu') {
+      if (!this.isAdmin(user, chatId)) return;
+      dbStore.setFsmState(user.user_id, 'admin_wait_set_provider');
+      const prods = dbStore.getData().products;
+
+      let text = `⚡ <b>BANTIBHAIYA RESELLER API PID SETUP</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `Configure your BantiBhaiya / Upstream Reseller Product PID and Duration directly in Telegram.\n\n` +
+        `👇 <b>Reply in chat with:</b>\n` +
+        `<code>&lt;Product_ID&gt; &lt;Provider_PID&gt; &lt;Provider_Duration&gt;</code>\n\n` +
+        `📌 <b>Example:</b>\n` +
+        `<code>101 5489 1 Day</code>\n` +
+        `<code>102 5490 7 Days</code>\n\n` +
+        `📋 <b>Current Products & PID Status:</b>\n`;
+
+      prods.slice(0, 10).forEach(p => {
+        const pidStatus = p.provider_product_id ? `PID: <code>${p.provider_product_id}</code> (${p.provider_duration || p.validity})` : `<i>Not Configured (Vault Key)</i>`;
+        text += `• ID: <code>${p.id}</code> | <b>${p.panel_name} (${p.name})</b>\n  ${pidStatus}\n`;
+      });
+
+      text += `\n<i>Send /cancel to abort.</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔙 Back to Products Hub', callback_data: 'admin_prods_hub' }],
+          [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      };
+
+      await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
+    if (data === 'admin_inject_keys_menu') {
+      if (!this.isAdmin(user, chatId)) return;
+      dbStore.setFsmState(user.user_id, 'admin_wait_add_keys');
+      const prods = dbStore.getData().products;
+      const unusedKeys = dbStore.getData().productKeys.filter(k => k.is_used === 0);
+
+      let text = `🔑 <b>INJECT / ADD LICENSE KEYS TO VAULT</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `👇 <b>Reply in chat with Product ID and your Keys (separated by commas or newlines):</b>\n\n` +
+        `<code>&lt;Product_ID&gt; | &lt;KEY1, KEY2, KEY3...&gt;</code>\n\n` +
+        `📌 <b>Example:</b>\n` +
+        `<code>101 | KLM-987A-123B, KLM-554C-889D, KLM-112E-776F</code>\n\n` +
+        `📋 <b>Product IDs List:</b>\n`;
+
+      prods.slice(0, 10).forEach(p => {
+        const avail = unusedKeys.filter(k => k.product_id === p.id).length;
+        text += `• ID: <code>${p.id}</code> - <b>${p.panel_name} (${p.name})</b> (Stock: <b>${avail}</b>)\n`;
+      });
+
+      text += `\n<i>Send /cancel to abort.</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔙 Back to Products Hub', callback_data: 'admin_prods_hub' }],
+          [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]
+        ]
+      };
+
+      await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
     if (data === 'admin_stock') {
       if (!this.isAdmin(user, chatId)) return;
       const d = dbStore.getData();
@@ -3745,26 +4321,33 @@ class TelegramEngine {
       `• Total Users: <b>${data.users.length}</b> (🌟 ${resellerCount} Resellers | 💎 ${vipCount} VIPs)\n` +
       `• Gross Sales: <b>₹${totalRevenue.toLocaleString()}</b>\n` +
       `• Total User Funds in Wallets: <b>₹${totalUserBal.toFixed(2)}</b>\n` +
-      `• Keys in Vault: <b>${totalKeys} ready</b> (${data.products.length} Products)\n` +
+      `• Keys in Vault: <b>${totalKeys} ready</b> (${data.products.length} Plans)\n` +
       `• Total Orders Processed: <b>${data.orders.length}</b>\n` +
       `• Open Support Tickets: <b>${openTickets}</b>\n\n` +
-      `⚡ <b>Quick Bot Slash Commands:</b>\n` +
-      `• <code>/addproduct Category | Panel | Plan | Price | ResellerPrice</code>\n` +
-      `• <code>/addkey Product_ID | Key1, Key2</code>\n` +
-      `• <code>/addbalance &lt;user_id&gt; &lt;amount&gt;</code> - Credit wallet\n` +
-      `• <code>/deduct &lt;user_id&gt; &lt;amount&gt;</code> - Deduct wallet\n` +
-      `• <code>/users</code> - View active users & balances\n` +
-      `• <code>/stock</code> - View product stock\n` +
-      `• <code>/broadcast &lt;message&gt;</code> - Message all users\n\n` +
-      `👇 <i>Use the interactive buttons below or launch the Full Web Admin Hub:</i>`;
+      `⚡ <b>Quick Admin Slash Commands:</b>\n` +
+      `• <code>/addproduct Category | Panel | Plan | Price | ResellerPrice | Mode | PID | Duration</code>\n` +
+      `• <code>/delproduct &lt;id&gt;</code> or <code>/delpanel &lt;name&gt;</code>\n` +
+      `• <code>/setprovider &lt;id&gt; &lt;pid&gt; &lt;duration&gt;</code>\n` +
+      `• <code>/addkey &lt;id&gt; | Key1, Key2</code>\n` +
+      `• <code>/addbalance &lt;uid&gt; &lt;amount&gt;</code> | <code>/deduct &lt;uid&gt; &lt;amount&gt;</code>\n\n` +
+      `👇 <i>Use the interactive buttons below to manage products, plans & keys right inside Telegram:</i>`;
 
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '🚀 Launch Admin Hub (Mini App)', web_app: { url: webAppUrl }, style: 'primary' }
+          { text: '🚀 Launch Web Admin Hub (Mini App)', web_app: { url: webAppUrl }, style: 'primary' }
         ],
         [
-          { text: '🌐 Open Admin Hub in Browser', url: webAppUrl, style: 'primary' }
+          { text: '📦 Manage Products & Plans', callback_data: 'admin_prods_hub', style: 'primary' },
+          { text: '➕ Add Product / Plan', callback_data: 'admin_add_prod_menu', style: 'success' }
+        ],
+        [
+          { text: '🗑️ Delete Product / Panel', callback_data: 'admin_del_prods_menu', style: 'danger' },
+          { text: '⚡ Banti API PID Setup', callback_data: 'admin_reseller_pid_menu', style: 'primary' }
+        ],
+        [
+          { text: '🔑 + Add Vault Keys', callback_data: 'admin_inject_keys_menu', style: 'success' },
+          { text: '📦 Vault Stock', callback_data: 'admin_stock', style: 'primary' }
         ],
         [
           { text: '💳 + Add Balance', callback_data: 'admin_add_bal', style: 'success' },
@@ -3772,22 +4355,19 @@ class TelegramEngine {
         ],
         [
           { text: '👥 View Users', callback_data: 'admin_users', style: 'primary' },
-          { text: '📦 Products & Vault', callback_data: 'admin_stock', style: 'primary' }
+          { text: `🎫 Tickets (${openTickets})`, callback_data: 'admin_tickets', style: 'primary' }
         ],
         [
-          { text: `🎫 Tickets (${openTickets})`, callback_data: 'admin_tickets', style: 'primary' },
-          { text: '📢 Send Broadcast', callback_data: 'admin_broadcast', style: 'primary' }
-        ],
-        [
+          { text: '📢 Send Broadcast', callback_data: 'admin_broadcast', style: 'primary' },
           {
-            text: settings.bot_status === 'ON' ? '🟢 Bot: Online (Click to Pause)' : '🔴 Bot: Maintenance (Click to Resume)',
+            text: settings.bot_status === 'ON' ? '🟢 Bot: Online (Pause)' : '🔴 Bot: Maintenance',
             callback_data: 'admin_toggle_maint',
             style: 'danger'
           }
         ],
         [
-          { text: '🧹 Clear Bot Commands', callback_data: 'admin_delete_commands', style: 'danger' },
-          { text: '🔄 Reset Bot Commands', callback_data: 'admin_sync_commands', style: 'primary' }
+          { text: '🧹 Clear Commands', callback_data: 'admin_delete_commands', style: 'danger' },
+          { text: '🔄 Reset Commands', callback_data: 'admin_sync_commands', style: 'primary' }
         ],
         [
           { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh', style: 'success' },
