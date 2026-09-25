@@ -55,11 +55,13 @@ import {
   ChevronRight,
   Power,
   Wallet,
-  AlertCircle
+  AlertCircle,
+  ShoppingBag
 } from 'lucide-react';
 import { Product, BotInstance } from '../../types';
 import { sortProductsByDuration } from '../../utils/durationSorter';
 import { SystemHealthWidget } from './SystemHealthWidget';
+import { PurchaseLogs } from './PurchaseLogs';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
 import { PWAInstallCard } from '../Common/PWAInstallCard';
 
@@ -982,12 +984,20 @@ export const AdminDashboard: React.FC = () => {
             color: 'from-amber-500/20 to-orange-600/20 border-amber-500/30 text-amber-300'
           },
           {
+            id: 'purchases',
+            title: 'Purchase Logs',
+            subtitle: `${orders.length} Fulfilled`,
+            icon: ShoppingBag,
+            badge: `${orders.length}`,
+            color: 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-300'
+          },
+          {
             id: 'users',
             title: 'Manage Users',
             subtitle: `${allUsers.length} Users`,
             icon: Users,
             badge: `${allUsers.length}`,
-            color: 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-300'
+            color: 'from-blue-500/20 to-cyan-600/20 border-blue-500/30 text-blue-300'
           },
           {
             id: 'broadcast',
@@ -1051,6 +1061,7 @@ export const AdminDashboard: React.FC = () => {
           { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
           { id: 'botcommands', label: '🤖 Bot Commands', icon: Code2 },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
+          { id: 'purchases', label: `🛍️ Purchase Logs (${orders.length})`, icon: ShoppingBag },
           { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
           { id: 'referrals', label: '🎁 Referral Program', icon: Gift },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
@@ -2302,6 +2313,13 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= PURCHASE & KEY DEDUCTION LOGS TAB ================= */}
+        {adminTab === 'purchases' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <PurchaseLogs />
           </div>
         )}
 

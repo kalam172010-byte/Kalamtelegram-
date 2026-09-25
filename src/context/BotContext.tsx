@@ -634,6 +634,81 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore bots sync notice:', err?.message || err);
     });
 
+    // 2.1 Firestore onSnapshot Real-Time Listener for Products Catalog
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudProducts: Product[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const p = docSnap.data() as Product;
+          if (p && p.id !== undefined && p.id !== null) {
+            cloudProducts.push({
+              ...p,
+              is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
+              reseller_price: p.reseller_price ?? p.price_inr,
+              reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+            });
+          }
+        });
+        if (cloudProducts.length > 0) {
+          setProducts(cloudProducts);
+          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
+          offlineStorage.saveProducts(cloudProducts);
+          setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore products onSnapshot notice:', err?.message || err);
+    });
+
+    // 2.2 Firestore onSnapshot Real-Time Listener for Product Keys
+    const unsubKeys = onSnapshot(collection(db, 'keys'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudKeys: ProductKey[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const k = docSnap.data() as ProductKey;
+          if (k && k.key_text) {
+            cloudKeys.push(k);
+          }
+        });
+        if (cloudKeys.length > 0) {
+          setProductKeys(cloudKeys);
+          localStorage.setItem('kalam_bot_keys', JSON.stringify(cloudKeys));
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore keys onSnapshot notice:', err?.message || err);
+    });
+
+    // 2.3 Real-Time Server-Sent Events (SSE) Stream for Products & Catalog Changes
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/products/stream');
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed && (parsed.type === 'PRODUCTS_UPDATE' || parsed.type === 'PRODUCTS_SNAPSHOT')) {
+            if (Array.isArray(parsed.products)) {
+              setProducts(parsed.products);
+              localStorage.setItem('kalam_bot_products', JSON.stringify(parsed.products));
+              offlineStorage.saveProducts(parsed.products);
+              setBots(prev => prev.map(b => ({ ...b, products: parsed.products })));
+            }
+            if (Array.isArray(parsed.productKeys)) {
+              setProductKeys(parsed.productKeys);
+              localStorage.setItem('kalam_bot_keys', JSON.stringify(parsed.productKeys));
+            }
+          }
+        } catch {
+          // ignore stream parse errors
+        }
+      };
+      eventSource.onerror = () => {
+        // SSE reconnects automatically
+      };
+    } catch {
+      // EventSource fallback
+    }
+
     // 3. Firestore Sync for Settings
     const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot: any) => {
       if (snapshot) {
@@ -653,7 +728,12 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('focus', handleFocus);
       unsubscribeAuth();
       unsubBots();
+      unsubProducts();
+      unsubKeys();
       unsubSettings();
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, []);
 

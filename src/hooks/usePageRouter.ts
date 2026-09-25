@@ -146,6 +146,7 @@ export function usePageRouter({
             bots: 'Bot Fleet Master Control',
             health: 'System Health & Server Diagnostics',
             products: 'Product Store Management & Key Vault',
+            purchases: 'Purchase & Key Deduction Logs',
             users: 'User Accounts & Balances Directory',
             referrals: 'Affiliate & Referral Network',
             broadcast: 'Telegram Broadcast Engine',

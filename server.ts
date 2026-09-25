@@ -9,6 +9,33 @@ import { famGateway } from './server/famGateway';
 import { bantiResellerService } from './server/bantiResellerApi';
 import { apiLogger } from './server/apiLogger';
 
+// SSE Clients for real-time products stream
+const productSseClients = new Set<express.Response>();
+
+export function broadcastProductsUpdate(products?: any[], productKeys?: any[]) {
+  const currentData = dbStore.getData();
+  const payload = {
+    type: 'PRODUCTS_UPDATE',
+    timestamp: new Date().toISOString(),
+    products: products || currentData.products,
+    productKeys: productKeys || currentData.productKeys
+  };
+  const dataString = `data: ${JSON.stringify(payload)}\n\n`;
+
+  for (const client of productSseClients) {
+    try {
+      client.write(dataString);
+    } catch {
+      productSseClients.delete(client);
+    }
+  }
+}
+
+// Register on dbStore listener if available
+dbStore.onProductsChange = (products: any[], productKeys: any[]) => {
+  broadcastProductsUpdate(products, productKeys);
+};
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -232,6 +259,42 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // 4.1 Real-Time Server-Sent Events (SSE) Stream for Instant Catalog Updates
+  app.get('/api/products/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    // Add client to active pool
+    productSseClients.add(res);
+
+    // Send initial snapshot immediately
+    const currentData = dbStore.getData();
+    const initialPayload = {
+      type: 'PRODUCTS_SNAPSHOT',
+      timestamp: new Date().toISOString(),
+      products: currentData.products,
+      productKeys: currentData.productKeys
+    };
+    res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
+
+    // Keep connection alive with ping every 25s
+    const pingTimer = setInterval(() => {
+      try {
+        res.write(`: ping\n\n`);
+      } catch {
+        clearInterval(pingTimer);
+        productSseClients.delete(res);
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(pingTimer);
+      productSseClients.delete(res);
+    });
   });
 
   // 5. Manage Products (Add, Edit, Delete, Stock/Key refill)

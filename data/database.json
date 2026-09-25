@@ -10,10 +10,10 @@
       "auth_provider": "google",
       "first_name": "Kalam (Admin)",
       "username": "kalam2000abc",
-      "balance": 1000,
+      "balance": 400,
       "account_type": "Reseller",
-      "orders_count": 0,
-      "spent": 0,
+      "orders_count": 1,
+      "spent": 100,
       "joined_date": "2026-01-10 10:00:00",
       "is_reseller": 1,
       "reseller_since": "2026-01-15",
@@ -113,166 +113,6 @@
   ],
   "products": [
     {
-      "id": 3003,
-      "category": "PC PANEL",
-      "panel_name": "KALAM PC BYPASS",
-      "name": "30 Days",
-      "validity": "30 Days",
-      "price_inr": 800,
-      "reseller_price": 600,
-      "reseller_price_inr": 600,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 PC HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 3002,
-      "category": "PC PANEL",
-      "panel_name": "KALAM PC BYPASS",
-      "name": "7 Days",
-      "validity": "7 Days",
-      "price_inr": 350,
-      "reseller_price": 260,
-      "reseller_price_inr": 260,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 PC HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 3001,
-      "category": "PC PANEL",
-      "panel_name": "KALAM PC BYPASS",
-      "name": "1 Day",
-      "validity": "1 Day",
-      "price_inr": 90,
-      "reseller_price": 70,
-      "reseller_price_inr": 70,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 PC HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 2003,
-      "category": "ANDROID ROOT PANEL",
-      "panel_name": "KALAM ROOT INJECTOR",
-      "name": "30 Days",
-      "validity": "30 Days",
-      "price_inr": 700,
-      "reseller_price": 520,
-      "reseller_price_inr": 520,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 2002,
-      "category": "ANDROID ROOT PANEL",
-      "panel_name": "KALAM ROOT INJECTOR",
-      "name": "7 Days",
-      "validity": "7 Days",
-      "price_inr": 320,
-      "reseller_price": 240,
-      "reseller_price_inr": 240,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 2001,
-      "category": "ANDROID ROOT PANEL",
-      "panel_name": "KALAM ROOT INJECTOR",
-      "name": "1 Day",
-      "validity": "1 Day",
-      "price_inr": 80,
-      "reseller_price": 60,
-      "reseller_price_inr": 60,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 1004,
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "KALAM VIP NON-ROOT",
-      "name": "30 Days",
-      "validity": "30 Days",
-      "price_inr": 550,
-      "reseller_price": 420,
-      "reseller_price_inr": 420,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 1003,
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "KALAM VIP NON-ROOT",
-      "name": "7 Days",
-      "validity": "7 Days",
-      "price_inr": 250,
-      "reseller_price": 190,
-      "reseller_price_inr": 190,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 1002,
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "KALAM VIP NON-ROOT",
-      "name": "3 Days",
-      "validity": "3 Days",
-      "price_inr": 140,
-      "reseller_price": 110,
-      "reseller_price_inr": 110,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
-      "id": 1001,
-      "category": "ANDROID NON ROOT PANEL",
-      "panel_name": "KALAM VIP NON-ROOT",
-      "name": "1 Day",
-      "validity": "1 Day",
-      "price_inr": 60,
-      "reseller_price": 45,
-      "reseller_price_inr": 45,
-      "stock": 5,
-      "is_active": 1,
-      "device_limit": "1 Device HWID",
-      "delivery_mode": "hybrid",
-      "apk_link": "https://t.me/KalamFFPanelAPKs",
-      "is_maintenance": 0
-    },
-    {
       "name": "1 Day",
       "panel_name": "TEST PANEL",
       "category": "ANDROID NON ROOT PANEL",
@@ -281,81 +121,34 @@
       "validity": "1 Day",
       "is_active": 1,
       "id": 1790297431005,
-      "reseller_price_inr": 100
+      "reseller_price_inr": 100,
+      "stock": 3
     }
   ],
   "productKeys": [
     {
-      "id": 9011,
-      "product_id": 3003,
-      "key_text": "KLM-PC-30D-L63W1",
+      "id": 1790333886147,
+      "product_id": 1790297431005,
+      "key_text": "KALAM-TEST-VIP-KEY-3",
       "is_used": 0
     },
     {
-      "id": 9010,
-      "product_id": 3002,
-      "key_text": "KLM-PC-7D-K28M6",
+      "id": 1790333884236,
+      "product_id": 1790297431005,
+      "key_text": "KALAM-TEST-VIP-KEY-2",
       "is_used": 0
     },
     {
-      "id": 9009,
-      "product_id": 3001,
-      "key_text": "KLM-PC-1D-J74R5",
-      "is_used": 0
-    },
-    {
-      "id": 9008,
-      "product_id": 2003,
-      "key_text": "KLM-ROOT-30D-H90P2",
-      "is_used": 0
-    },
-    {
-      "id": 9007,
-      "product_id": 2002,
-      "key_text": "KLM-ROOT-7D-G31L8",
-      "is_used": 0
-    },
-    {
-      "id": 9006,
-      "product_id": 2001,
-      "key_text": "KLM-ROOT-1D-F55N3",
-      "is_used": 0
-    },
-    {
-      "id": 9005,
-      "product_id": 1004,
-      "key_text": "KLM-NONROOT-30D-E82Q7",
-      "is_used": 0
-    },
-    {
-      "id": 9004,
-      "product_id": 1003,
-      "key_text": "KLM-NONROOT-7D-D44V9",
-      "is_used": 0
-    },
-    {
-      "id": 9003,
-      "product_id": 1002,
-      "key_text": "KLM-NONROOT-3D-C19X4",
-      "is_used": 0
-    },
-    {
-      "id": 9002,
-      "product_id": 1001,
-      "key_text": "KLM-NONROOT-1D-B73K1",
-      "is_used": 0
-    },
-    {
-      "id": 9001,
-      "product_id": 1001,
-      "key_text": "KLM-NONROOT-1D-A89F2",
+      "id": 1790333883511,
+      "product_id": 1790297431005,
+      "key_text": "KALAM-TEST-VIP-KEY-1",
       "is_used": 0
     },
     {
       "id": 1790297423312,
       "product_id": 1790297431005,
       "key_text": "KEY2",
-      "is_used": 0
+      "is_used": 1
     },
     {
       "id": 1790297428794,
@@ -364,7 +157,16 @@
       "is_used": 0
     }
   ],
-  "orders": [],
+  "orders": [
+    {
+      "id": 1790333870782,
+      "user_id": 12846461,
+      "product_name": "TEST PANEL - 1 Day",
+      "price_paid": 100,
+      "delivered_key": "KEY2",
+      "purchase_date": "2026-09-25T10:57:50.782Z"
+    }
+  ],
   "tickets": [],
   "coupons": [
     {
@@ -410,6 +212,34 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790334336695,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 11:05:36"
+    },
+    {
+      "id": 1790333922773,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 10:58:42"
+    },
+    {
+      "id": 1790333904213,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 10:58:24"
+    },
+    {
+      "id": 1790333565040,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-25 10:52:45"
+    },
     {
       "id": 1790301962718,
       "user_id": 12846461,
@@ -1536,76 +1366,28 @@
       },
       "productKeys": [
         {
-          "id": 9011,
-          "product_id": 3003,
-          "key_text": "KLM-PC-30D-L63W1",
+          "id": 1790333886147,
+          "product_id": 1790297431005,
+          "key_text": "KALAM-TEST-VIP-KEY-3",
           "is_used": 0
         },
         {
-          "id": 9010,
-          "product_id": 3002,
-          "key_text": "KLM-PC-7D-K28M6",
+          "id": 1790333884236,
+          "product_id": 1790297431005,
+          "key_text": "KALAM-TEST-VIP-KEY-2",
           "is_used": 0
         },
         {
-          "id": 9009,
-          "product_id": 3001,
-          "key_text": "KLM-PC-1D-J74R5",
-          "is_used": 0
-        },
-        {
-          "id": 9008,
-          "product_id": 2003,
-          "key_text": "KLM-ROOT-30D-H90P2",
-          "is_used": 0
-        },
-        {
-          "id": 9007,
-          "product_id": 2002,
-          "key_text": "KLM-ROOT-7D-G31L8",
-          "is_used": 0
-        },
-        {
-          "id": 9006,
-          "product_id": 2001,
-          "key_text": "KLM-ROOT-1D-F55N3",
-          "is_used": 0
-        },
-        {
-          "id": 9005,
-          "product_id": 1004,
-          "key_text": "KLM-NONROOT-30D-E82Q7",
-          "is_used": 0
-        },
-        {
-          "id": 9004,
-          "product_id": 1003,
-          "key_text": "KLM-NONROOT-7D-D44V9",
-          "is_used": 0
-        },
-        {
-          "id": 9003,
-          "product_id": 1002,
-          "key_text": "KLM-NONROOT-3D-C19X4",
-          "is_used": 0
-        },
-        {
-          "id": 9002,
-          "product_id": 1001,
-          "key_text": "KLM-NONROOT-1D-B73K1",
-          "is_used": 0
-        },
-        {
-          "id": 9001,
-          "product_id": 1001,
-          "key_text": "KLM-NONROOT-1D-A89F2",
+          "id": 1790333883511,
+          "product_id": 1790297431005,
+          "key_text": "KALAM-TEST-VIP-KEY-1",
           "is_used": 0
         },
         {
           "id": 1790297423312,
           "product_id": 1790297431005,
           "key_text": "KEY2",
-          "is_used": 0
+          "is_used": 1
         },
         {
           "id": 1790297428794,
@@ -1671,166 +1453,6 @@
       "name": "𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇",
       "products": [
         {
-          "id": 3003,
-          "category": "PC PANEL",
-          "panel_name": "KALAM PC BYPASS",
-          "name": "30 Days",
-          "validity": "30 Days",
-          "price_inr": 800,
-          "reseller_price": 600,
-          "reseller_price_inr": 600,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 PC HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 3002,
-          "category": "PC PANEL",
-          "panel_name": "KALAM PC BYPASS",
-          "name": "7 Days",
-          "validity": "7 Days",
-          "price_inr": 350,
-          "reseller_price": 260,
-          "reseller_price_inr": 260,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 PC HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 3001,
-          "category": "PC PANEL",
-          "panel_name": "KALAM PC BYPASS",
-          "name": "1 Day",
-          "validity": "1 Day",
-          "price_inr": 90,
-          "reseller_price": 70,
-          "reseller_price_inr": 70,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 PC HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 2003,
-          "category": "ANDROID ROOT PANEL",
-          "panel_name": "KALAM ROOT INJECTOR",
-          "name": "30 Days",
-          "validity": "30 Days",
-          "price_inr": 700,
-          "reseller_price": 520,
-          "reseller_price_inr": 520,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 2002,
-          "category": "ANDROID ROOT PANEL",
-          "panel_name": "KALAM ROOT INJECTOR",
-          "name": "7 Days",
-          "validity": "7 Days",
-          "price_inr": 320,
-          "reseller_price": 240,
-          "reseller_price_inr": 240,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 2001,
-          "category": "ANDROID ROOT PANEL",
-          "panel_name": "KALAM ROOT INJECTOR",
-          "name": "1 Day",
-          "validity": "1 Day",
-          "price_inr": 80,
-          "reseller_price": 60,
-          "reseller_price_inr": 60,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 1004,
-          "category": "ANDROID NON ROOT PANEL",
-          "panel_name": "KALAM VIP NON-ROOT",
-          "name": "30 Days",
-          "validity": "30 Days",
-          "price_inr": 550,
-          "reseller_price": 420,
-          "reseller_price_inr": 420,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 1003,
-          "category": "ANDROID NON ROOT PANEL",
-          "panel_name": "KALAM VIP NON-ROOT",
-          "name": "7 Days",
-          "validity": "7 Days",
-          "price_inr": 250,
-          "reseller_price": 190,
-          "reseller_price_inr": 190,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 1002,
-          "category": "ANDROID NON ROOT PANEL",
-          "panel_name": "KALAM VIP NON-ROOT",
-          "name": "3 Days",
-          "validity": "3 Days",
-          "price_inr": 140,
-          "reseller_price": 110,
-          "reseller_price_inr": 110,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
-          "id": 1001,
-          "category": "ANDROID NON ROOT PANEL",
-          "panel_name": "KALAM VIP NON-ROOT",
-          "name": "1 Day",
-          "validity": "1 Day",
-          "price_inr": 60,
-          "reseller_price": 45,
-          "reseller_price_inr": 45,
-          "stock": 5,
-          "is_active": 1,
-          "device_limit": "1 Device HWID",
-          "delivery_mode": "hybrid",
-          "apk_link": "https://t.me/KalamFFPanelAPKs",
-          "is_maintenance": 0
-        },
-        {
           "name": "1 Day",
           "panel_name": "TEST PANEL",
           "category": "ANDROID NON ROOT PANEL",
@@ -1839,7 +1461,8 @@
           "validity": "1 Day",
           "is_active": 1,
           "id": 1790297431005,
-          "reseller_price_inr": 100
+          "reseller_price_inr": 100,
+          "stock": 3
         }
       ],
       "status": "ONLINE",
