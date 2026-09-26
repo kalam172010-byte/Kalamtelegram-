@@ -1117,9 +1117,9 @@ class TelegramEngine {
           `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
           `📦 <b>Product:</b> <code>${escapeHtml(product.panel_name)} - ${escapeHtml(product.name)}</code>\n` +
           `💰 <b>Amount Paid:</b> <code>₹${userPrice}</code>\n` +
-          `🔑 <b>Key Delivered:</b> <code>${escapeHtml(deliveredKey)}</code>\n` +
           `⚙️ <b>Vault Source:</b> <code>${escapeHtml(providerSource)}</code>` +
-          (androidId ? `\n📱 <b>Device HWID:</b> <code>${escapeHtml(androidId)}</code>` : '')
+          (androidId ? `\n📱 <b>Device HWID:</b> <code>${escapeHtml(androidId)}</code>` : '') + `\n\n` +
+          `<blockquote>🔑 <b>DELIVERED LICENSE KEY:</b>\n<pre><code>${escapeHtml(deliveredKey)}</code></pre></blockquote>`
         );
       } catch (e) {
         // ignore
@@ -1137,19 +1137,21 @@ class TelegramEngine {
     const safeKey = escapeHtml(deliveredKey);
 
     const deliveryMessage = `🎉 <b><u>PURCHASE SUCCESSFUL!</u> (#<code>${orderId}</code>)</b>\n` +
-      `════════════════════\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
       `📦 <b>Product:</b> <code>${safePanel} - ${safeName}</code>\n` +
       `⏳ <b>Validity:</b> <code>${safeValidity}</code>\n` +
       `💰 <b>Amount Paid:</b> <code>₹${userPrice}</code>\n` +
       `💳 <b>Remaining Balance:</b> <code>₹${user.balance.toFixed(2)}</code>${deviceNote}\n` +
-      `════════════════════\n\n` +
-      `🔑 <b>YOUR LICENSE KEY (TAP TO COPY):</b>\n` +
-      `<code>${safeKey}</code>\n\n` +
-      `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
-      `<b><a href="${apkDownloadUrl}">${escapeHtml(apkDownloadUrl)}</a></b>\n\n` +
-      `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
-      `<b><a href="${tutorialUrl}">${escapeHtml(tutorialUrl)}</a></b>\n\n` +
-      `✨ <i>Click on the license key above to copy it directly to your clipboard. Enjoy playing!</i>`;
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `<blockquote>🔑 <b>YOUR LICENSE KEY (TAP TO COPY):</b>\n` +
+      `<pre><code>${safeKey}</code></pre></blockquote>\n\n` +
+      `<blockquote>📥 <b>DOWNLOAD APK / LOADER:</b>\n` +
+      `<b><a href="${apkDownloadUrl}">🚀 CLICK HERE TO DOWNLOAD APK 🚀</a></b>\n` +
+      `<code>${escapeHtml(apkDownloadUrl)}</code></blockquote>\n\n` +
+      `<blockquote>📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
+      `<b><a href="${tutorialUrl}">🎥 CLICK HERE FOR SETUP VIDEO 🎥</a></b>\n` +
+      `<code>${escapeHtml(tutorialUrl)}</code></blockquote>\n\n` +
+      `✨ <i>Tap the license key inside the box above to copy it directly to your clipboard. Enjoy playing!</i>`;
 
     const keyboard = {
       inline_keyboard: [
@@ -3008,7 +3010,7 @@ class TelegramEngine {
         `💳 <b>Your Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n`;
 
       if (product.apk_link && product.apk_link.startsWith('http')) {
-        text += `📥 <b>APK Download Link:</b> <b><a href="${product.apk_link}">Click Here To Download</a></b>\n`;
+        text += `\n<blockquote>📥 <b>DOWNLOAD APK / LOADER:</b>\n<b><a href="${product.apk_link}">🚀 CLICK HERE TO DOWNLOAD APK 🚀</a></b>\n<code>${escapeHtml(product.apk_link)}</code></blockquote>\n`;
       }
 
       text += `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -4274,11 +4276,11 @@ class TelegramEngine {
 
     let keysText = '';
     if (orders.length > 0) {
-      keysText = `\n\n🔑 <b>PURCHASED KEYS HISTORY (${orders.length} Total Keys):</b>\n` +
+      keysText = `\n\n<blockquote>🔑 <b>PURCHASED KEYS HISTORY (${orders.length} Total Keys):</b>\n\n` +
         orders.slice(0, 5).map((o, idx) => {
           const hwidStr = o.android_id ? `\n  📱 <i>HWID:</i> <code>${o.android_id}</code>` : '';
-          return `${idx + 1}️⃣ <b>${o.product_name}</b>\n  🔑 <code>${o.delivered_key}</code> (${o.purchase_date})${hwidStr}`;
-        }).join('\n\n');
+          return `${idx + 1}️⃣ <b>${escapeHtml(o.product_name)}</b>\n  🔑 <code>${escapeHtml(o.delivered_key)}</code> (${o.purchase_date})${hwidStr}`;
+        }).join('\n\n') + `</blockquote>`;
 
       if (orders.length > 5) {
         keysText += `\n\n💡 <i>Showing 5 recent keys. Tap "📜 View All My Keys" below to see complete history!</i>`;
