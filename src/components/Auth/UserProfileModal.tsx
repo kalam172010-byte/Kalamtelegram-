@@ -25,7 +25,9 @@ import {
   Check,
   Calendar,
   Activity,
-  Trash2
+  Trash2,
+  DollarSign,
+  Key
 } from 'lucide-react';
 
 interface UserProfileModalProps {
@@ -51,8 +53,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
     logout,
     resetPassword,
     setIsAuthModalOpen,
-    setAuthMode
+    setAuthMode,
+    orders = [],
+    logs = []
   } = useBot();
+
+  const myOrders = orders.filter(o => o.user_id === currentUser.user_id);
+  const mySpinLogs = logs.filter(l => l.user_id === currentUser.user_id && (l.action === 'DAILY_GIFT' || l.action === 'SPIN' || l.action.includes('GIFT') || l.action.includes('SPIN')));
+  const spinCount = (currentUser.spin_count || 0) + mySpinLogs.length;
 
   const [activeTab, setActiveTab] = useState<'profile' | 'avatar' | 'security'>('profile');
   const [newPassword, setNewPassword] = useState('');
@@ -375,33 +383,82 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         {/* Tab 1: Profile Details */}
         {activeTab === 'profile' && (
           <div className="space-y-3.5 text-xs">
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 flex items-center gap-1 font-bold">
                   <Wallet className="w-3 h-3 text-emerald-400" /> Balance
                 </span>
-                <div className="text-sm font-black text-emerald-400 font-mono">
+                <div className="text-xs font-black text-emerald-400 font-mono">
                   ₹{currentUser.balance.toFixed(2)}
                 </div>
               </div>
 
               <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 flex items-center gap-1 font-bold">
-                  <Gift className="w-3 h-3 text-pink-400" /> Ref Earned
+                  <DollarSign className="w-3 h-3 text-purple-400" /> Total Spent
                 </span>
-                <div className="text-sm font-black text-pink-300 font-mono">
-                  ₹{(currentUser.referral_earnings || 0).toFixed(2)}
+                <div className="text-xs font-black text-purple-300 font-mono">
+                  ₹{(currentUser.spent || 0).toFixed(2)}
                 </div>
               </div>
 
               <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 flex items-center gap-1 font-bold">
-                  <Crown className="w-3 h-3 text-amber-400" /> Orders
+                  <Key className="w-3 h-3 text-amber-400" /> Keys Bought
                 </span>
-                <div className="text-sm font-black text-white font-mono">
-                  {currentUser.orders_count} Keys
+                <div className="text-xs font-black text-amber-300 font-mono">
+                  {myOrders.length} Keys
                 </div>
               </div>
+
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-500 flex items-center gap-1 font-bold">
+                  <Gift className="w-3 h-3 text-pink-400" /> Spins / Claims
+                </span>
+                <div className="text-xs font-black text-pink-300 font-mono">
+                  {spinCount} Spins
+                </div>
+              </div>
+            </div>
+
+            {/* Purchased Keys History Section */}
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Purchased Keys History ({myOrders.length})</span>
+                </span>
+              </div>
+
+              {myOrders.length === 0 ? (
+                <div className="text-center py-3 text-slate-500 text-[11px] italic">
+                  No purchased keys found. Order keys from the product store!
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {myOrders.map((o) => (
+                    <div key={o.id || o.order_id} className="p-2.5 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between gap-2">
+                      <div className="space-y-0.5 overflow-hidden">
+                        <div className="font-bold text-slate-200 text-[11px] truncate">{o.product_name}</div>
+                        <div className="font-mono text-cyan-300 text-[10px] font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800/60 inline-block">
+                          {o.delivered_key}
+                        </div>
+                        <div className="text-[9px] text-slate-500 font-mono">{o.purchase_date}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(o.delivered_key);
+                          setStatusMsg({ type: 'success', text: `Copied key: ${o.delivered_key}` });
+                        }}
+                        className="px-2.5 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-800/60 rounded-lg text-[10px] font-bold transition shrink-0 cursor-pointer"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">

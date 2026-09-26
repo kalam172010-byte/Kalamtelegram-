@@ -57,7 +57,9 @@ import {
   Power,
   Wallet,
   AlertCircle,
-  ShoppingBag
+  ShoppingBag,
+  Palette,
+  QrCode
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -4997,6 +4999,178 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[10px] text-slate-500 mt-1">
                     Highest amount a Telegram user can add in one deposit
                   </p>
+                </div>
+              </div>
+
+              {/* Custom UPI QR Code Color Palette & Interface Configuration */}
+              <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-amber-400" />
+                      <span>Custom UPI QR Code Interface & Color Palette</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Customize primary (modules/dots) and secondary (background accent) colors for the generated PhonePe / UPI payment QR code image sent in Telegram.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2.5 py-1 rounded-full">
+                    QR Customization Active
+                  </span>
+                </div>
+
+                {/* Color Palette Presets */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span>Quick Theme Color Presets:</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Click a preset to apply instantly</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                    {[
+                      { name: 'PhonePe Purple', dark: '#581c87', light: '#f3e8ff' },
+                      { name: 'Classic Dark', dark: '#000000', light: '#ffffff' },
+                      { name: 'GPay Emerald', dark: '#065f46', light: '#ecfdf5' },
+                      { name: 'Paytm Cyber Blue', dark: '#1e3a8a', light: '#eff6ff' },
+                      { name: 'Neon Yellow', dark: '#0f172a', light: '#fef08a' },
+                      { name: 'Crimson Red', dark: '#881337', light: '#fff1f2' }
+                    ].map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => {
+                          updateSettings({
+                            payment_qr_dark_color: preset.dark,
+                            payment_qr_light_color: preset.light
+                          });
+                          if (activeBot) {
+                            updateActiveBotGateway({
+                              payment_qr_dark_color: preset.dark,
+                              payment_qr_light_color: preset.light
+                            });
+                          }
+                        }}
+                        className="flex flex-col items-center justify-between p-2 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800/80 transition cursor-pointer text-left space-y-1.5"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full border border-slate-700 shadow-sm inline-block" style={{ backgroundColor: preset.dark }}></span>
+                          <span className="w-4 h-4 rounded-full border border-slate-700 shadow-sm inline-block" style={{ backgroundColor: preset.light }}></span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-200">{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  {/* Primary Color Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full inline-block border border-slate-600" style={{ backgroundColor: settings.payment_qr_dark_color || '#000000' }}></span>
+                      <span>Primary Color (QR Modules)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={settings.payment_qr_dark_color || '#000000'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSettings({ payment_qr_dark_color: val });
+                          if (activeBot) updateActiveBotGateway({ payment_qr_dark_color: val });
+                        }}
+                        className="w-10 h-9 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={settings.payment_qr_dark_color || '#000000'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSettings({ payment_qr_dark_color: val });
+                          if (activeBot) updateActiveBotGateway({ payment_qr_dark_color: val });
+                        }}
+                        placeholder="#000000"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-amber-400"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Foreground color for QR dots & data squares.</p>
+                  </div>
+
+                  {/* Secondary Color Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full inline-block border border-slate-600" style={{ backgroundColor: settings.payment_qr_light_color || '#ffffff' }}></span>
+                      <span>Secondary Color (Background)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={settings.payment_qr_light_color || '#ffffff'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSettings({ payment_qr_light_color: val });
+                          if (activeBot) updateActiveBotGateway({ payment_qr_light_color: val });
+                        }}
+                        className="w-10 h-9 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={settings.payment_qr_light_color || '#ffffff'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSettings({ payment_qr_light_color: val });
+                          if (activeBot) updateActiveBotGateway({ payment_qr_light_color: val });
+                        }}
+                        placeholder="#ffffff"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-amber-400"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Background accent color behind QR code.</p>
+                  </div>
+
+                  {/* Center Badge Logo URL */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Center Badge Logo URL
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.payment_qr_logo_url || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateSettings({ payment_qr_logo_url: val });
+                      }}
+                      placeholder="https://img.icons8.com/color/512/phone-pe.png"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 outline-none focus:border-cyan-400"
+                    />
+                    <p className="text-[10px] text-slate-500">URL for logo icon in center of generated QR code.</p>
+                  </div>
+                </div>
+
+                {/* Live QR Code Interface Preview Box */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1 text-left">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4 text-amber-400" /> Live UPI Payment QR Code Preview
+                    </span>
+                    <p className="text-[11px] text-slate-400">
+                      This live preview shows exactly how customers will see the styled QR code in Telegram when making UPI deposits.
+                    </p>
+                    <div className="text-[10px] font-mono text-slate-500 space-x-3 pt-1">
+                      <span>Primary: <strong className="text-slate-300">{settings.payment_qr_dark_color || '#000000'}</strong></span>
+                      <span>Secondary: <strong className="text-slate-300">{settings.payment_qr_light_color || '#ffffff'}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl border border-slate-700 shadow-xl bg-slate-950 shrink-0 text-center space-y-1">
+                    <img
+                      src={`https://quickchart.io/qr?text=${encodeURIComponent('upi://pay?pa=' + (settings.fampay_upi_id || 'sample@upi') + '&pn=Store&am=100.00&cu=INR')}&size=200&margin=2&ecLevel=H&dark=${(settings.payment_qr_dark_color || '#000000').replace('#', '')}&light=${(settings.payment_qr_light_color || '#ffffff').replace('#', '')}&centerImageUrl=${encodeURIComponent(settings.payment_qr_logo_url || 'https://img.icons8.com/color/512/phone-pe.png')}&centerImageWidth=45&centerImageHeight=45`}
+                      alt="UPI Payment QR Code Preview"
+                      className="w-32 h-32 rounded-lg object-contain bg-white mx-auto shadow-inner border border-slate-800"
+                      onError={(e) => {
+                        (e.target as HTMLElement).setAttribute('src', 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SampleUPI');
+                      }}
+                    />
+                    <span className="text-[9px] font-bold font-mono text-emerald-400 block">📱 SCAN & PAY PREVIEW</span>
+                  </div>
                 </div>
               </div>
 

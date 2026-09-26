@@ -924,6 +924,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       productKeys: shouldClone ? [...productKeys] : [],
       settings: {
         ...settings,
+        bot_name: params.name.trim(),
+        ui_start_menu: (settings.ui_start_menu || '').replace(/KALAM PANEL BOT/gi, params.name.trim().toUpperCase()).replace(/KALAM FF PANEL/gi, params.name.trim().toUpperCase()),
         admin_id: adminIdToUse,
         bot_token: params.bot_token.trim(),
         bot_username: cleanUsername || 'MyStoreBot',
@@ -945,6 +947,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBotId(newBot.id);
     setSettings(prev => ({
       ...prev,
+      bot_name: newBot.name,
       admin_id: adminIdToUse,
       bot_token: newBot.bot_token,
       bot_username: newBot.username,
@@ -1087,6 +1090,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setSettings(prev => ({
         ...prev,
+        bot_name: targetBot.name,
         admin_id: targetAdminId,
         bot_token: targetBot.bot_token,
         bot_username: targetBot.username,
@@ -1102,6 +1106,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          bot_name: targetBot.name,
           admin_id: targetAdminId,
           bot_token: targetBot.bot_token,
           bot_username: targetBot.username,

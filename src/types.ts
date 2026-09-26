@@ -13,6 +13,8 @@ export interface PaymentGatewayConfig {
   auto_approve: boolean;
   min_deposit_inr?: number;
   max_deposit_inr?: number;
+  payment_qr_dark_color?: string;
+  payment_qr_light_color?: string;
 }
 
 export interface ResellerApiConfig {
@@ -77,6 +79,7 @@ export interface User {
   account_type: AccountType;
   orders_count: number;
   spent: number;
+  spin_count?: number;
   last_spin?: string;
   joined_date: string;
   last_login?: string;
@@ -129,10 +132,14 @@ export interface ProductKey {
 
 export interface Order {
   id: number;
+  order_id?: string;
   user_id: number;
+  product_id?: number | string;
   product_name: string;
   price_paid: number;
+  price_inr?: number;
   delivered_key: string;
+  android_id?: string;
   purchase_date: string;
 }
 
@@ -289,6 +296,8 @@ export interface Settings {
   min_deposit_inr?: number;
   max_deposit_inr?: number;
   payment_qr_logo_url?: string;
+  payment_qr_dark_color?: string;
+  payment_qr_light_color?: string;
   [key: string]: any;
 }
 

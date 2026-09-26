@@ -144,6 +144,21 @@ class TelegramEngine {
     this.startWatchdog();
   }
 
+  public getBotDisplayName(): string {
+    const settings = dbStore.getData().settings;
+    if (settings.bot_name && settings.bot_name.trim()) {
+      return settings.bot_name.trim().toUpperCase();
+    }
+    if (this.botInfo && this.botInfo.first_name && this.botInfo.first_name.trim()) {
+      return this.botInfo.first_name.trim().toUpperCase();
+    }
+    if (settings.bot_username && settings.bot_username.trim()) {
+      const cleanUser = settings.bot_username.replace('@', '').trim();
+      if (cleanUser) return `${cleanUser.toUpperCase()} STORE`;
+    }
+    return 'VIP PANEL STORE';
+  }
+
   public getValidTokenFromStore(): string {
     const settings = dbStore.getData().settings;
     if (settings.bot_token && settings.bot_token.trim() && !settings.bot_token.includes('exampleToken')) {
@@ -405,7 +420,8 @@ class TelegramEngine {
       throw new Error('Admin ID is not configured');
     }
 
-    const text = `⚡ <b>KALAM FF PANEL - TEST NOTIFICATION</b>\n\n` +
+    const botName = this.getBotDisplayName();
+    const text = `⚡ <b>${botName} - TEST NOTIFICATION</b>\n\n` +
       `✅ <b>Status:</b> Live Telegram Bot Engine is successfully connected!\n` +
       `🤖 <b>Bot:</b> @${this.botInfo?.username || 'KalamFFPanelBot'}\n` +
       `👤 <b>Admin ID:</b> <code>${settings.admin_id}</code>\n` +
@@ -1171,7 +1187,7 @@ class TelegramEngine {
     const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
 
     if (user.is_banned === 1) {
-      await this.sendMessage(chatId, '🚫 <b>Account Suspended</b>\n\nYour account has been banned from using Kalam FF Panel. Contact support if you believe this is an error.');
+      await this.sendMessage(chatId, `🚫 <b>Account Suspended</b>\n\nYour account has been banned from using ${this.getBotDisplayName()}. Contact support if you believe this is an error.`);
       return;
     }
 
@@ -2535,7 +2551,7 @@ class TelegramEngine {
     if (data === 'check_update') {
       const apkUrl = settings.apk_download_url || settings.official_channel_link || 'https://t.me/KalamFFPanelAPKs';
       const text =
-        `⚡ <b>KALAM FF PANEL - SYSTEM STATUS & UPDATES</b> ⚡\n` +
+        `⚡ <b>${this.getBotDisplayName()} - SYSTEM STATUS & UPDATES</b> ⚡\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `✅ <b>Bot Engine:</b> <code>v4.8.2-STABLE</code>\n` +
         `🛡 <b>Bypass Status:</b> 100% Anti-Ban Active & Safe\n` +
@@ -2592,12 +2608,62 @@ class TelegramEngine {
       return;
     }
 
+    if (data === 'my_keys_history' || data === 'my_keys' || data === 'all_keys') {
+      const orders = dbStore.getData().orders.filter(o => o.user_id === user.user_id);
+      await this.answerCallback(cb.id, `🔑 Displaying your ${orders.length} purchased keys`, false);
+
+      if (orders.length === 0) {
+        const emptyText = `📜 <b>PURCHASED KEYS HISTORY</b>\n\n` +
+          `<i>You haven't purchased any license keys yet.</i>\n\n` +
+          `👉 Visit the <b>Product Store</b> to buy your first key!`;
+        const emptyKb = {
+          inline_keyboard: [
+            [{ text: '🛒 Product Store', callback_data: 'shop_categories', style: 'danger' }],
+            [{ text: '👤 Back to Profile', callback_data: 'profile', style: 'primary' }]
+          ]
+        };
+        if (messageId) {
+          await this.editMessageText(chatId, messageId, emptyText, emptyKb);
+        } else {
+          await this.sendMessage(chatId, emptyText, emptyKb);
+        }
+        return;
+      }
+
+      let text = `📜 <b>ALL PURCHASED KEYS HISTORY (${orders.length} Total Keys)</b>\n` +
+        `════════════════════\n\n`;
+
+      orders.forEach((o, idx) => {
+        const hwidStr = o.android_id ? `\n  📱 <i>HWID:</i> <code>${o.android_id}</code>` : '';
+        text += `${idx + 1}️⃣ <b>${o.product_name}</b> (₹${o.price_inr})\n` +
+          `  🔑 <code>${o.delivered_key}</code>\n` +
+          `  📅 <i>Date:</i> ${o.purchase_date}${hwidStr}\n\n`;
+      });
+
+      text += `💡 <i>Tap any key code above to copy it instantly to your clipboard!</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🛒 Buy More Keys', callback_data: 'shop_categories', style: 'danger' }],
+          [{ text: '👤 Back to Profile', callback_data: 'profile', style: 'primary' }],
+          [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+        ]
+      };
+
+      if (messageId) {
+        await this.editMessageText(chatId, messageId, text, keyboard);
+      } else {
+        await this.sendMessage(chatId, text, keyboard);
+      }
+      return;
+    }
+
     if (data === 'shop_categories') {
       const allActiveProds = dbStore.getData().products.filter(p => p.is_active !== 0);
       const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
 
       if (allActiveProds.length === 0) {
-        const emptyText = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
+        const emptyText = `🛒 <b>${this.getBotDisplayName()} - STORE CATALOG</b>\n\n` +
           `📦 No products are currently available in the catalog.\n` +
           `Please check back soon or contact support!`;
         const emptyKb = {
@@ -2609,7 +2675,7 @@ class TelegramEngine {
         return;
       }
 
-      const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
+      const text = `🛒 <b>${this.getBotDisplayName()} - STORE CATALOG</b>\n\n` +
         `Select your desired operating environment and panel category below:\n\n` +
         `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
         `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
@@ -3065,7 +3131,17 @@ class TelegramEngine {
       }
 
       const userPrice = this.getUserPrice(user, product);
-      const orderId = `ORD_UPI_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const settings = dbStore.getData().settings;
+      const redirectUrl = settings.famgateway_redirect_url || `https://t.me/${settings.bot_username || 'KalamFFPanelBot'}`;
+
+      // 1. Create order in FamGateway API & database
+      const orderRes = await famGateway.createOrder({
+        amount: userPrice,
+        userId: user.user_id,
+        redirectUrl
+      });
+
+      const orderId = orderRes.order_id || `ORD_UPI_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
       // Save pending transaction with product_id link
       dbStore.addTransaction({
@@ -3080,9 +3156,9 @@ class TelegramEngine {
 
       const upiId = famGateway.getUpiId();
       const payeeName = famGateway.getPayeeName();
-
       const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${userPrice.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
-      const { buffer: qrBuf, url: publicQrUrl } = await this.getPhonePeQrPhoto(upiUri);
+
+      const { buffer: qrBuf, url: publicQrUrl } = await this.getPhonePeQrPhoto(orderRes.payment_url || upiUri);
 
       const upiText = `📲 <b><u>DIRECT UPI QR PAY (INSTANT KEY DELIVERY)</u></b>\n` +
         `════════════════════\n` +
@@ -3090,33 +3166,58 @@ class TelegramEngine {
         `⏳ <b>Validity:</b> <code>${product.validity}</code>\n` +
         `💰 <b>Price to Pay:</b> <b>₹${userPrice.toFixed(2)}</b>\n` +
         `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
-        `💳 <b>UPI VPA ID:</b> <code>${upiId}</code>\n` +
+        `💳 <b>UPI VPA ID (Tap to Copy):</b> <code>${upiId}</code>\n` +
         `════════════════════\n\n` +
         `📱 <b>HOW TO PAY & GET YOUR KEY INSTANTLY:</b>\n` +
-        `1️⃣ Scan the <b>PhonePe QR Code</b> above or pay to UPI ID <code>${upiId}</code>.\n` +
+        `1️⃣ Scan the <b>PhonePe / UPI QR Code</b> above OR copy UPI ID <code>${upiId}</code>.\n` +
         `2️⃣ Pay exact amount: <b>₹${userPrice.toFixed(2)}</b> via PhonePe, GPay, Paytm, BHIM, or FamPay.\n` +
         `3️⃣ After payment, tap <b>⚡ VERIFY UPI PAYMENT NOW</b> or reply with your <b>12-digit UTR</b> in chat!\n\n` +
         `⚡ <i>Once verified, your license key will be delivered automatically right here!</i>`;
 
-      const upiKb = {
-        inline_keyboard: [
-          [{ text: '🟣 Pay via PhonePe / UPI App', url: upiUri }],
-          [{ text: '⚡ VERIFY UPI PAYMENT NOW', callback_data: `verify_upiprod_${orderId}`, style: 'success' }],
-          [{ text: '🔙 Back to Checkout', callback_data: `prod_${product.id}`, style: 'danger' }]
-        ]
-      };
+      const upiButtons: any[] = [];
 
+      // Payment link button ONLY if it is a valid http(s) URL (Telegram Bot API rejects upi:// protocol links)
+      if (orderRes.payment_url && (orderRes.payment_url.startsWith('http://') || orderRes.payment_url.startsWith('https://'))) {
+        upiButtons.push([
+          { text: '🌐 Open FamGateway.in Checkout', url: orderRes.payment_url }
+        ]);
+      }
+
+      upiButtons.push([
+        { text: '⚡ VERIFY UPI PAYMENT NOW', callback_data: `verify_upiprod_${orderId}`, style: 'success' }
+      ]);
+      upiButtons.push([
+        { text: '🔙 Back to Checkout', callback_data: `prod_${product.id}`, style: 'danger' }
+      ]);
+
+      const upiKb = { inline_keyboard: upiButtons };
+
+      if (messageId) {
+        await this.deleteMessage(chatId, messageId).catch(() => {});
+      }
+
+      // Try sending photo buffer first, then photo URL, then fallback text
       if (qrBuf) {
         try {
           await this.sendPhotoBuffer(chatId, qrBuf, upiText, upiKb);
-        } catch (bufErr) {
-          await this.sendPhoto(chatId, publicQrUrl, upiText, upiKb);
+          await this.answerCallback(cb.id, '📲 PhonePe UPI QR Code Generated!', false);
+          return;
+        } catch (bufErr: any) {
+          console.warn('[TelegramEngine] sendPhotoBuffer failed for upipay_:', bufErr.message);
         }
-      } else {
-        await this.sendPhoto(chatId, publicQrUrl, upiText, upiKb);
       }
-      await this.answerCallback(cb.id, '📲 PhonePe UPI QR Code Generated!', false);
-      return;
+
+      try {
+        await this.sendPhoto(chatId, publicQrUrl, upiText, upiKb);
+        await this.answerCallback(cb.id, '📲 PhonePe UPI QR Code Generated!', false);
+        return;
+      } catch (photoErr: any) {
+        console.warn('[TelegramEngine] sendPhoto failed for upipay_:', photoErr.message);
+      }
+
+      // Final fallback to text message if media send fails
+      await this.sendMessage(chatId, upiText, upiKb);
+      await this.answerCallback(cb.id, '📲 UPI Pay Details Generated!', false);
       return;
     }
 
@@ -3439,7 +3540,7 @@ class TelegramEngine {
       const apkUrl = settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
       const channelUrl = settings.official_channel_link || 'https://t.me/KalamFFPanelChannel';
 
-      const text = `🎧 <b>KALAM FF PANEL - 24/7 SUPPORT & CHANNELS</b>\n\n` +
+      const text = `🎧 <b>${this.getBotDisplayName()} - 24/7 SUPPORT & CHANNELS</b>\n\n` +
         `Need assistance with key activation, installation, or payments?\n\n` +
         `📲 <b>APK Download Channel:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
         `📢 <b>Official Channel:</b> <a href="${channelUrl}">${channelUrl}</a>\n` +
@@ -3485,7 +3586,7 @@ class TelegramEngine {
       const apkUrl = settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
       const tutorialUrl = settings.how_to_video || 'https://youtube.com';
 
-      const text = `📖 <b>HOW TO INSTALL & USE KALAM FF PANEL</b>\n\n` +
+      const text = `📖 <b>HOW TO INSTALL & USE ${this.getBotDisplayName()}</b>\n\n` +
         `1️⃣ <b>Purchase:</b> Buy your preferred panel from 🛒 <b>Product Store</b>.\n` +
         `2️⃣ <b>Download APK:</b> Click the APK Channel link below.\n` +
         `3️⃣ <b>Install:</b> Allow unknown sources and install the APK.\n` +
@@ -3928,9 +4029,18 @@ class TelegramEngine {
         `📢 <i>Please check back shortly or stay tuned to our official support channel for updates.</i>`;
     }
 
+    const botName = this.getBotDisplayName();
+    if (settings.ui_start_menu && settings.ui_start_menu.trim().length > 10) {
+      let customText = settings.ui_start_menu;
+      customText = customText.replace(/KALAM PANEL BOT/gi, botName)
+                             .replace(/KALAM FF PANEL/gi, botName)
+                             .replace(/KALAM STORE/gi, botName);
+      return customText;
+    }
+
     const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Member';
 
-    return `⚡ <b>WELCOME TO KALAM FF PANEL STORE</b> ⚡\n\n` +
+    return `⚡ <b>WELCOME TO ${botName}</b> ⚡\n\n` +
       `👋 Hello, <b>${user.first_name}</b>!\n` +
       `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
@@ -4047,7 +4157,16 @@ class TelegramEngine {
     const logoUrl = (settings && settings.payment_qr_logo_url && settings.payment_qr_logo_url.trim())
       ? settings.payment_qr_logo_url.trim()
       : 'https://img.icons8.com/color/512/phone-pe.png';
-    const qcUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=500&margin=2&ecLevel=H&centerImageUrl=${encodeURIComponent(logoUrl)}&centerImageWidth=110&centerImageHeight=110`;
+
+    const darkColor = (settings && settings.payment_qr_dark_color && settings.payment_qr_dark_color.trim())
+      ? settings.payment_qr_dark_color.trim().replace('#', '')
+      : '000000';
+
+    const lightColor = (settings && settings.payment_qr_light_color && settings.payment_qr_light_color.trim())
+      ? settings.payment_qr_light_color.trim().replace('#', '')
+      : 'ffffff';
+
+    const qcUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=500&margin=2&ecLevel=H&dark=${darkColor}&light=${lightColor}&centerImageUrl=${encodeURIComponent(logoUrl)}&centerImageWidth=110&centerImageHeight=110`;
 
     try {
       const res = await fetch(qcUrl);
@@ -4103,12 +4222,23 @@ class TelegramEngine {
 
   private async sendProfileMessage(chatId: number, user: User, messageId?: number) {
     const orders = dbStore.getData().orders.filter(o => o.user_id === user.user_id);
-    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Customer';
+    const logs = dbStore.getData().logs.filter(l => l.user_id === user.user_id);
+    const spinLogs = logs.filter(l => l.action === 'DAILY_GIFT' || l.action === 'SPIN' || l.action.includes('GIFT') || l.action.includes('SPIN'));
+    const spinCount = (user.spin_count || 0) + spinLogs.length;
+
+    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : (user.is_vip === 1 ? '💎 VIP Member' : '👤 Regular Customer');
 
     let keysText = '';
     if (orders.length > 0) {
-      keysText = `\n\n🔑 <b>RECENT PURCHASED KEYS (Click to Copy):</b>\n` +
-        orders.slice(0, 5).map(o => `• <b>${o.product_name}</b>\n  <code>${o.delivered_key}</code> (${o.purchase_date})`).join('\n');
+      keysText = `\n\n🔑 <b>PURCHASED KEYS HISTORY (${orders.length} Total Keys):</b>\n` +
+        orders.slice(0, 5).map((o, idx) => {
+          const hwidStr = o.android_id ? `\n  📱 <i>HWID:</i> <code>${o.android_id}</code>` : '';
+          return `${idx + 1}️⃣ <b>${o.product_name}</b>\n  🔑 <code>${o.delivered_key}</code> (${o.purchase_date})${hwidStr}`;
+        }).join('\n\n');
+
+      if (orders.length > 5) {
+        keysText += `\n\n💡 <i>Showing 5 recent keys. Tap "📜 View All My Keys" below to see complete history!</i>`;
+      }
     } else {
       keysText = `\n\n<i>You have not purchased any keys yet. Visit the Product Store to get started!</i>`;
     }
@@ -4127,37 +4257,47 @@ class TelegramEngine {
       dbStore.updateUser(user.user_id, { avatar_url: photoSource });
     }
 
-    const text = `👤 <b>USER ACCOUNT PROFILE</b>\n\n` +
-      `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
+    const text = `👤 <b>USER ACCOUNT PROFILE & KEY HISTORY</b>\n` +
+      `════════════════════\n` +
+      `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
       `📛 <b>Name:</b> ${user.first_name} (@${user.username || 'none'})\n` +
       `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
       `💰 <b>Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n` +
-      `📊 <b>Total Orders:</b> ${orders.length}\n` +
-      `💸 <b>Total Spent:</b> ₹${user.spent.toFixed(2)}\n` +
-      `👥 <b>Friends Referred:</b> ${user.referral_count || 0} (Earned: ₹${(user.referral_earnings || 0).toFixed(2)})` + keysText;
+      `💸 <b>Total Amount Spent:</b> <b>₹${user.spent.toFixed(2)}</b>\n` +
+      `🔑 <b>Total Keys Purchased:</b> <b>${orders.length} Keys</b>\n` +
+      `🎰 <b>Total Spins & Daily Gifts Claimed:</b> <b>${spinCount} Times</b>\n` +
+      `👥 <b>Friends Referred:</b> ${user.referral_count || 0} (Earned: ₹${(user.referral_earnings || 0).toFixed(2)})\n` +
+      `════════════════════` + keysText;
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '💳 Add Balance', callback_data: 'add_balance', style: 'success' },
-          { text: '🛒 Buy Now', callback_data: 'shop_categories', style: 'danger' }
-        ],
-        [
-          { text: '👥 Refer & Earn', callback_data: 'referral_menu', style: 'success' },
-          { text: '🎁 Redeem Code', callback_data: 'redeem_code', style: 'danger' }
-        ],
-        [
-          { text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }
-        ]
-      ]
-    };
+    const keyboardButtons: any[] = [];
+
+    if (orders.length > 0) {
+      keyboardButtons.push([
+        { text: `📜 View All My Keys (${orders.length})`, callback_data: 'my_keys_history', style: 'primary' }
+      ]);
+    }
+
+    keyboardButtons.push([
+      { text: '💳 Add Balance', callback_data: 'add_balance', style: 'success' },
+      { text: '🛒 Product Store', callback_data: 'shop_categories', style: 'danger' }
+    ]);
+
+    keyboardButtons.push([
+      { text: '👥 Refer & Earn', callback_data: 'referral_menu', style: 'success' },
+      { text: '🎁 Daily Gift / Spin', callback_data: 'daily_gift', style: 'success' }
+    ]);
+
+    keyboardButtons.push([
+      { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
+    ]);
+
+    const keyboard = { inline_keyboard: keyboardButtons };
 
     if (messageId) {
       try {
         await this.editMessageMedia(chatId, messageId, photoSource, text, keyboard);
         return;
       } catch (e) {
-        // Fallback: If Telegram cannot convert text msg into media msg in-place, delete text msg & send photo msg
         await this.deleteMessage(chatId, messageId).catch(() => {});
       }
     }
@@ -4390,7 +4530,7 @@ class TelegramEngine {
 
     const statusBadge = user.is_reseller === 1 ? '✅ <b>Active Reseller</b>' : '❌ <i>Not Activated</i>';
 
-    const text = `🌟 <b>KALAM FF PANEL - WHOLESALE RESELLER PROGRAM</b>\n\n` +
+    const text = `🌟 <b>${this.getBotDisplayName()} - WHOLESALE RESELLER PROGRAM</b>\n\n` +
       `Status: ${statusBadge}\n\n` +
       `💼 <b>Reseller Benefits:</b>\n` +
       `• Up to <b>50% Wholesale Discount</b> on all panel keys\n` +
@@ -4446,7 +4586,7 @@ class TelegramEngine {
       `👛 Wallet Balance: <b>₹${user.balance.toFixed(2)}</b>\n\n` +
       `🚀 <i>Share your personal link to start earning real cash rewards instantly!</i>`;
 
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('🔥 Join Kalam FF Panel Bot for Free Fire VIP Injectors, Root/Non-Root Panels & instant key delivery!')}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(`🔥 Join ${this.getBotDisplayName()} Bot for Free Fire VIP Injectors, Root/Non-Root Panels & instant key delivery!`)}`;
 
     const keyboard = {
       inline_keyboard: [
@@ -4469,7 +4609,7 @@ class TelegramEngine {
 
   private async sendSupportMenu(chatId: number, user: User, messageId?: number) {
     const settings = dbStore.getData().settings;
-    const text = `🎧 <b>KALAM FF PANEL - 24/7 SUPPORT DESK</b>\n\n` +
+    const text = `🎧 <b>${this.getBotDisplayName()} - 24/7 SUPPORT DESK</b>\n\n` +
       `Need assistance with key activation, installation, or payments?\n\n` +
       `💬 <b>Direct Telegram Support:</b> <a href="${settings.support_telegram}">${settings.support_telegram}</a>\n` +
       `📱 <b>WhatsApp Support:</b> <a href="${settings.support_whatsapp}">${settings.support_whatsapp}</a>\n` +
@@ -4491,7 +4631,7 @@ class TelegramEngine {
 
   private async sendHowToUse(chatId: number, user: User, messageId?: number) {
     const settings = dbStore.getData().settings;
-    const text = `📖 <b>HOW TO INSTALL & USE KALAM FF PANEL</b>\n\n` +
+    const text = `📖 <b>HOW TO INSTALL & USE ${this.getBotDisplayName()}</b>\n\n` +
       `1️⃣ <b>Purchase:</b> Buy your preferred panel from 🛒 <b>Product Store</b>.\n` +
       `2️⃣ <b>Download APK:</b> Click the download link provided with your key.\n` +
       `3️⃣ <b>Install:</b> Allow unknown sources and install the APK.\n` +
