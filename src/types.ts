@@ -170,6 +170,8 @@ export interface Transaction {
   expires_at?: number;
   utr?: string;
   sender_name?: string;
+  product_id?: number | string;
+  user_price?: number;
 }
 
 export interface CryptoTxn {
@@ -286,6 +288,7 @@ export interface Settings {
   vip_price_inr?: number;
   min_deposit_inr?: number;
   max_deposit_inr?: number;
+  payment_qr_logo_url?: string;
   [key: string]: any;
 }
 

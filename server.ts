@@ -654,8 +654,8 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Commands must be an array' });
       }
 
-      // Save to local dbStore
-      dbStore.updateSettings({ bot_commands: commands });
+      // Save to local dbStore with enabled true
+      dbStore.updateSettings({ bot_commands: commands, bot_commands_enabled: true });
 
       // Sync to live Telegram API
       let apiResult = null;
@@ -670,6 +670,33 @@ async function startServer() {
         commands,
         apiResult,
         message: 'Bot commands updated and synced with Telegram API successfully!'
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/bot/commands/reset', async (_req, res) => {
+    try {
+      const defaultCommands = [
+        { command: 'start', description: '✨ Launch Shop & Main Menu' },
+        { command: 'shop', description: '🛒 Product Catalog & Buy Keys' },
+        { command: 'addbalance', description: '💳 Add Wallet Balance via FamPay UPI' },
+        { command: 'balance', description: '👛 Check Current Wallet Balance' },
+        { command: 'profile', description: '👤 My Profile & Purchased Keys' },
+        { command: 'reseller', description: '👑 Reseller VIP Wholesale Dashboard' },
+        { command: 'referral', description: '🎁 Refer Friends & Earn Cash Rewards' },
+        { command: 'help', description: '💬 24/7 Support & Help Desk' }
+      ];
+
+      dbStore.updateSettings({ bot_commands: defaultCommands, bot_commands_enabled: true });
+      const apiResult = await telegramEngine.syncBotCommands(true);
+
+      res.json({
+        success: true,
+        commands: defaultCommands,
+        apiResult,
+        message: 'Telegram Bot commands successfully reset to default and synced with Telegram API!'
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });

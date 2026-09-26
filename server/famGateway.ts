@@ -435,22 +435,42 @@ class FamGatewayService {
       message: `Successfully verified and credited ₹${creditAmount.toFixed(2)} to User UID ${user.user_id} (@${user.username || 'user'})`
     });
 
-    // 1. Notify the user immediately on Telegram
+    // 1. If this payment was generated for a Direct Product Purchase, deliver the key instantly!
+    if (txn.product_id) {
+      const prodId = txn.product_id;
+      let product = dbStore.getProduct(prodId);
+      if (!product) {
+        product = data.products.find(p => String(p.id) === String(prodId) || Number(p.id) === Number(prodId));
+      }
+      if (product) {
+        try {
+          const uPrice = txn.user_price || creditAmount;
+          await telegramEngine.executeProductDelivery(user.user_id, user, product, uPrice);
+          return { success: true, user };
+        } catch (delErr: any) {
+          console.error('Error during direct product key auto-delivery:', delErr);
+        }
+      }
+    }
+
+    // 2. Otherwise (regular wallet deposit), notify the user immediately on Telegram
     try {
       const utrLine = utr ? `🧾 <b>UTR / Ref ID:</b> <code>${utr}</code>\n` : '';
       await telegramEngine.sendMessage(
         user.user_id,
-        `🎉 <b>PAYMENT CONFIRMED & WALLET CREDITED!</b> 🎉\n\n` +
+        `🎉 <b><u>PAYMENT CONFIRMED & WALLET CREDITED!</u></b> 🎉\n` +
+        `════════════════════\n` +
         `✅ <b>Status:</b> Payment Successfully Verified\n` +
         `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
         utrLine +
-        `💰 <b>Amount Credited:</b> <b>+₹${creditAmount.toFixed(2)}</b>\n` +
-        `💳 <b>New Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n\n` +
-        `<i>Your funds are ready! You can now purchase your favorite Free Fire panel keys instantly from the store.</i>`,
+        `💰 <b>Amount Credited:</b> <code>+₹${creditAmount.toFixed(2)}</code>\n` +
+        `💳 <b>New Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n` +
+        `════════════════════\n\n` +
+        `⚡ <i>Your funds are ready! You can now purchase your favorite Free Fire panel keys instantly from the store.</i>`,
         {
           inline_keyboard: [
-            [{ text: '🛒 Open Product Store', callback_data: 'shop_categories' }],
-            [{ text: '👤 View My Profile & Keys', callback_data: 'profile' }]
+            [{ text: '🛒 Open Product Store', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '👤 View My Profile & Keys', callback_data: 'profile', style: 'success' }]
           ]
         }
       );

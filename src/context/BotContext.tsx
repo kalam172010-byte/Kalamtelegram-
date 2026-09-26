@@ -1866,7 +1866,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!qrUrl || qrUrl.length < 10) {
       try {
-        qrUrl = await generateQrDataUrl(paymentUrl || upiUri);
+        qrUrl = await generateQrDataUrl(paymentUrl || upiUri, { logoUrl: settings.payment_qr_logo_url });
       } catch (e) {
         qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentUrl || upiUri)}`;
       }

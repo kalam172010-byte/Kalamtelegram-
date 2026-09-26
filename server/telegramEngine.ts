@@ -441,45 +441,89 @@ class TelegramEngine {
       await this.callApi('deleteMyCommands', {});
     } catch (e) {}
 
+    try {
+      await this.callApi('setChatMenuButton', { menu_button: { type: 'default' } });
+    } catch (e) {}
+
     dbStore.updateSettings({ bot_commands_enabled: false });
     return result || { ok: true };
   }
 
   public async syncBotCommands(force = false): Promise<any> {
     const settings = dbStore.getData().settings;
-    if (settings.bot_commands_enabled === false) {
+    if (settings.bot_commands_enabled === false && !force) {
       return await this.deleteMyCommands();
     }
 
     const now = Date.now();
-    // Throttle setMyCommands to at most once every 5 minutes to prevent Telegram API rate limits (Too Many Requests)
-    if (!force && (now - this.lastCommandsSyncTime) < 5 * 60 * 1000) {
+    // Throttle setMyCommands to at most once every 30 seconds unless forced
+    if (!force && (now - this.lastCommandsSyncTime) < 30 * 1000) {
       return { ok: true, cached: true };
     }
 
     try {
-      const commands = [
+      const defaultCommands = [
         { command: 'start', description: '✨ Launch Shop & Main Menu' },
-        { command: 'shop', description: '🛒 Product Store Catalog & Duration Plans' },
+        { command: 'shop', description: '🛒 Product Catalog & Buy Keys' },
         { command: 'addbalance', description: '💳 Add Wallet Balance via FamPay UPI' },
-        { command: 'profile', description: '👤 My Profile & Purchased License Keys' },
+        { command: 'balance', description: '👛 Check Current Wallet Balance' },
+        { command: 'profile', description: '👤 My Profile & Purchased Keys' },
         { command: 'reseller', description: '👑 Reseller VIP Wholesale Dashboard' },
-        { command: 'referral', description: '🎁 Refer Friends & Earn Cash Bonus' },
-        { command: 'help', description: '💬 24/7 Support Channel & Tickets' }
+        { command: 'referral', description: '🎁 Refer Friends & Earn Cash Rewards' },
+        { command: 'help', description: '💬 24/7 Support & Help Desk' }
       ];
-      dbStore.updateSettings({ bot_commands_enabled: true });
 
-      const token = dbStore.getData().settings.bot_token;
+      const commands = Array.isArray(settings.bot_commands) && settings.bot_commands.length > 0
+        ? settings.bot_commands
+        : defaultCommands;
+
+      dbStore.updateSettings({ bot_commands_enabled: true, bot_commands: commands });
+
+      const token = this.getValidTokenFromStore();
       if (!token || token.includes('exampleToken')) return;
 
+      // 1. Set standard commands for default global scope
       const res = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ commands })
       });
       const data = await res.json();
+
+      // 2. Set for all private chats scope to ensure 1-on-1 chats display the commands
+      await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands, scope: { type: 'all_private_chats' } })
+      }).catch(() => {});
+
+      // 3. Explicitly set Telegram Chat Menu Button to 'commands' to display the [Menu] button in chat
+      await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menu_button: { type: 'commands' } })
+      }).catch(() => {});
+
+      // 4. Set admin commands for the admin chat if admin_id is configured
+      const adminId = Number(settings.admin_id);
+      if (adminId && !isNaN(adminId)) {
+        const adminCommands = [
+          { command: 'admin', description: '🛠 Open Admin Control Panel' },
+          { command: 'panel', description: '📊 Admin Terminal Dashboard' },
+          { command: 'broadcast', description: '📢 Broadcast to All Users' },
+          { command: 'stats', description: '📈 Revenue & Performance Stats' },
+          ...commands
+        ];
+        await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commands: adminCommands, scope: { type: 'chat', chat_id: adminId } })
+        }).catch(() => {});
+      }
+
       if (data.ok) {
         this.lastCommandsSyncTime = now;
+        console.log('✅ Telegram bot commands & menu button successfully synced to Telegram API');
       } else {
         console.warn('syncBotCommands Telegram notice:', data.description || 'Rate limited');
       }
@@ -521,7 +565,7 @@ class TelegramEngine {
             if (settings.bot_commands_enabled === false) {
               await this.deleteMyCommands().catch(() => {});
             } else {
-              await this.syncBotCommands().catch(() => {});
+              await this.syncBotCommands(true).catch(() => {});
             }
           } catch (e) {
             // ignore
@@ -864,7 +908,7 @@ class TelegramEngine {
     return keys.length > 0 ? `[Stock: ${keys.length}]` : '[SOLD OUT]';
   }
 
-  private async executeProductDelivery(
+  public async executeProductDelivery(
     chatId: number,
     user: User,
     product: Product,
@@ -1074,18 +1118,20 @@ class TelegramEngine {
     const safeValidity = escapeHtml(product.validity);
     const safeKey = escapeHtml(deliveredKey);
 
-    const deliveryMessage = `🎉 <b>PURCHASE SUCCESSFUL! (#${orderId})</b>\n\n` +
-      `📦 <b>Product:</b> ${safePanel} - ${safeName}\n` +
-      `⏳ <b>Validity:</b> ${safeValidity}\n` +
-      `💰 <b>Amount Paid:</b> ₹${userPrice}\n` +
-      `💳 <b>Remaining Balance:</b> ₹${user.balance.toFixed(2)}${deviceNote}\n\n` +
-      `🔑 <b>YOUR LICENSE KEY:</b>\n` +
+    const deliveryMessage = `🎉 <b><u>PURCHASE SUCCESSFUL!</u> (#${orderId})</b>\n` +
+      `════════════════════\n` +
+      `📦 <b>Product:</b> <code>${safePanel} - ${safeName}</code>\n` +
+      `⏳ <b>Validity:</b> <code>${safeValidity}</code>\n` +
+      `💰 <b>Amount Paid:</b> <code>₹${userPrice}</code>\n` +
+      `💳 <b>Remaining Balance:</b> <code>₹${user.balance.toFixed(2)}</code>${deviceNote}\n` +
+      `════════════════════\n\n` +
+      `🔑 <b>YOUR LICENSE KEY (TAP TO COPY):</b>\n` +
       `<code>${safeKey}</code>\n\n` +
       `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
       `<a href="${apkDownloadUrl}">${escapeHtml(apkDownloadUrl)}</a>\n\n` +
       `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
       `<a href="${tutorialUrl}">${escapeHtml(tutorialUrl)}</a>\n\n` +
-      `<i>Click on the key above to copy it directly to your clipboard. Enjoy playing!</i>`;
+      `✨ <i>Click on the license key above to copy it directly to your clipboard. Enjoy playing!</i>`;
 
     const keyboard = {
       inline_keyboard: [
@@ -1851,23 +1897,23 @@ class TelegramEngine {
       }
     }
 
-    // Robust Command Parsing (handling /start, /start@BotUsername, deep links, uppercase, etc.)
-    if (lowerText.startsWith('/start')) {
+    // Robust Command Parsing (handling /start, /menu, /shop, /buy, etc.)
+    if (lowerText.startsWith('/start') || lowerText.startsWith('/menu')) {
       await this.sendWelcomeMessage(chatId, user);
       return;
     }
 
-    if (lowerText.startsWith('/shop') || lowerText.startsWith('/store') || lowerText.startsWith('/products')) {
+    if (lowerText.startsWith('/shop') || lowerText.startsWith('/store') || lowerText.startsWith('/products') || lowerText.startsWith('/buy')) {
       await this.sendShopCategories(chatId, user);
       return;
     }
 
-    if (lowerText.startsWith('/pay') || lowerText.startsWith('/deposit') || lowerText.startsWith('/addbalance')) {
+    if (lowerText.startsWith('/pay') || lowerText.startsWith('/deposit') || lowerText.startsWith('/addbalance') || lowerText.startsWith('/recharge')) {
       const parts = text.split(/\s+/);
       if (parts.length >= 2) {
         const cleanNum = parts[1].replace(/[^0-9.]/g, '');
         const amount = parseFloat(cleanNum);
-        if (!isNaN(amount) && amount >= 10 && amount <= 100000) {
+        if (!isNaN(amount) && amount >= 1 && amount <= 100000) {
           await this.sendPaymentInstructions(chatId, user, amount);
           return;
         }
@@ -1881,12 +1927,12 @@ class TelegramEngine {
       return;
     }
 
-    if (lowerText.startsWith('/profile') || lowerText.startsWith('/account') || lowerText.startsWith('/keys')) {
+    if (lowerText.startsWith('/profile') || lowerText.startsWith('/account') || lowerText.startsWith('/keys') || lowerText.startsWith('/mykeys')) {
       await this.sendProfileMessage(chatId, user);
       return;
     }
 
-    if (lowerText.startsWith('/reseller')) {
+    if (lowerText.startsWith('/reseller') || lowerText.startsWith('/vip')) {
       await this.sendResellerMenu(chatId, user);
       return;
     }
@@ -1896,8 +1942,28 @@ class TelegramEngine {
       return;
     }
 
-    if (lowerText.startsWith('/help') || lowerText.startsWith('/support')) {
+    if (lowerText.startsWith('/help') || lowerText.startsWith('/support') || lowerText.startsWith('/ticket')) {
       await this.sendSupportMenu(chatId, user);
+      return;
+    }
+
+    if (lowerText.startsWith('/apk') || lowerText.startsWith('/download') || lowerText.startsWith('/update') || lowerText.startsWith('/check_update')) {
+      const apkUrl = settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
+      const channelUrl = settings.official_channel_link || 'https://t.me/KalamFFPanelChannel';
+      await this.sendMessage(
+        chatId,
+        `📥 <b>LATEST APK DOWNLOADS & UPDATES</b>\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `Get the latest verified panel APKs, bypass files, and anti-ban updates from our official download channel.\n\n` +
+        `📲 <b>APK Channel:</b> <a href="${apkUrl}">${apkUrl}</a>\n` +
+        `📢 <b>Official Updates:</b> <a href="${channelUrl}">${channelUrl}</a>`,
+        {
+          inline_keyboard: [
+            [{ text: '📥 Open APK Channel', url: apkUrl }],
+            [{ text: '📢 Official Channel', url: channelUrl }],
+            [{ text: '🔙 Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      );
       return;
     }
 
@@ -2895,6 +2961,9 @@ class TelegramEngine {
         keyboard.inline_keyboard.push([
           { text: `⚡ CONFIRM & BUY NOW (₹${userPrice}) ⚡`, callback_data: `buy_${product.id}`, style: 'danger' }
         ]);
+        keyboard.inline_keyboard.push([
+          { text: `📲 DIRECT UPI QR PAY (₹${userPrice}) ⚡`, callback_data: `upipay_${product.id}`, style: 'success' }
+        ]);
       } else {
         keyboard.inline_keyboard.push([
           { text: `❌ Out of Stock`, callback_data: 'stock_empty', style: 'danger' }
@@ -2977,6 +3046,108 @@ class TelegramEngine {
         ]
       };
       await this.editMessageText(chatId, messageId, text, keyboard);
+      return;
+    }
+
+    if (data.startsWith('upipay_')) {
+      const rawProdId = data.replace('upipay_', '').trim();
+      let product = dbStore.getProduct(rawProdId);
+      if (!product) {
+        product = dbStore.getData().products.find(p => 
+          String(p.id).trim() === rawProdId || 
+          Number(p.id) === Number(rawProdId)
+        );
+      }
+
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
+        await this.answerCallback(cb.id, '❌ Product no longer available.', true);
+        return;
+      }
+
+      const userPrice = this.getUserPrice(user, product);
+      const orderId = `ORD_UPI_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      // Save pending transaction with product_id link
+      dbStore.addTransaction({
+        order_id: orderId,
+        user_id: user.user_id,
+        amount_inr: userPrice,
+        status: 'pending',
+        timestamp: Date.now(),
+        product_id: product.id,
+        user_price: userPrice
+      });
+
+      const upiId = famGateway.getUpiId();
+      const payeeName = famGateway.getPayeeName();
+
+      const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${userPrice.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
+      const { buffer: qrBuf, url: publicQrUrl } = await this.getPhonePeQrPhoto(upiUri);
+
+      const upiText = `📲 <b><u>DIRECT UPI QR PAY (INSTANT KEY DELIVERY)</u></b>\n` +
+        `════════════════════\n` +
+        `📦 <b>Product:</b> <code>${product.panel_name} (${product.name})</code>\n` +
+        `⏳ <b>Validity:</b> <code>${product.validity}</code>\n` +
+        `💰 <b>Price to Pay:</b> <b>₹${userPrice.toFixed(2)}</b>\n` +
+        `🆔 <b>Order ID:</b> <code>${orderId}</code>\n` +
+        `💳 <b>UPI VPA ID:</b> <code>${upiId}</code>\n` +
+        `════════════════════\n\n` +
+        `📱 <b>HOW TO PAY & GET YOUR KEY INSTANTLY:</b>\n` +
+        `1️⃣ Scan the <b>PhonePe QR Code</b> above or pay to UPI ID <code>${upiId}</code>.\n` +
+        `2️⃣ Pay exact amount: <b>₹${userPrice.toFixed(2)}</b> via PhonePe, GPay, Paytm, BHIM, or FamPay.\n` +
+        `3️⃣ After payment, tap <b>⚡ VERIFY UPI PAYMENT NOW</b> or reply with your <b>12-digit UTR</b> in chat!\n\n` +
+        `⚡ <i>Once verified, your license key will be delivered automatically right here!</i>`;
+
+      const upiKb = {
+        inline_keyboard: [
+          [{ text: '🟣 Pay via PhonePe / UPI App', url: upiUri }],
+          [{ text: '⚡ VERIFY UPI PAYMENT NOW', callback_data: `verify_upiprod_${orderId}`, style: 'success' }],
+          [{ text: '🔙 Back to Checkout', callback_data: `prod_${product.id}`, style: 'danger' }]
+        ]
+      };
+
+      if (qrBuf) {
+        try {
+          await this.sendPhotoBuffer(chatId, qrBuf, upiText, upiKb);
+        } catch (bufErr) {
+          await this.sendPhoto(chatId, publicQrUrl, upiText, upiKb);
+        }
+      } else {
+        await this.sendPhoto(chatId, publicQrUrl, upiText, upiKb);
+      }
+      await this.answerCallback(cb.id, '📲 PhonePe UPI QR Code Generated!', false);
+      return;
+      return;
+    }
+
+    if (data.startsWith('verify_upiprod_')) {
+      const orderId = data.replace('verify_upiprod_', '').trim();
+      await this.answerCallback(cb.id, '🔄 Verifying payment status with UPI Gateway...', false);
+
+      const statusRes = await famGateway.checkOrderStatus(orderId);
+      if (statusRes.isPaid) {
+        await famGateway.processSuccessfulPayment(orderId, statusRes.amount);
+        await this.answerCallback(cb.id, '🎉 Payment Verified! Key Delivered!', true);
+      } else {
+        const text = `⏳ <b>PAYMENT STATUS: PENDING / VERIFYING...</b>\n` +
+          `════════════════════\n` +
+          `🆔 <b>Order ID:</b> <code>${orderId}</code>\n\n` +
+          `If you have completed your UPI transfer in PhonePe / GPay / Paytm:\n` +
+          `👉 Tap <b>⚡ VERIFY UPI PAYMENT NOW</b> again, or simply <b>send your 12-digit UTR number</b> directly in this chat!`;
+
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '⚡ VERIFY UPI PAYMENT NOW', callback_data: `verify_upiprod_${orderId}`, style: 'success' }],
+            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          ]
+        };
+
+        if (messageId) {
+          await this.editMessageText(chatId, messageId, text, keyboard);
+        } else {
+          await this.sendMessage(chatId, text, keyboard);
+        }
+      }
       return;
     }
 
@@ -3871,6 +4042,29 @@ class TelegramEngine {
     }
   }
 
+  private async getPhonePeQrPhoto(upiUri: string): Promise<{ buffer?: Buffer; url: string }> {
+    const settings = dbStore.getData().settings;
+    const logoUrl = (settings && settings.payment_qr_logo_url && settings.payment_qr_logo_url.trim())
+      ? settings.payment_qr_logo_url.trim()
+      : 'https://img.icons8.com/color/512/phone-pe.png';
+    const qcUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=500&margin=2&ecLevel=H&centerImageUrl=${encodeURIComponent(logoUrl)}&centerImageWidth=110&centerImageHeight=110`;
+
+    try {
+      const res = await fetch(qcUrl);
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+        if (buffer.length > 1000) {
+          return { buffer, url: qcUrl };
+        }
+      }
+    } catch (err) {
+      console.warn('[TelegramEngine] Fetch QuickChart PhonePe QR error:', err);
+    }
+
+    return { url: qcUrl };
+  }
+
   public async getUserProfilePhotoFileId(userId: number): Promise<string | null> {
     try {
       const photosRes = await this.callApi('getUserProfilePhotos', { user_id: userId, limit: 1 });
@@ -4118,23 +4312,8 @@ class TelegramEngine {
     const payeeName = famGateway.getPayeeName();
     const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount.toFixed(2)}&tn=${encodeURIComponent(orderId)}&cu=INR`;
 
-    // 2. Generate PNG QR Code Buffer (Native Buffer upload to Telegram)
-    let qrBuffer: Buffer | null = null;
-    try {
-      qrBuffer = await QRCode.toBuffer(orderRes.payment_url || upiUri, {
-        width: 500,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: {
-          dark: '#000000',
-          light: '#ffffff'
-        }
-      });
-    } catch (qrErr) {
-      console.warn('QRCode buffer generation failed:', qrErr);
-    }
-
-    const publicQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=10&data=${encodeURIComponent(orderRes.payment_url || upiUri)}`;
+    // 2. Generate PNG QR Code Buffer with PhonePe Logo centered
+    const { buffer: qrBuffer, url: publicQrUrl } = await this.getPhonePeQrPhoto(orderRes.payment_url || upiUri);
 
     const text = `⚡ <b>FAMGATEWAY.IN AUTOMATED UPI PAYMENT</b> ⚡\n\n` +
       `💰 <b>Amount to Pay:</b> <b>₹${amount.toFixed(2)}</b>\n` +
@@ -4145,7 +4324,7 @@ class TelegramEngine {
       `⏳ <b>Validity:</b> 15 Minutes (Auto-Verifying)\n\n` +
       `📱 <b>HOW TO PAY VIA FAMGATEWAY.IN:</b>\n` +
       `1️⃣ Open <b>PhonePe, Google Pay, Paytm, FamPay, or BHIM</b>.\n` +
-      `2️⃣ Scan the QR Code image above OR pay to UPI ID <code>${upiId}</code>.\n` +
+      `2️⃣ Scan the <b>PhonePe QR Code</b> image above OR pay to UPI ID <code>${upiId}</code>.\n` +
       `3️⃣ Pay exact amount: <b>₹${amount.toFixed(2)}</b>.\n` +
       `4️⃣ <b>FamGateway will AUTOMATICALLY credit your wallet</b> in seconds!\n\n` +
       `<i>👉 After paying, tap "🔄 Check & Auto-Confirm Payment" below.</i>`;
@@ -4174,23 +4353,22 @@ class TelegramEngine {
       await this.deleteMessage(chatId, messageId).catch(() => {});
     }
 
-    // 4. Attempt Delivery: Try sending actual generated QR Photo Buffer first
+    // 4. Attempt Delivery: Try sending actual generated PhonePe QR Photo Buffer first
     if (qrBuffer) {
       try {
         await this.sendPhotoBuffer(chatId, qrBuffer, text, keyboard);
         return;
       } catch (bufErr: any) {
-        console.warn('sendPhotoBuffer failed, trying ultra-fast QuickChart QR CDN:', bufErr.message);
+        console.warn('sendPhotoBuffer failed, sending via photo URL:', bufErr.message);
       }
     }
 
-    // 5. Fallback 1: QuickChart QR CDN (Highly reliable with Telegram servers)
-    const quickChartUrl = `https://quickchart.io/qr?text=${encodeURIComponent(orderRes.payment_url || upiUri)}&size=500&margin=2`;
+    // 5. Fallback 1: QuickChart QR CDN with PhonePe Logo
     try {
-      await this.sendPhoto(chatId, quickChartUrl, text, keyboard);
+      await this.sendPhoto(chatId, publicQrUrl, text, keyboard);
       return;
     } catch (qcErr: any) {
-      console.warn('QuickChart sendPhoto failed, trying QRServer CDN:', qcErr.message);
+      console.warn('QuickChart sendPhoto failed:', qcErr.message);
     }
 
     // 6. Fallback 2: QRServer CDN
@@ -4629,7 +4807,14 @@ class TelegramEngine {
       command: c.command.toLowerCase().replace(/[^a-z0-9_]/g, ''),
       description: c.description.slice(0, 256)
     })).filter(c => c.command.length >= 1 && c.description.length >= 1);
-    return await this.callApi('setMyCommands', { commands: formatted });
+
+    const res = await this.callApi('setMyCommands', { commands: formatted });
+    await this.callApi('setMyCommands', { commands: formatted, scope: { type: 'all_private_chats' } }).catch(() => {});
+    await this.callApi('setChatMenuButton', { menu_button: { type: 'commands' } }).catch(() => {});
+
+    dbStore.updateSettings({ bot_commands_enabled: true, bot_commands: formatted });
+    this.lastCommandsSyncTime = Date.now();
+    return res;
   }
 
   /**

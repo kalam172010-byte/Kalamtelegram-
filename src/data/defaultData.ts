@@ -120,6 +120,18 @@ export const DEFAULT_SETTINGS: Settings = {
   usdt_to_inr: 90.0,
   min_deposit_inr: 1.0,
   max_deposit_inr: 50000.0,
+  payment_qr_logo_url: 'https://img.icons8.com/color/512/phone-pe.png',
+  bot_commands_enabled: true,
+  bot_commands: [
+    { command: 'start', description: '✨ Launch Shop & Main Menu' },
+    { command: 'shop', description: '🛒 Product Catalog & Buy Keys' },
+    { command: 'addbalance', description: '💳 Add Wallet Balance via FamPay UPI' },
+    { command: 'balance', description: '👛 Check Current Wallet Balance' },
+    { command: 'profile', description: '👤 My Profile & Purchased Keys' },
+    { command: 'reseller', description: '👑 Reseller VIP Wholesale Dashboard' },
+    { command: 'referral', description: '🎁 Refer Friends & Earn Cash Rewards' },
+    { command: 'help', description: '💬 24/7 Support & Help Desk' }
+  ],
 };
 
 export const INITIAL_USERS: User[] = [

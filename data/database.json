@@ -106,7 +106,7 @@
       "is_banned": 0,
       "warnings": 0,
       "is_vip": 0,
-      "avatar_url": "AgACAgUAAxUAAWq06_sWW3LY6yQi_DkEjPsRe65dAALTEmsbsVFxVIEreVvzwpksAQADAgADYwADPQQ",
+      "avatar_url": "AgACAgUAAxUAAWq3XbrI5J_xSuXwLv1Z5XoWcUbiAALTEmsbsVFxVIEreVvzwpksAQADAgADYwADPQQ",
       "is_admin": 0,
       "role": "Regular"
     },
@@ -719,6 +719,20 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790402814568,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-26 06:06:54"
+    },
+    {
+      "id": 1790402805674,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-26 06:06:45"
+    },
     {
       "id": 1790401925145,
       "user_id": 5255460348,
@@ -1921,9 +1935,42 @@
     "usdt_to_inr": 90,
     "min_deposit_inr": 1,
     "max_deposit_inr": 50000,
-    "bot_commands": [],
+    "bot_commands": [
+      {
+        "command": "start",
+        "description": "✨ Launch Shop & Main Menu"
+      },
+      {
+        "command": "shop",
+        "description": "🛒 Product Catalog & Buy Keys"
+      },
+      {
+        "command": "addbalance",
+        "description": "💳 Add Wallet Balance via FamPay UPI"
+      },
+      {
+        "command": "balance",
+        "description": "👛 Check Current Wallet Balance"
+      },
+      {
+        "command": "profile",
+        "description": "👤 My Profile & Purchased Keys"
+      },
+      {
+        "command": "reseller",
+        "description": "👑 Reseller VIP Wholesale Dashboard"
+      },
+      {
+        "command": "referral",
+        "description": "🎁 Refer Friends & Earn Cash"
+      },
+      {
+        "command": "help",
+        "description": "💬 24/7 Support & Help Desk"
+      }
+    ],
     "maintenance_mode": false,
-    "bot_commands_enabled": false,
+    "bot_commands_enabled": true,
     "webapp_url": "https://kalamtelegram.onrender.com"
   },
   "emojis": {

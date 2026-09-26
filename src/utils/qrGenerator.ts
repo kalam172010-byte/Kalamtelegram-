@@ -31,7 +31,7 @@ export function buildUpiUri(details: UpiPaymentDetails): string {
 }
 
 /**
- * Generates a high-quality Data URI PNG QR Code offline without external network dependency
+ * Generates a high-quality Data URI PNG QR Code offline with PhonePe logo in the center
  */
 export async function generateQrDataUrl(
   content: string,
@@ -40,23 +40,67 @@ export async function generateQrDataUrl(
     margin?: number;
     darkColor?: string;
     lightColor?: string;
+    addPhonePeLogo?: boolean;
+    logoUrl?: string;
   }
 ): Promise<string> {
+  const logoUrl = options?.logoUrl || 'https://img.icons8.com/color/512/phone-pe.png';
+  const width = options?.width || 360;
+  const shouldAddLogo = options?.addPhonePeLogo !== false;
+
   try {
-    const dataUrl = await QRCode.toDataURL(content, {
-      width: options?.width || 360,
-      margin: options?.margin !== undefined ? options.margin : 2,
-      color: {
-        dark: options?.darkColor || '#000000',
-        light: options?.lightColor || '#ffffff',
-      },
-      errorCorrectionLevel: 'M',
-    });
-    return dataUrl;
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      await QRCode.toCanvas(canvas, content, {
+        width,
+        margin: options?.margin !== undefined ? options.margin : 2,
+        color: {
+          dark: options?.darkColor || '#000000',
+          light: options?.lightColor || '#ffffff',
+        },
+        errorCorrectionLevel: 'H',
+      });
+
+      if (shouldAddLogo) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const logoSize = Math.floor(width * 0.22);
+          const x = (width - logoSize) / 2;
+          const y = (width - logoSize) / 2;
+
+          // Draw a clean rounded white background box for clear QR separation
+          ctx.fillStyle = '#FFFFFF';
+          const padding = 6;
+          ctx.beginPath();
+          if (typeof ctx.roundRect === 'function') {
+            ctx.roundRect(x - padding, y - padding, logoSize + padding * 2, logoSize + padding * 2, 12);
+          } else {
+            ctx.rect(x - padding, y - padding, logoSize + padding * 2, logoSize + padding * 2);
+          }
+          ctx.fill();
+
+          // Draw the custom QR logo image
+          await new Promise<void>((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              ctx.drawImage(img, x, y, logoSize, logoSize);
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = logoUrl;
+          });
+        }
+      }
+      return canvas.toDataURL('image/png');
+    }
   } catch (err) {
-    console.error('Local QRCode generation error, falling back to public CDN:', err);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(content)}`;
+    console.warn('Canvas QR generation with logo failed, using QuickChart fallback:', err);
   }
+
+  // Fallback QuickChart URL with custom logo center
+  const logoWidth = Math.floor(width * 0.22);
+  return `https://quickchart.io/qr?text=${encodeURIComponent(content)}&size=${width}&margin=2&ecLevel=H&centerImageUrl=${encodeURIComponent(logoUrl)}&centerImageWidth=${logoWidth}&centerImageHeight=${logoWidth}`;
 }
 
 /**
