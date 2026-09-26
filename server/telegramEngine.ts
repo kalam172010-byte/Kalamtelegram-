@@ -4032,18 +4032,50 @@ class TelegramEngine {
     }
 
     const botName = this.getBotDisplayName();
+    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : (user.is_vip === 1 ? '💎 VIP Member' : '👤 Regular Member');
+    const userHandle = user.username ? `@${escapeHtml(user.username)}` : 'none';
+
+    // Check if custom start menu text is defined in settings
     if (settings.ui_start_menu && settings.ui_start_menu.trim().length > 10) {
       let customText = settings.ui_start_menu;
-      customText = customText.replace(/KALAM PANEL BOT/gi, botName)
-                             .replace(/KALAM FF PANEL/gi, botName)
-                             .replace(/KALAM STORE/gi, botName);
-      return customText;
-    }
+      
+      // Evaluate all dynamic placeholders in custom text
+      customText = customText
+        .replace(/KALAM PANEL BOT/gi, botName)
+        .replace(/KALAM FF PANEL/gi, botName)
+        .replace(/KALAM STORE/gi, botName)
+        .replace(/{bot_name}/g, botName)
+        .replace(/{first_name}/g, escapeHtml(user.first_name))
+        .replace(/{user_id}/g, String(user.user_id))
+        .replace(/{username}/g, userHandle)
+        .replace(/{tier}/g, tier)
+        .replace(/{balance}/g, user.balance.toFixed(2));
 
-    const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Member';
+      // If custom text already contains greeting/user details, return evaluated customText directly
+      if (
+        customText.includes(user.first_name) || 
+        customText.includes(String(user.user_id)) || 
+        customText.includes('Wallet Balance') ||
+        customText.includes('Account Tier')
+      ) {
+        return customText;
+      }
+
+      // If custom text is missing standard user greeting block, prepend the standard user banner
+      return `⚡ <b><u>WELCOME TO ${botName}</u></b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `👋 Hello, <b>${escapeHtml(user.first_name)}</b>!\n` +
+        `🤖 <b>Bot Name:</b> <code>${botName}</code>\n` +
+        `👤 <b>Username:</b> <code>${userHandle}</code>\n` +
+        `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
+        `🎖 <b>Account Tier:</b> <code>${tier}</code>\n` +
+        `💰 <b>Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        customText + `\n\n<i>Select an option below to proceed:</i>`;
+    }
 
     return `⚡ <b><u>WELCOME TO ${botName}</u></b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n` +
       `👋 Hello, <b>${escapeHtml(user.first_name)}</b>!\n` +
+      `🤖 <b>Bot Name:</b> <code>${botName}</code>\n` +
+      `👤 <b>Username:</b> <code>${userHandle}</code>\n` +
       `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
       `🎖 <b>Account Tier:</b> <code>${tier}</code>\n` +
       `💰 <b>Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +

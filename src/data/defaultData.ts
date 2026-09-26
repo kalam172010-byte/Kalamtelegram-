@@ -47,14 +47,20 @@ export const DEFAULT_EMOJIS: Record<string, string> = {
 };
 
 export const UI_TEXTS = {
-  start_menu: `✨ <b>KALAM PANEL BOT</b>
+  start_menu: `✨ <b>{bot_name}</b>
 
-{product_store} 𝗣𝗥𝗢𝗗𝗨𝗖𝗧 𝗦𝘁𝗼𝗿𝗲 : 𝗮𝗹𝗹 𝗸𝗲𝘆𝘀 𝗣𝘂𝗿𝗰𝗵𝗮𝘀𝗲  & 𝗶𝗻𝘀𝘁𝗮𝗻𝘁𝗹𝘆 𝗱𝗲𝗹𝗶𝘃𝗲𝗿𝘆
-{profile} 𝗠𝘆 𝗽𝗿𝗼𝗳𝗶𝗹𝗲 : 𝗰𝗵𝗲𝗰𝗸 𝘆𝗼𝘂𝗿 𝗮𝗰𝗰𝗼𝘂𝗻𝘁 𝗶𝗻𝗳𝗼𝗿𝗺𝗮𝘁𝗶𝗼𝗻
-{add_balance} 𝗔𝗱𝗱 𝗯𝗮𝗹𝗮𝗻𝗰𝗲 : 𝗱𝗲𝗽𝗼𝘀𝗶𝘁𝗲 𝗯𝗮𝗹𝗮𝗻𝗰𝗲 & 𝘀𝗲𝗰𝘂𝗿𝗲 𝘀𝗲𝗿𝘃𝗶𝗰𝗲
-{history} 𝗔𝗹𝗹 𝗵𝗶𝘀𝘁𝗼𝗿𝘆 : 𝗰𝗵𝗲𝗰𝗸 𝗮𝗹𝗹 𝗽𝘂𝗿𝗰𝗵𝗮𝘀𝗲 𝗵𝗶𝘀𝘁𝗼𝗿𝘆
-{referral} 𝗥𝗲𝗳𝗲𝗿 & 𝗘𝗮𝗿𝗻 : 𝗶𝗻𝘃𝗶𝘁𝗲 𝗳𝗿𝗶𝗲𝗻𝗱𝘀 & 𝗲𝗮𝗿𝗻 𝘂𝗻𝗹𝗶𝗺𝗶𝘁𝗲𝗱 𝗰𝗮𝘀𝗵
-{support} 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 : 𝗯𝗼𝘁 𝗽𝗿𝗼𝗯𝗹𝗲𝗺 𝘀𝗼𝗹𝘃𝗲𝗱 𝗳𝗼𝗿 𝘀𝘂𝗽𝗽𝗼𝗿𝘁 𝗮𝗱𝗺𝗶𝗻`,
+👋 Hello, <b>{first_name}</b>!
+🤖 <b>Bot Name:</b> <code>{bot_name}</code>
+👤 <b>Username:</b> <code>{username}</code>
+🆔 <b>Telegram UID:</b> <code>{user_id}</code>
+🎖 <b>Account Tier:</b> <code>{tier}</code>
+💰 <b>Wallet Balance:</b> <code>₹{balance}</code>
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>Instant Key Delivery System:</b>
+• Premium Free Fire Injector & Menu Panels
+• Android Non-Root, Root & PC Emulators
+• Instant FamPay UPI & Crypto Wallet Top-ups
+• 100% Anti-Ban Protection & Auto Key Dispenser`,
 
   referral_menu: `🎁 <b><u>REFER & EARN REWARDS PROGRAM</u></b> 👥
 ━━━━━━━━━━━━━━━━━━━━
