@@ -956,12 +956,12 @@ class TelegramEngine {
 
     if (user.balance < userPrice) {
       const needed = userPrice - user.balance;
-      const text = `⚠️ <b>INSUFFICIENT WALLET BALANCE</b>\n\n` +
-        `You are trying to purchase: <b>${product.panel_name} (${product.name})</b>\n` +
-        `💵 Item Price: <b>₹${userPrice}</b>\n` +
-        `💳 Your Current Balance: <b>₹${user.balance.toFixed(2)}</b>\n` +
-        `🔻 Balance Needed: <b>₹${needed.toFixed(2)}</b>\n\n` +
-        `Please top up your wallet via FamPay UPI or Crypto to complete your order.`;
+      const text = `⚠️ <b><u>INSUFFICIENT WALLET BALANCE</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 <b>Product:</b> <code>${escapeHtml(product.panel_name)} (${escapeHtml(product.name)})</code>\n` +
+        `💵 <b>Item Price:</b> <code>₹${userPrice}</code>\n` +
+        `💳 <b>Current Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n` +
+        `🔻 <b>Balance Needed:</b> <code>₹${needed.toFixed(2)}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `<i>Please top up your wallet via FamPay UPI or Crypto to complete your order instantly!</i>`;
 
       const keyboard = {
         inline_keyboard: [
@@ -1111,13 +1111,15 @@ class TelegramEngine {
       try {
         await this.sendMessage(
           settings.admin_id,
-          `🚨 <b>NEW ORDER PLACED! (#${orderId})</b>\n\n` +
-          `👤 <b>Customer:</b> ${user.first_name} (@${user.username || user.user_id})\n` +
-          `📦 <b>Product:</b> ${product.panel_name} - ${product.name}\n` +
-          `💰 <b>Amount:</b> ₹${userPrice}\n` +
-          `🔑 <b>Key:</b> <code>${deliveredKey}</code>\n` +
-          `⚙️ <b>Source:</b> ${providerSource}` +
-          (androidId ? `\n📱 <b>Device HWID:</b> <code>${androidId}</code>` : '')
+          `🚨 <b><u>NEW ORDER PLACED!</u> (#<code>${orderId}</code>)</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👤 <b>Customer:</b> <b>${escapeHtml(user.first_name)}</b> (<code>@${escapeHtml(user.username || String(user.user_id))}</code>)\n` +
+          `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
+          `📦 <b>Product:</b> <code>${escapeHtml(product.panel_name)} - ${escapeHtml(product.name)}</code>\n` +
+          `💰 <b>Amount Paid:</b> <code>₹${userPrice}</code>\n` +
+          `🔑 <b>Key Delivered:</b> <code>${escapeHtml(deliveredKey)}</code>\n` +
+          `⚙️ <b>Vault Source:</b> <code>${escapeHtml(providerSource)}</code>` +
+          (androidId ? `\n📱 <b>Device HWID:</b> <code>${escapeHtml(androidId)}</code>` : '')
         );
       } catch (e) {
         // ignore
@@ -1134,7 +1136,7 @@ class TelegramEngine {
     const safeValidity = escapeHtml(product.validity);
     const safeKey = escapeHtml(deliveredKey);
 
-    const deliveryMessage = `🎉 <b><u>PURCHASE SUCCESSFUL!</u> (#${orderId})</b>\n` +
+    const deliveryMessage = `🎉 <b><u>PURCHASE SUCCESSFUL!</u> (#<code>${orderId}</code>)</b>\n` +
       `════════════════════\n` +
       `📦 <b>Product:</b> <code>${safePanel} - ${safeName}</code>\n` +
       `⏳ <b>Validity:</b> <code>${safeValidity}</code>\n` +
@@ -1144,9 +1146,9 @@ class TelegramEngine {
       `🔑 <b>YOUR LICENSE KEY (TAP TO COPY):</b>\n` +
       `<code>${safeKey}</code>\n\n` +
       `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
-      `<a href="${apkDownloadUrl}">${escapeHtml(apkDownloadUrl)}</a>\n\n` +
+      `<b><a href="${apkDownloadUrl}">${escapeHtml(apkDownloadUrl)}</a></b>\n\n` +
       `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
-      `<a href="${tutorialUrl}">${escapeHtml(tutorialUrl)}</a>\n\n` +
+      `<b><a href="${tutorialUrl}">${escapeHtml(tutorialUrl)}</a></b>\n\n` +
       `✨ <i>Click on the license key above to copy it directly to your clipboard. Enjoy playing!</i>`;
 
     const keyboard = {
@@ -2989,24 +2991,24 @@ class TelegramEngine {
 
       let discountText = '';
       if (user.is_reseller === 1) {
-        discountText = `\n🏷 <b>Wholesale Price Applied:</b> ₹${product.reseller_price} (Retail: ₹${product.price_inr})`;
+        discountText = `\n🏷 <b>Wholesale Price:</b> <code>₹${product.reseller_price}</code> (Retail: <s>₹${product.price_inr}</s>)`;
       } else if (user.is_vip === 1) {
-        discountText = `\n💎 <b>VIP 15% Discount:</b> ₹${userPrice} (Regular: ₹${product.price_inr})`;
+        discountText = `\n💎 <b>VIP 15% Discount:</b> <code>₹${userPrice}</code> (Regular: <s>₹${product.price_inr}</s>)`;
       }
 
       const hwidNote = isDeviceBound ? `\n📱 <b>Device Lock:</b> <i>Requires Android HWID on purchase</i>` : ``;
 
-      let text = `📦 <b>${product.panel_name || product.name}</b>\n` +
-        `⏱ <b>Duration Plan:</b> ${product.name}\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `📂 <b>Category:</b> ${product.category}\n` +
-        `⏳ <b>Validity:</b> ${product.validity}\n` +
-        `🔒 <b>Device Limit:</b> ${product.device_limit}${hwidNote}\n` +
-        `💰 <b>Price:</b> <b>₹${userPrice}</b>${discountText}\n` +
+      let text = `📦 <b><u>${escapeHtml(product.panel_name || product.name)}</u></b>\n` +
+        `⏱ <b>Duration Plan:</b> <code>${escapeHtml(product.name)}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `📂 <b>Category:</b> <code>${escapeHtml(product.category)}</code>\n` +
+        `⏳ <b>Validity:</b> <code>${escapeHtml(product.validity)}</code>\n` +
+        `🔒 <b>Device Limit:</b> <code>${escapeHtml(product.device_limit)}</code>${hwidNote}\n` +
+        `💰 <b>Price:</b> <b><code>₹${userPrice}</code></b>${discountText}\n` +
         `📊 <b>Stock Status:</b> ${stockInfo}\n` +
-        `💳 <b>Your Wallet Balance:</b> ₹${user.balance.toFixed(2)}\n`;
+        `💳 <b>Your Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n`;
 
       if (product.apk_link && product.apk_link.startsWith('http')) {
-        text += `📥 <b>APK Download Link:</b> <a href="${product.apk_link}">Click Here</a>\n`;
+        text += `📥 <b>APK Download Link:</b> <b><a href="${product.apk_link}">Click Here To Download</a></b>\n`;
       }
 
       text += `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -4040,11 +4042,11 @@ class TelegramEngine {
 
     const tier = user.is_reseller === 1 ? '🌟 Wholesale Reseller' : '👤 Regular Member';
 
-    return `⚡ <b>WELCOME TO ${botName}</b> ⚡\n\n` +
-      `👋 Hello, <b>${user.first_name}</b>!\n` +
-      `🆔 <b>Telegram ID:</b> <code>${user.user_id}</code>\n` +
-      `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
-      `💰 <b>Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n\n` +
+    return `⚡ <b><u>WELCOME TO ${botName}</u></b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `👋 Hello, <b>${escapeHtml(user.first_name)}</b>!\n` +
+      `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
+      `🎖 <b>Account Tier:</b> <code>${tier}</code>\n` +
+      `💰 <b>Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +
       `🚀 <b>Instant Key Delivery System:</b>\n` +
       `• Premium Free Fire Injector & Menu Panels\n` +
       `• Android Non-Root, Root & PC Emulators\n` +
@@ -4257,16 +4259,16 @@ class TelegramEngine {
       dbStore.updateUser(user.user_id, { avatar_url: photoSource });
     }
 
-    const text = `👤 <b>USER ACCOUNT PROFILE & KEY HISTORY</b>\n` +
+    const text = `👤 <b><u>USER ACCOUNT PROFILE & KEY HISTORY</u></b>\n` +
       `════════════════════\n` +
       `🆔 <b>Telegram UID:</b> <code>${user.user_id}</code>\n` +
-      `📛 <b>Name:</b> ${user.first_name} (@${user.username || 'none'})\n` +
-      `🎖 <b>Account Tier:</b> <b>${tier}</b>\n` +
-      `💰 <b>Wallet Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n` +
-      `💸 <b>Total Amount Spent:</b> <b>₹${user.spent.toFixed(2)}</b>\n` +
-      `🔑 <b>Total Keys Purchased:</b> <b>${orders.length} Keys</b>\n` +
-      `🎰 <b>Total Spins & Daily Gifts Claimed:</b> <b>${spinCount} Times</b>\n` +
-      `👥 <b>Friends Referred:</b> ${user.referral_count || 0} (Earned: ₹${(user.referral_earnings || 0).toFixed(2)})\n` +
+      `📛 <b>Name:</b> <b>${escapeHtml(user.first_name)}</b> (<code>@${escapeHtml(user.username || 'none')}</code>)\n` +
+      `🎖 <b>Account Tier:</b> <code>${tier}</code>\n` +
+      `💰 <b>Wallet Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n` +
+      `💸 <b>Total Amount Spent:</b> <code>₹${user.spent.toFixed(2)}</code>\n` +
+      `🔑 <b>Total Keys Purchased:</b> <code>${orders.length} Keys</code>\n` +
+      `🎰 <b>Total Spins & Gifts:</b> <code>${spinCount} Times</code>\n` +
+      `👥 <b>Friends Referred:</b> <code>${user.referral_count || 0}</code> (Earned: <code>₹${(user.referral_earnings || 0).toFixed(2)}</code>)\n` +
       `════════════════════` + keysText;
 
     const keyboardButtons: any[] = [];
@@ -4309,11 +4311,11 @@ class TelegramEngine {
     const minDeposit = this.getMinDeposit();
     const maxDeposit = this.getMaxDeposit();
 
-    const text = `💳 <b>ADD WALLET BALANCE (FAMGATEWAY.IN)</b>\n\n` +
+    const text = `💳 <b><u>ADD WALLET BALANCE (FAMGATEWAY.IN)</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
       `⚡ <b>Instant Automated UPI Deposits powered by FamGateway.in</b>\n` +
       `Supported: PhonePe, Google Pay, Paytm, FamPay & BHIM UPI.\n\n` +
-      `💵 <b>Current Balance:</b> <b>₹${user.balance.toFixed(2)}</b>\n` +
-      `📊 <b>Deposit Limits:</b> <b>Min ₹${minDeposit}</b> • <b>Max ₹${maxDeposit.toLocaleString()}</b>\n\n` +
+      `💵 <b>Current Balance:</b> <code>₹${user.balance.toFixed(2)}</code>\n` +
+      `📊 <b>Deposit Limits:</b> <code>Min ₹${minDeposit}</code> • <code>Max ₹${maxDeposit.toLocaleString()}</code>\n━━━━━━━━━━━━━━━━━━━━\n` +
       `Select a quick deposit amount or enter a custom amount:`;
 
     const keyboard = {
@@ -4351,11 +4353,11 @@ class TelegramEngine {
     });
 
     const text =
-      `<blockquote>💰 ENTER CUSTOM AMOUNT 💰</blockquote>\n` +
-      `❯ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n` +
-      `Amount: ₹${amountStr}\n\n` +
-      `Use the keypad below to enter amount or type directly in chat.\n\n` +
-      `Min: 💰 ₹${Number(minDeposit).toFixed(2)} | Max: 💰 ₹${formattedMax}`;
+      `<blockquote>💰 <b><u>ENTER CUSTOM DEPOSIT AMOUNT</u></b> 💰</blockquote>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `💵 <b>Entered Amount:</b> <code>₹${amountStr}</code>\n\n` +
+      `Use the interactive keypad below to enter amount or type directly in chat.\n\n` +
+      `📊 <b>Min:</b> <code>₹${Number(minDeposit).toFixed(2)}</code> | <b>Max:</b> <code>₹${formattedMax}</code>`;
 
     const keyboard = {
       inline_keyboard: [
@@ -4575,15 +4577,15 @@ class TelegramEngine {
 
     const text = `🎁 <b><u>REFER & EARN REWARDS PROGRAM</u></b> 👥\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `💰 <b>Earn ₹${refReward.toFixed(2)} instant cash</b> for every active friend you invite!\n` +
-      `📈 Plus get <b>${commPercent}% lifetime commission</b> on every recharge & purchase!\n` +
-      `🎁 <b>Your invited friends receive ₹${refereeBonus.toFixed(2)}</b> welcome bonus!\n\n` +
-      `🔗 <b>Your Exclusive Referral Link:</b>\n` +
+      `💰 <b>Earn <code>₹${refReward.toFixed(2)}</code> instant cash</b> for every active friend you invite!\n` +
+      `📈 Plus get <b><code>${commPercent}%</code> lifetime commission</b> on every recharge & purchase!\n` +
+      `🎁 <b>Your invited friends receive <code>₹${refereeBonus.toFixed(2)}</code></b> welcome bonus!\n\n` +
+      `🔗 <b>Your Exclusive Referral Link (Tap to Copy):</b>\n` +
       `<code>${refLink}</code>\n\n` +
       `📊 <b>Your Referral Performance:</b>\n` +
-      `👥 Total Friends Invited: <b>${user.referral_count || 0}</b>\n` +
-      `💵 Total Referral Earnings: <b>₹${(user.referral_earnings || 0).toFixed(2)}</b>\n` +
-      `👛 Wallet Balance: <b>₹${user.balance.toFixed(2)}</b>\n\n` +
+      `👥 Total Friends Invited: <code>${user.referral_count || 0} Friends</code>\n` +
+      `💵 Total Referral Earnings: <code>₹${(user.referral_earnings || 0).toFixed(2)}</code>\n` +
+      `👛 Wallet Balance: <code>₹${user.balance.toFixed(2)}</code>\n\n` +
       `🚀 <i>Share your personal link to start earning real cash rewards instantly!</i>`;
 
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(`🔥 Join ${this.getBotDisplayName()} Bot for Free Fire VIP Injectors, Root/Non-Root Panels & instant key delivery!`)}`;
