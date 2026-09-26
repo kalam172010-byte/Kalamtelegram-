@@ -227,7 +227,13 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Filter out legacy demo accounts (58941209, 77489012, 88192031) if present
         const demoUids = [58941209, 77489012, 88192031];
         const filtered = parsed.filter(u => !demoUids.includes(u.user_id));
-        const merged = [...filtered];
+        const merged = filtered.map(u => {
+          const offBal = offlineStorage.getUserBalance(u.user_id);
+          return {
+            ...u,
+            balance: offBal !== null ? Math.max(u.balance || 0, offBal) : (u.balance || 0)
+          };
+        });
         for (const initU of INITIAL_USERS) {
           if (!merged.some(u => u.user_id === initU.user_id || (u.email && u.email.toLowerCase() === initU.email?.toLowerCase()))) {
             merged.push(initU);
@@ -542,19 +548,43 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 prevUsers.forEach(u => userMap.set(u.user_id, u));
                 serverData.users.forEach((su: User) => {
                   const existing = userMap.get(su.user_id);
+                  const offBal = offlineStorage.getUserBalance(su.user_id);
                   if (existing) {
+                    const safeBalance = Math.max(existing.balance ?? 0, su.balance ?? 0, offBal ?? 0);
+                    const safeSpent = Math.max(existing.spent ?? 0, su.spent ?? 0);
+                    const safeSaved = Math.max(existing.total_saved ?? 0, su.total_saved ?? 0);
+                    const safeOrders = Math.max(existing.orders_count ?? 0, su.orders_count ?? 0);
+
                     userMap.set(su.user_id, {
-                      ...existing,
                       ...su,
+                      ...existing,
+                      balance: safeBalance,
+                      spent: safeSpent,
+                      total_saved: safeSaved,
+                      orders_count: safeOrders,
                       email: existing.email || su.email,
                       password: existing.password || su.password,
-                      avatar_url: su.avatar_url || existing.avatar_url
+                      avatar_url: existing.avatar_url || su.avatar_url,
+                      first_name: existing.first_name || su.first_name,
+                      username: existing.username || su.username,
+                      bot_id: existing.bot_id || su.bot_id,
+                      bot_ids: Array.from(new Set([...(existing.bot_ids || []), ...(su.bot_ids || [])])),
+                      bot_username: existing.bot_username || su.bot_username,
+                      owner_id: existing.owner_id || su.owner_id,
+                      owner_email: existing.owner_email || su.owner_email
                     });
                   } else {
-                    userMap.set(su.user_id, su);
+                    const initialBal = offBal !== null ? Math.max(su.balance ?? 0, offBal) : (su.balance ?? 0);
+                    userMap.set(su.user_id, {
+                      ...su,
+                      balance: initialBal
+                    });
                   }
                 });
-                return Array.from(userMap.values());
+                const finalUsers = Array.from(userMap.values());
+                localStorage.setItem('kalam_bot_users', JSON.stringify(finalUsers));
+                offlineStorage.saveUserBalances(finalUsers);
+                return finalUsers;
               });
             }
 
@@ -813,9 +843,28 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUsers(prev => {
             const map = new Map<number, User>();
             prev.forEach(u => map.set(u.user_id, u));
-            cloudUsers.forEach(cu => map.set(cu.user_id, { ...(map.get(cu.user_id) || {}), ...cu }));
+            cloudUsers.forEach(cu => {
+              const existing = map.get(cu.user_id);
+              const offBal = offlineStorage.getUserBalance(cu.user_id);
+              const safeBal = (cu.balance !== undefined && cu.balance !== null)
+                ? (existing ? Math.max(existing.balance ?? 0, Number(cu.balance), offBal ?? 0) : Number(cu.balance))
+                : (existing?.balance ?? offBal ?? 0);
+              const safeSpent = Math.max(existing?.spent ?? 0, (cu.spent !== undefined && cu.spent !== null) ? Number(cu.spent) : 0);
+              const safeOrders = Math.max(existing?.orders_count ?? 0, (cu.orders_count !== undefined && cu.orders_count !== null) ? Number(cu.orders_count) : 0);
+              const safeSaved = Math.max(existing?.total_saved ?? 0, (cu.total_saved !== undefined && cu.total_saved !== null) ? Number(cu.total_saved) : 0);
+
+              map.set(cu.user_id, {
+                ...existing,
+                ...cu,
+                balance: safeBal,
+                spent: safeSpent,
+                orders_count: safeOrders,
+                total_saved: safeSaved
+              });
+            });
             const merged = Array.from(map.values());
             localStorage.setItem('kalam_bot_users', JSON.stringify(merged));
+            offlineStorage.saveUserBalances(merged);
             return merged;
           });
         }
@@ -1306,54 +1355,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return b;
     }));
   }, []);
-
-  const updateUserProfile = useCallback((updates: Partial<User>) => {
-    const targetUid = currentUserId || (currentUser ? currentUser.user_id : 12846461);
-
-    setUsers(prev => {
-      let matched = false;
-      const nextUsers = prev.map(u => {
-        if (u.user_id === targetUid || (currentUser && u.user_id === currentUser.user_id)) {
-          matched = true;
-          return { ...u, ...updates };
-        }
-        return u;
-      });
-
-      if (!matched && prev.length > 0) {
-        nextUsers[0] = { ...nextUsers[0], ...updates };
-      }
-
-      try {
-        localStorage.setItem('kalam_bot_users', JSON.stringify(nextUsers));
-      } catch (e) {
-        console.warn('Could not persist users to localStorage:', e);
-      }
-      return nextUsers;
-    });
-
-    // Also persist avatar to dedicated key for fallback
-    if (updates.avatar_url) {
-      try {
-        localStorage.setItem(`kalam_avatar_${targetUid}`, updates.avatar_url);
-      } catch (e) {}
-    }
-
-    // Sync to Firestore Cloud DB
-    try {
-      setDoc(doc(db, 'users', String(targetUid)), updates, { merge: true }).catch(() => {});
-    } catch (e) {}
-
-    // Sync to backend server
-    fetch('/api/users/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: targetUid,
-        ...updates
-      })
-    }).catch(() => {});
-  }, [currentUserId, currentUser]);
 
   // Format currency
   const fmtCurr = (amount: number) => `₹${amount.toFixed(2)}`;
@@ -3667,7 +3668,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
             const targetUser = users.find(u => u.user_id === targetUid);
             if (targetUser) {
-              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: u.balance + amt } : u));
+              updateUserBalance(targetUid, amt, reason, false);
               pushBotMessage(
                 `✅ <b>SUCCESS: +₹${amt} CREDITED!</b>\n\n` +
                 `👤 User: <b>${targetUser.first_name}</b>\n` +
@@ -3697,7 +3698,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
             const targetUser = users.find(u => u.user_id === targetUid);
             if (targetUser) {
               const newBal = Math.max(0, targetUser.balance - amt);
-              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: newBal } : u));
+              updateUserBalance(targetUid, -amt, reason, false);
               pushBotMessage(
                 `✅ <b>SUCCESS: -₹${amt} DEDUCTED!</b>\n\n` +
                 `👤 User: <b>${targetUser.first_name}</b>\n` +
@@ -4491,6 +4492,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       }
 
       localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
       return updated;
     });
 
@@ -4537,6 +4539,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setDoc(userDocRef, {
       user_id: numUserId,
       balance: targetUser ? targetUser.balance : Math.max(0, numDelta),
+      spent: targetUser ? targetUser.spent : 0,
       updated_at: new Date().toISOString()
     }, { merge: true }).catch(() => {});
 
@@ -4555,7 +4558,27 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .then(res => res.json())
     .then(data => {
       if (data && Array.isArray(data.users)) {
-        setUsers(data.users);
+        setUsers(prevUsers => {
+          const map = new Map<number, User>();
+          prevUsers.forEach(u => map.set(u.user_id, u));
+          data.users.forEach((su: User) => {
+            const existing = map.get(su.user_id);
+            if (existing) {
+              map.set(su.user_id, {
+                ...su,
+                ...existing,
+                balance: Math.max(existing.balance ?? 0, su.balance ?? 0),
+                spent: Math.max(existing.spent ?? 0, su.spent ?? 0)
+              });
+            } else {
+              map.set(su.user_id, su);
+            }
+          });
+          const merged = Array.from(map.values());
+          localStorage.setItem('kalam_bot_users', JSON.stringify(merged));
+          offlineStorage.saveUserBalances(merged);
+          return merged;
+        });
       }
       if (data && Array.isArray(data.transactions)) {
         setTransactions(data.transactions);
@@ -4566,15 +4589,30 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserBan = (userId: number) => {
     let newStatus = 0;
-    setUsers(prev => prev.map(u => {
-      if (u.user_id === userId) {
-        newStatus = u.is_banned ? 0 : 1;
-        return { ...u, is_banned: newStatus };
-      }
-      return u;
-    }));
+    let targetUser: User | undefined;
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          newStatus = u.is_banned ? 0 : 1;
+          targetUser = { ...u, is_banned: newStatus };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
     logActivity(12846461, 'ADMIN_TOGGLE_BAN', `User #${userId}`);
-    setDoc(doc(db, 'users', String(userId)), { is_banned: newStatus, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        is_banned: newStatus,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4584,15 +4622,30 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const warnUser = (userId: number, message: string) => {
     let count = 1;
-    setUsers(prev => prev.map(u => {
-      if (u.user_id === userId) {
-        count = (u.warnings || 0) + 1;
-        return { ...u, warnings: count };
-      }
-      return u;
-    }));
+    let targetUser: User | undefined;
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          count = (u.warnings || 0) + 1;
+          targetUser = { ...u, warnings: count };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
     logActivity(12846461, 'ADMIN_WARN_USER', `User #${userId}: ${message}`);
-    setDoc(doc(db, 'users', String(userId)), { warnings: count, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        warnings: count,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4602,19 +4655,34 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserVip = (userId: number) => {
     let newVip = 0;
-    setUsers(prev => prev.map(u => {
-      if (u.user_id === userId) {
-        newVip = u.is_vip ? 0 : 1;
-        return {
-          ...u,
-          is_vip: newVip,
-          vip_since: newVip ? new Date().toISOString().substring(0, 10) : undefined,
-          account_type: 'Regular'
-        };
-      }
-      return u;
-    }));
-    setDoc(doc(db, 'users', String(userId)), { is_vip: newVip, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    let targetUser: User | undefined;
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          newVip = u.is_vip ? 0 : 1;
+          targetUser = {
+            ...u,
+            is_vip: newVip,
+            vip_since: newVip ? new Date().toISOString().substring(0, 10) : undefined,
+            account_type: 'Regular'
+          };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        is_vip: newVip,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4624,19 +4692,34 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserReseller = (userId: number) => {
     let newReseller = 0;
-    setUsers(prev => prev.map(u => {
-      if (u.user_id === userId) {
-        newReseller = u.is_reseller ? 0 : 1;
-        return {
-          ...u,
-          is_reseller: newReseller,
-          reseller_since: newReseller ? new Date().toISOString().substring(0, 10) : undefined,
-          account_type: newReseller ? 'Reseller' : 'Regular'
-        };
-      }
-      return u;
-    }));
-    setDoc(doc(db, 'users', String(userId)), { is_reseller: newReseller, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    let targetUser: User | undefined;
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          newReseller = u.is_reseller ? 0 : 1;
+          targetUser = {
+            ...u,
+            is_reseller: newReseller,
+            reseller_since: newReseller ? new Date().toISOString().substring(0, 10) : undefined,
+            account_type: newReseller ? 'Reseller' : 'Regular'
+          };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        is_reseller: newReseller,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5312,6 +5395,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     } else {
       // Create user account with new password so they can log in immediately
       const newUid = Math.floor(10000000 + Math.random() * 90000000);
+      const existingOfflineBal = offlineStorage.getUserBalance(isOwner ? 12846461 : newUid);
+      const initialBalance = existingOfflineBal !== null ? existingOfflineBal : (isOwner ? 1000.0 : 100.0);
+
       const newUser: User = {
         user_id: isOwner ? 12846461 : newUid,
         email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@gmail.com`,
@@ -5320,7 +5406,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         username: cleanEmail.split('@')[0] || `user_${newUid}`,
         auth_provider: 'email',
         avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
-        balance: isOwner ? 1000.0 : 100.0,
+        balance: initialBalance,
         account_type: isOwner ? 'Reseller' : 'Regular',
         orders_count: 0,
         spent: 0,
@@ -5337,6 +5423,43 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     return { success: true, message: 'Password has been successfully updated!' };
+  };
+
+  const updateUserProfile = (updates: Partial<User>) => {
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === currentUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase())) {
+          return {
+            ...u,
+            ...updates,
+            // CRITICAL: Protect user balance so profile/avatar updates never reset or alter it!
+            balance: updates.balance !== undefined ? updates.balance : u.balance,
+            spent: updates.spent !== undefined ? updates.spent : u.spent
+          };
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
+
+    // Sync to Firestore
+    setDoc(doc(db, 'users', String(currentUserId)), {
+      user_id: currentUserId,
+      ...updates,
+      updated_at: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+
+    // Sync to Server API
+    fetch('/api/users/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUserId,
+        ...updates
+      })
+    }).catch(err => console.warn('Failed to sync profile update:', err));
   };
 
   const resetDatabaseToDefaults = () => {

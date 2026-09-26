@@ -448,7 +448,13 @@ export class DatabaseStore {
   public updateUser(userId: number, updates: Partial<User>): User | null {
     const idx = this.data.users.findIndex(u => u.user_id === userId);
     if (idx === -1) return null;
-    this.data.users[idx] = { ...this.data.users[idx], ...updates };
+    const current = this.data.users[idx];
+    this.data.users[idx] = {
+      ...current,
+      ...updates,
+      balance: updates.balance !== undefined ? updates.balance : (current.balance || 0),
+      spent: updates.spent !== undefined ? updates.spent : (current.spent || 0)
+    };
     this.saveData();
     return this.data.users[idx];
   }
