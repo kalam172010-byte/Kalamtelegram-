@@ -105,6 +105,7 @@ export const AdminDashboard: React.FC = () => {
     setCurrentUserId,
     setActiveTab,
     bots,
+    myBots,
     activeBot,
     createBot,
     updateBot,
@@ -2543,6 +2544,47 @@ export const AdminDashboard: React.FC = () => {
         {/* ================= USERS TAB ================= */}
         {adminTab === 'users' && (
           <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Active Bot User Filter Header Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-indigo-950/80 border border-cyan-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  <Bot className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm md:text-base font-extrabold text-white">
+                      {activeBot ? activeBot.name : 'Store Bot'} Users Database
+                    </h3>
+                    {activeBot?.username && (
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold border border-cyan-500/40">
+                        @{activeBot.username.replace(/^@/, '')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] md:text-xs text-slate-300">
+                    Showing only customers registered under this specific Telegram bot ({allUsers.length} Users).
+                  </p>
+                </div>
+              </div>
+
+              {myBots.length > 1 && (
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                  <span className="text-xs text-slate-400 font-medium">Switch Bot:</span>
+                  <select
+                    value={activeBot?.id || ''}
+                    onChange={(e) => switchActiveBot(e.target.value)}
+                    className="bg-slate-950 border border-cyan-500/40 rounded-xl px-3 py-1.5 text-xs font-semibold text-cyan-300 outline-none cursor-pointer hover:border-cyan-400 transition"
+                  >
+                    {myBots.map((b) => (
+                      <option key={`usr-bot-sel-${b.id}`} value={b.id}>
+                        {b.name} (@{b.username || 'bot'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             {/* Direct User Payment / Balance Credit Card */}
             <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 border border-emerald-500/30 p-5 rounded-2xl shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-4">

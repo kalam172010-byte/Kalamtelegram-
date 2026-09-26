@@ -1156,15 +1156,18 @@ class TelegramEngine {
     const keyboard = {
       inline_keyboard: [
         [
-          { text: '⬇️ Download APK Channel', url: apkDownloadUrl },
-          { text: '📢 Official Channel', url: channelUrl }
+          { text: '⬇️ Download APK Channel', url: apkDownloadUrl, style: 'success' },
+          { text: '📢 Official Channel', url: channelUrl, style: 'primary' }
         ],
         [
-          { text: '🎥 Setup Video Guide', url: tutorialUrl }
+          { text: '🎥 Setup Video Guide', url: tutorialUrl, style: 'warning' }
         ],
         [
-          { text: '👤 View in My Profile', callback_data: 'profile' },
-          { text: '🛒 Continue Shopping', callback_data: 'shop_categories' }
+          { text: '👤 View in My Profile', callback_data: 'profile', style: 'primary' },
+          { text: '🛒 Continue Shopping', callback_data: 'shop_categories', style: 'danger' }
+        ],
+        [
+          { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
         ]
       ]
     };
@@ -1186,16 +1189,16 @@ class TelegramEngine {
     const fromUser = msg.from;
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
+    const settings = dbStore.getData().settings;
 
     const isExistingUser = dbStore.getUser(fromUser.id);
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
+    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, `🚫 <b>Account Suspended</b>\n\nYour account has been banned from using ${this.getBotDisplayName()}. Contact support if you believe this is an error.`);
       return;
     }
-
-    const settings = dbStore.getData().settings;
 
     // Check Maintenance Mode (Only Master Admin can bypass)
     const isMaintenanceOn = this.isMaintenanceModeActive();
@@ -2482,8 +2485,9 @@ class TelegramEngine {
     const chatId = msg.chat.id;
     const messageId = msg.message_id;
 
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId);
     const settings = dbStore.getData().settings;
+    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
 
     if (user.is_banned === 1) {
       await this.answerCallback(cb.id, 'Your account is suspended.', true);

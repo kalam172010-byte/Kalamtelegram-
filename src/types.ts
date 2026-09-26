@@ -68,6 +68,11 @@ export interface ReferralRecord {
 export interface User {
   user_id: number;
   chat_id?: number;
+  bot_id?: string;        // ID of the bot where user was registered/interacted
+  bot_ids?: string[];     // All bot IDs user is associated with
+  bot_username?: string;  // Username of the bot e.g. @KalamFFPanelBot
+  owner_id?: number;      // Store owner user ID
+  owner_email?: string;   // Store owner email
   phone?: string;
   email?: string;
   password?: string;

@@ -354,7 +354,21 @@ async function startServer() {
     }
   });
 
-  // 6. Manage Users (Balance adjustment, VIP/Reseller toggle, Bans, Warnings)
+  // 6. Manage Users (Get Bot-scoped Users, Balance adjustment, VIP/Reseller toggle, Bans, Warnings)
+  app.get('/api/users', (req, res) => {
+    try {
+      const { bot_id, owner_id, owner_email } = req.query;
+      const users = dbStore.getUsersForBot(
+        bot_id ? String(bot_id) : undefined,
+        owner_id ? Number(owner_id) : undefined,
+        owner_email ? String(owner_email) : undefined
+      );
+      res.json({ success: true, users });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/users', async (req, res) => {
     try {
       const { action, userId, amount, is_reseller, is_vip, is_banned, warning_count, reason, notifyTelegram } = req.body;

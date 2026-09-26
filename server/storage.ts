@@ -346,12 +346,28 @@ export class DatabaseStore {
     this.saveData();
   }
 
-  public getOrCreateUser(tgId: number, firstName: string, username?: string, chatId?: number): User {
+  public getOrCreateUser(
+    tgId: number,
+    firstName: string,
+    username?: string,
+    chatId?: number,
+    botId?: string,
+    botUsername?: string,
+    ownerId?: number,
+    ownerEmail?: string
+  ): User {
     let user = this.data.users.find(u => u.user_id === tgId);
+    const activeBotId = botId || this.data.settings.bot_username || 'default_bot';
+    
     if (!user) {
       user = {
         user_id: tgId,
         chat_id: chatId || tgId,
+        bot_id: activeBotId,
+        bot_ids: [activeBotId],
+        bot_username: botUsername || this.data.settings.bot_username || '',
+        owner_id: ownerId,
+        owner_email: ownerEmail,
         first_name: firstName,
         username: username || firstName.toLowerCase().replace(/[^a-z0-9]/g, ''),
         balance: 0,
@@ -366,7 +382,7 @@ export class DatabaseStore {
         is_vip: 0
       };
       this.data.users.push(user);
-      this.logActivity(tgId, 'USER_REGISTERED', `New user @${user.username} (UID: ${tgId}, Chat: ${chatId || tgId}) joined`);
+      this.logActivity(tgId, 'USER_REGISTERED', `New user @${user.username} (UID: ${tgId}, Bot: ${activeBotId}) joined`);
       this.saveData();
     } else {
       let updated = false;
@@ -382,9 +398,47 @@ export class DatabaseStore {
         user.username = username;
         updated = true;
       }
+      // Associate with bot
+      if (botId) {
+        if (!user.bot_id) {
+          user.bot_id = botId;
+          updated = true;
+        }
+        if (!user.bot_ids) {
+          user.bot_ids = [botId];
+          updated = true;
+        } else if (!user.bot_ids.includes(botId)) {
+          user.bot_ids.push(botId);
+          updated = true;
+        }
+      }
+      if (botUsername && !user.bot_username) {
+        user.bot_username = botUsername;
+        updated = true;
+      }
+      if (ownerId && !user.owner_id) {
+        user.owner_id = ownerId;
+        updated = true;
+      }
+      if (ownerEmail && !user.owner_email) {
+        user.owner_email = ownerEmail;
+        updated = true;
+      }
       if (updated) this.saveData();
     }
     return user;
+  }
+
+  public getUsersForBot(botId?: string, ownerId?: number, ownerEmail?: string): User[] {
+    if (!botId && !ownerId && !ownerEmail) {
+      return this.data.users;
+    }
+    return this.data.users.filter(u => {
+      const matchesBot = botId ? (u.bot_id === botId || (u.bot_ids && u.bot_ids.includes(botId))) : true;
+      const matchesOwnerId = ownerId ? (u.owner_id === ownerId || u.user_id === ownerId) : true;
+      const matchesOwnerEmail = ownerEmail && u.owner_email ? u.owner_email.toLowerCase() === ownerEmail.toLowerCase() : true;
+      return matchesBot || (matchesOwnerId && matchesOwnerEmail);
+    });
   }
 
   public getUser(userId: number): User | undefined {

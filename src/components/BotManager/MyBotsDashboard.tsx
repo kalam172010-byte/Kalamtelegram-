@@ -35,7 +35,9 @@ export const MyBotsDashboard: React.FC = () => {
     duplicateBot,
     toggleBotStatus,
     setActiveTab,
-    currentUser
+    currentUser,
+    rawUsers,
+    allUsers
   } = useBot();
 
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -256,11 +258,11 @@ export const MyBotsDashboard: React.FC = () => {
                       </div>
 
                       {/* Integrations Status Pills */}
-                      <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="grid grid-cols-3 gap-2 text-xs">
                         <div className="liquid-glass-pill p-2.5 rounded-2xl">
                           <div className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
                             <CreditCard className="w-3 h-3 text-emerald-400" />
-                            UPI Payment Gateway
+                            UPI Gateway
                           </div>
                           <div className="font-mono text-emerald-300 font-bold mt-1 truncate">
                             {bot.payment_gateway?.upi_id || 'Not Set'}
@@ -270,10 +272,27 @@ export const MyBotsDashboard: React.FC = () => {
                         <div className="liquid-glass-pill p-2.5 rounded-2xl">
                           <div className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
                             <Zap className="w-3 h-3 text-purple-400" />
-                            Reseller Provider API
+                            Reseller API
                           </div>
                           <div className="text-purple-300 font-bold mt-1 truncate">
-                            {bot.reseller_api?.status === 'ON' ? 'Provider API (Sync)' : 'Manual Vault'}
+                            {bot.reseller_api?.status === 'ON' ? 'API Sync' : 'Vault'}
+                          </div>
+                        </div>
+
+                        <div className="liquid-glass-pill p-2.5 rounded-2xl">
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
+                            <Users className="w-3 h-3 text-cyan-400" />
+                            Bot Users
+                          </div>
+                          <div className="text-cyan-300 font-bold mt-1 truncate font-mono">
+                            {(() => {
+                              const bUsers = (rawUsers || allUsers || []).filter(u =>
+                                u.bot_id === bot.id ||
+                                (u.bot_id && u.bot_id.replace(/^@/, '').toLowerCase() === (bot.username || '').replace(/^@/, '').toLowerCase()) ||
+                                (Array.isArray(u.bot_ids) && (u.bot_ids.includes(bot.id) || u.bot_ids.some(b => b.replace(/^@/, '').toLowerCase() === (bot.username || '').replace(/^@/, '').toLowerCase())))
+                              );
+                              return `${bUsers.length} Users`;
+                            })()}
                           </div>
                         </div>
                       </div>

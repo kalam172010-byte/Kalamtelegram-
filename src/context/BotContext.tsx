@@ -79,6 +79,7 @@ export interface BotContextType {
   isAdmin: boolean;
   setCurrentUserId: (userId: number) => void;
   allUsers: User[];
+  rawUsers?: User[];
   isAuthenticated: boolean;
   setIsAuthenticated: (auth: boolean) => void;
   isAuthModalOpen: boolean;
@@ -456,6 +457,48 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Active bot is selected from user's own bots or fallback to system store bots
   const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || bots.find(b => b.id === activeBotId) || bots[0] || INITIAL_BOTS[0];
+
+  // Scoped users filtered strictly by the active bot and owner bots (Multi-Tenant Isolation)
+  const scopedUsers = useMemo(() => {
+    if (!activeBot) return users;
+    const currentBotId = activeBot.id;
+    const currentBotUser = (activeBot.username || '').replace(/^@/, '').toLowerCase().trim();
+    
+    // Check if user has specific bots
+    const myBotIds = myBots.map(b => b.id);
+    const myBotUsernames = myBots.map(b => (b.username || '').replace(/^@/, '').toLowerCase().trim()).filter(Boolean);
+
+    return users.filter(u => {
+      // 1. If user is the currently logged in account
+      if (u.user_id === currentUserId || (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())) {
+        return true;
+      }
+      // 2. If user was created under this active bot
+      if (u.bot_id && (u.bot_id === currentBotId || u.bot_id.replace(/^@/, '').toLowerCase().trim() === currentBotUser)) {
+        return true;
+      }
+      // 3. If user has interacted with active bot ID in bot_ids list
+      if (Array.isArray(u.bot_ids) && (u.bot_ids.includes(currentBotId) || (currentBotUser && u.bot_ids.some(b => b.replace(/^@/, '').toLowerCase().trim() === currentBotUser)))) {
+        return true;
+      }
+      // 4. If user's bot_username matches active bot
+      if (u.bot_username && currentBotUser && u.bot_username.replace(/^@/, '').toLowerCase().trim() === currentBotUser) {
+        return true;
+      }
+      // 5. If user was created under one of the owner's bots
+      if (u.owner_id && u.owner_id === currentUserId) {
+        return true;
+      }
+      if (u.owner_email && currentUser.email && u.owner_email.toLowerCase() === currentUser.email.toLowerCase()) {
+        return true;
+      }
+      // 6. If user's bot_id matches any of owner's bots
+      if (u.bot_id && (myBotIds.includes(u.bot_id) || myBotUsernames.includes(u.bot_id.replace(/^@/, '').toLowerCase().trim()))) {
+        return true;
+      }
+      return false;
+    });
+  }, [users, activeBot, myBots, currentUserId, currentUser.email]);
 
   // Sync state to local storage & offline storage cache
   useEffect(() => {
@@ -2196,26 +2239,33 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const apkUrl = prod.apk_link || settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
     const tutorialUrl = settings.how_to_video || 'https://youtube.com';
 
-    let msg = `🎉 <b>PURCHASE SUCCESSFUL! (#${newOrder.id})</b>\n\n` +
-      `📦 <b>Product:</b> ${prod.panel_name} - ${prod.name}\n` +
-      `⏳ <b>Validity:</b> ${prod.validity || prod.name}\n` +
-      `💰 <b>Amount Paid:</b> ${fmtCurr(finalPrice)}\n` +
-      `💳 <b>Remaining Balance:</b> ${fmtCurr(remainingBal)}${androidId ? `\n📱 <b>Bound HWID:</b> <code>${androidId}</code>` : ''}\n\n` +
-      `🔑 <b>YOUR LICENSE KEY:</b>\n` +
-      `<code>${deliveredKey}</code>\n\n` +
-      `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
-      `<a href="${apkUrl}">${apkUrl}</a>\n\n` +
-      `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
-      `<a href="${tutorialUrl}">${tutorialUrl}</a>\n\n` +
-      `<i>Click on the key above to copy it directly. Enjoy playing!</i>`;
+    let msg = `🎉 <b><u>PURCHASE SUCCESSFUL!</u> (#<code>${newOrder.id}</code>)</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 <b>Product:</b> <code>${prod.panel_name} - ${prod.name}</code>\n` +
+      `⏳ <b>Validity:</b> <code>${prod.validity || prod.name}</code>\n` +
+      `💰 <b>Amount Paid:</b> <code>${fmtCurr(finalPrice)}</code>\n` +
+      `💳 <b>Remaining Balance:</b> <code>${fmtCurr(remainingBal)}</code>${androidId ? `\n📱 <b>Bound HWID:</b> <code>${androidId}</code>` : ''}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `<blockquote>🔑 <b>YOUR LICENSE KEY (TAP TO COPY):</b>\n` +
+      `<pre><code>${deliveredKey}</code></pre></blockquote>\n\n` +
+      `<blockquote>📥 <b>DOWNLOAD APK / LOADER:</b>\n` +
+      `<b><a href="${apkUrl}">🚀 CLICK HERE TO DOWNLOAD APK 🚀</a></b>\n` +
+      `<code>${apkUrl}</code></blockquote>\n\n` +
+      `<blockquote>📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
+      `<b><a href="${tutorialUrl}">🎥 CLICK HERE FOR SETUP VIDEO 🎥</a></b>\n` +
+      `<code>${tutorialUrl}</code></blockquote>\n\n` +
+      `✨ <i>Tap the license key inside the box above to copy it directly. Enjoy playing!</i>`;
 
     const successKb: InlineKeyboardButton[][] = [
       [
-        { text: "⬇️ Download APK Channel", url: apkUrl },
-        { text: "📢 Official Channel", url: settings.official_channel_link || 'https://t.me/KalamFFPanelChannel' }
+        { text: "⬇️ Download APK Channel", url: apkUrl, style: "success" },
+        { text: "📢 Official Channel", url: settings.official_channel_link || 'https://t.me/KalamFFPanelChannel', style: "primary" }
       ],
       [
-        { text: "👤 View in My Profile", callback_data: "menu_profile", style: "success" },
+        { text: "🎥 Setup Video Guide", url: tutorialUrl, style: "warning" }
+      ],
+      [
+        { text: "👤 View in My Profile", callback_data: "menu_profile", style: "primary" },
         { text: "🛒 Continue Shopping", callback_data: "menu_shop", style: "danger" }
       ],
       [
@@ -5311,7 +5361,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         currentUser,
         isAdmin,
         setCurrentUserId,
-        allUsers: users,
+        allUsers: scopedUsers,
+        rawUsers: users,
         isAuthenticated,
         setIsAuthenticated,
         isAuthModalOpen,
