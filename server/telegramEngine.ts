@@ -2605,13 +2605,15 @@ class TelegramEngine {
         p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
 
-      let text = `📦 <b><u>${categoryName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+      let text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n` +
+        `🔥 <b>Choose a product:</b>`;
+
       if (allCatProducts.length === 0) {
-        text += `<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`;
+        text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n\n` +
+          `<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`;
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' }],
-            [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+            [{ text: '🔙 Back', callback_data: 'shop_categories', style: 'danger' }]
           ]
         };
         await this.editMessageText(chatId, messageId, text, keyboard);
@@ -2633,50 +2635,39 @@ class TelegramEngine {
         panelMap.set(pName, sortProductsByDuration(plans));
       }
 
-      text += `👉 <b>Select a Product / Panel below to view its duration plans & keys:</b>\n\n`;
-      
-      let pIdx = 1;
-      for (const [pName, plans] of panelMap.entries()) {
-        const sortedPlans = sortProductsByDuration(plans);
-        if (!sortedPlans || sortedPlans.length === 0) continue;
-        const isUnderMaint = sortedPlans.some(p => Boolean(p.is_maintenance));
-        const lowestPrice = Math.min(...plans.map(p => this.getUserPrice(user, p)));
-
-        if (isUnderMaint) {
-          text += `<b>${pIdx}.</b> 🔴 <b>${pName}</b> — <b>[UNDER MAINTENANCE]</b> <i>(Orders Paused)</i>\n`;
-        } else {
-          text += `<b>${pIdx}.</b> 📁 <b>${pName}</b> (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'} • From ₹${lowestPrice})\n`;
-        }
-        pIdx++;
-      }
-
       const buttons: any[] = [];
+      const gameIcons = ['🔥', '📲', '🪓', '🛡️', '🎯', '⚡', '💧', '⚔️', '🧪', '🪝', '🦖', '👑', '💎', '🚀', '🌟'];
+      let iconIdx = 0;
+
       for (const [pName, plans] of panelMap.entries()) {
         const sortedPlans = sortProductsByDuration(plans);
         const firstProd = sortedPlans && sortedPlans.length > 0 ? sortedPlans[0] : null;
         if (!firstProd || firstProd.id === undefined) continue;
 
         const isUnderMaint = sortedPlans.some(p => Boolean(p.is_maintenance));
-        const lowestPrice = Math.min(...plans.map(p => this.getUserPrice(user, p)));
+
+        // Check if name already has an emoji prefix
+        const hasEmoji = /\p{Extended_Pictographic}/u.test(pName.substring(0, 2));
+        const icon = hasEmoji ? '' : `${gameIcons[iconIdx % gameIcons.length]} `;
+        iconIdx++;
 
         if (isUnderMaint) {
           buttons.push([{
-            text: `🔴 [UNDER MAINTENANCE] ${pName}`,
+            text: `🛠️ ${pName} [MAINTENANCE]`,
             callback_data: `maint_pnl_${firstProd.id}`,
             style: 'danger'
           }]);
         } else {
           buttons.push([{
-            text: `📦 ${pName} (${plans.length} ${plans.length === 1 ? 'Plan' : 'Plans'} • From ₹${lowestPrice})`,
+            text: `${icon}${pName}`,
             callback_data: `pnl_${firstProd.id}`,
-            style: 'primary'
+            style: 'success'
           }]);
         }
       }
 
       buttons.push([
-        { text: '🔙 Back to Categories', callback_data: 'shop_categories', style: 'danger' },
-        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
+        { text: '🔙 Back', callback_data: 'shop_categories', style: 'danger' }
       ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
@@ -2763,8 +2754,7 @@ class TelegramEngine {
           `✅ <i>Please check back soon or explore our other active products!</i>`;
         const keyboard = {
           inline_keyboard: [
-            [{ text: `🔙 Back to ${targetCategory.split(' ')[0]} Products`, callback_data: catCode, style: 'danger' }],
-            [{ text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }],
+            [{ text: '🔙 Back', callback_data: catCode, style: 'danger' }],
             [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
           ]
         };
@@ -2772,58 +2762,40 @@ class TelegramEngine {
         return;
       }
 
-      let text = `📦 <b><u>${targetPanelName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `📂 <b>Category:</b> ${targetCategory}\n` +
-        `📱 <b>Device Limit:</b> ${refProduct.device_limit || '1 Device HWID'}\n`;
+      const tierName = user.is_reseller === 1 ? 'RESELLER VIP' : (user.is_vip === 1 ? 'VIP MEMBER' : 'USER');
 
-      if (refProduct.apk_link && refProduct.apk_link.startsWith('http')) {
-        text += `📥 <b>APK Download:</b> <a href="${refProduct.apk_link}">Click Here to Download</a>\n`;
-      }
-
-      text += `━━━━━━━━━━━━━━━━━━━━\n` +
-        `⏱ <b>AVAILABLE DURATION PLANS:</b>\n\n`;
-
-      const buttons: any[] = [];
-      const isReseller = user.is_reseller === 1;
+      let text = `🪓 <b>${targetPanelName.toUpperCase()}</b> 🪓\n\n` +
+        `👑 <b>Your Account Tier:</b> <code>${tierName}</code>\n\n` +
+        `💳 <b>Choose your access plan:</b>\n\n`;
 
       for (const plan of panelPlans) {
         const userPrice = this.getUserPrice(user, plan);
-        const stockTag = this.getProductStockTag(plan);
-        const isMaint = Boolean(plan.is_maintenance);
+        text += `💲 ₹${userPrice.toFixed(2)} — 🎟️ ${plan.name.toUpperCase()}\n`;
+      }
 
-        text += `⏱ <b>Plan: ${plan.name}</b>\n`;
-        if (isReseller) {
-          text += `  • Regular: <s>₹${plan.price_inr}</s> | 👑 <b>Reseller: ₹${userPrice}</b>\n`;
-        } else if (user.is_vip === 1) {
-          text += `  • Regular: <s>₹${plan.price_inr}</s> | 💎 <b>VIP (15% OFF): ₹${userPrice}</b>\n`;
-        } else {
-          text += `  • Price: <b>₹${userPrice}</b>\n`;
-        }
-        text += `  • Stock: ${stockTag}\n\n`;
+      const buttons: any[] = [];
+
+      for (const plan of panelPlans) {
+        const userPrice = this.getUserPrice(user, plan);
+        const isMaint = Boolean(plan.is_maintenance);
 
         if (isMaint) {
           buttons.push([{
-            text: `🛠️ ${targetPanelName} (${plan.name}) - Under Maintenance 🛠️`,
+            text: `🛠️ ${plan.name.toUpperCase()} (Under Maintenance)`,
             callback_data: `maint_${plan.id}`,
             style: 'danger'
           }]);
         } else {
           buttons.push([{
-            text: `⚡ ${targetPanelName} - ${plan.name} (₹${userPrice}) ${stockTag}`,
-            callback_data: `prod_${plan.id}`,
-            style: 'primary'
+            text: `🎟️ ${plan.name.toUpperCase()} — ₹${userPrice.toFixed(2)}`,
+            callback_data: `buy_${plan.id}`,
+            style: 'success'
           }]);
         }
       }
 
-      text += `👇 <i>Select any duration plan above to view full details and instant key purchase:</i>`;
-
       buttons.push([
-        { text: `🔙 Back to ${targetCategory.split(' ')[0]} Panels`, callback_data: catCode, style: 'danger' },
-        { text: '🛒 Store Catalog', callback_data: 'shop_categories', style: 'primary' }
-      ]);
-      buttons.push([
-        { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
+        { text: '🔙 Back', callback_data: catCode, style: 'danger' }
       ]);
 
       await this.editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
@@ -3825,12 +3797,11 @@ class TelegramEngine {
     const uniqueCats = Array.from(new Set(allActiveProds.map(p => (p.category || '').trim()).filter(Boolean)));
 
     if (allActiveProds.length === 0) {
-      const emptyText = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
-        `📦 No products are currently available in the catalog.\n` +
-        `Please check back soon or contact support!`;
+      const emptyText = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n\n` +
+        `📦 <i>No products are currently available in the catalog. Please check back soon or contact support!</i>`;
       const emptyKb = {
         inline_keyboard: [
-          [{ text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }]
+          [{ text: '🔙 Back', callback_data: 'main_menu', style: 'danger' }]
         ]
       };
       if (messageId) {
@@ -3841,28 +3812,25 @@ class TelegramEngine {
       return;
     }
 
-    const text = `🛒 <b>KALAM FF PANEL - STORE CATALOG</b>\n\n` +
-      `Select your desired operating environment and panel category below:\n\n` +
-      `🔹 <b>Android Non-Root:</b> Easy APK install, zero root required, 100% safe\n` +
-      `🔸 <b>Android Root:</b> Maximum performance, memory injection, bypass features\n` +
-      `💻 <b>PC Emulator:</b> High FPS, full emulator compatibility (BlueStacks/LDPlayer)`;
+    const text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n` +
+      `📱 <b>Select your device type:</b>`;
 
     const inline_keyboard: any[][] = [
-      [{ text: '📱 Android Non-Root Panel', callback_data: 'cat_nonroot', style: 'success' }],
-      [{ text: '⚡ Android Root Panel', callback_data: 'cat_root', style: 'success' }],
-      [{ text: '💻 PC Emulator Panel', callback_data: 'cat_pc', style: 'success' }]
+      [{ text: '🛡️ ANDROID NONROOT', callback_data: 'cat_nonroot', style: 'success' }],
+      [{ text: '🌿 ANDROID ROOT', callback_data: 'cat_root', style: 'success' }]
     ];
 
     // Add dynamic category buttons for custom categories added by user/admin
     for (const cat of uniqueCats) {
-      if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root') && !isCategoryMatch(cat, 'pc')) {
+      if (!isCategoryMatch(cat, 'nonroot') && !isCategoryMatch(cat, 'root')) {
+        const icon = cat.toLowerCase().includes('pc') ? '💻' : (cat.toLowerCase().includes('ios') ? '🍏' : '📦');
         inline_keyboard.push([
-          { text: `📦 ${cat.toUpperCase()}`, callback_data: `cat_custom_${encodeURIComponent(cat)}`, style: 'primary' }
+          { text: `${icon} ${cat.toUpperCase()}`, callback_data: `cat_custom_${encodeURIComponent(cat)}`, style: 'success' }
         ]);
       }
     }
 
-    inline_keyboard.push([{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]);
+    inline_keyboard.push([{ text: '🔙 Back', callback_data: 'main_menu', style: 'danger' }]);
     if (messageId) {
       await this.editMessageText(chatId, messageId, text, { inline_keyboard });
     } else {

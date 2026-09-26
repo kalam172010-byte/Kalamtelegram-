@@ -298,6 +298,15 @@ async function startServer() {
   });
 
   // 5. Manage Products (Add, Edit, Delete, Stock/Key refill)
+  app.get('/api/products', (req, res) => {
+    try {
+      const currentData = dbStore.getData();
+      res.json({ success: true, products: currentData.products, productKeys: currentData.productKeys });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/products', (req, res) => {
     try {
       const { action, product, productId, productIds, keys, keyId, category, panelName } = req.body;

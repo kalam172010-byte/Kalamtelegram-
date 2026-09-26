@@ -258,7 +258,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((p, idx) => ({
             ...p,
             id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -271,7 +271,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Error parsing products', e);
       }
     }
-    return [];
+    return INITIAL_PRODUCTS;
   });
 
   const [productKeys, setProductKeys] = useState<ProductKey[]>(() => {
@@ -279,7 +279,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
       } catch (e) {
@@ -637,7 +637,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2.1 Firestore onSnapshot Real-Time Listener for Products Catalog
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
-      if (snapshot) {
+      if (snapshot && !snapshot.empty) {
         const cloudProducts: Product[] = [];
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
@@ -650,10 +650,12 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         });
-        setProducts(cloudProducts);
-        localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
-        offlineStorage.saveProducts(cloudProducts);
-        setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
+        if (cloudProducts.length > 0) {
+          setProducts(cloudProducts);
+          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
+          offlineStorage.saveProducts(cloudProducts);
+          setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
+        }
       }
     }, (err: any) => {
       console.warn('Firestore products onSnapshot notice:', err?.message || err);
@@ -661,7 +663,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2.2 Firestore onSnapshot Real-Time Listener for Product Keys
     const unsubKeys = onSnapshot(collection(db, 'keys'), (snapshot: any) => {
-      if (snapshot) {
+      if (snapshot && !snapshot.empty) {
         const cloudKeys: ProductKey[] = [];
         snapshot.forEach((docSnap: any) => {
           const k = docSnap.data() as ProductKey;
@@ -669,8 +671,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             cloudKeys.push(k);
           }
         });
-        setProductKeys(cloudKeys);
-        localStorage.setItem('kalam_bot_keys', JSON.stringify(cloudKeys));
+        if (cloudKeys.length > 0) {
+          setProductKeys(cloudKeys);
+          localStorage.setItem('kalam_bot_keys', JSON.stringify(cloudKeys));
+        }
       }
     }, (err: any) => {
       console.warn('Firestore keys onSnapshot notice:', err?.message || err);
@@ -2015,11 +2019,17 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const savings = normalPrice - finalPrice;
 
     if (currentUser.balance < finalPrice) {
+      const needed = finalPrice - currentUser.balance;
       pushBotMessage(
-        `❌ <b>Insufficient Balance!</b>\n\nYou need <b>${fmtCurr(finalPrice)}</b>, but your balance is <b>${fmtCurr(currentUser.balance)}</b>.\n\nPlease top up your wallet via <b>Add Balance</b>.`,
+        `⚠️ <b>INSUFFICIENT WALLET BALANCE</b>\n\n` +
+        `You are trying to purchase: <b>${prod.panel_name} (${prod.name})</b>\n` +
+        `💵 Item Price: <b>${fmtCurr(finalPrice)}</b>\n` +
+        `💳 Your Current Balance: <b>${fmtCurr(currentUser.balance)}</b>\n` +
+        `🔻 Balance Needed: <b>${fmtCurr(needed)}</b>\n\n` +
+        `Please top up your wallet via FamPay UPI to complete your order.`,
         [
-          [{ text: "💳 Add Balance Now", callback_data: "menu_add_balance", style: "primary" }],
-          [{ text: "BACK", callback_data: "menu_shop", style: "danger" }]
+          [{ text: `💲 Add Balance (${fmtCurr(needed)} needed)`, callback_data: "menu_add_balance", style: "success" }],
+          [{ text: "🔙 Back", callback_data: `pnl_${prod.id}`, style: "danger" }]
         ]
       );
       return;
@@ -2127,25 +2137,38 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     confetti({ particleCount: 80, spread: 80, origin: { y: 0.5 } });
 
-    let msg = `✅ <b>PURCHASE SUCCESSFUL!</b>
-━━━━━━━━━━━━━━━━━━
-📦 <b>Panel:</b> ${prod.category}
-📁 <b>Panel Name:</b> ${prod.panel_name}
-⏱ <b>Package:</b> ${prod.name}
-💰 <b>Amount Deducted:</b> ${fmtCurr(finalPrice)}
-📱 <b>Device Limit:</b> ${prod.device_limit}
-${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━━━━━━━━━━━━━━━━━\n`;
+    const remainingBal = Math.max(0, currentUser.balance - finalPrice);
+    const apkUrl = prod.apk_link || settings.apk_channel_link || 'https://t.me/KalamFFPanelAPKs';
+    const tutorialUrl = settings.how_to_video || 'https://youtube.com';
 
-    if (prod.apk_link && prod.apk_link.startsWith('http')) {
-      msg += `📥 <b>APK Link:</b> <a href="${prod.apk_link}">Click Here to Download</a>\n\n`;
-    }
+    let msg = `🎉 <b>PURCHASE SUCCESSFUL! (#${newOrder.id})</b>\n\n` +
+      `📦 <b>Product:</b> ${prod.panel_name} - ${prod.name}\n` +
+      `⏳ <b>Validity:</b> ${prod.validity || prod.name}\n` +
+      `💰 <b>Amount Paid:</b> ${fmtCurr(finalPrice)}\n` +
+      `💳 <b>Remaining Balance:</b> ${fmtCurr(remainingBal)}${androidId ? `\n📱 <b>Bound HWID:</b> <code>${androidId}</code>` : ''}\n\n` +
+      `🔑 <b>YOUR LICENSE KEY:</b>\n` +
+      `<code>${deliveredKey}</code>\n\n` +
+      `⬇️ <b>APK / LOADER CHANNEL:</b>\n` +
+      `<a href="${apkUrl}">${apkUrl}</a>\n\n` +
+      `📖 <b>TUTORIAL & SETUP GUIDE:</b>\n` +
+      `<a href="${tutorialUrl}">${tutorialUrl}</a>\n\n` +
+      `<i>Click on the key above to copy it directly. Enjoy playing!</i>`;
 
-    msg += `🔑 <b>Your Exclusive License Key:</b>
-<code>${deliveredKey}</code>
+    const successKb: InlineKeyboardButton[][] = [
+      [
+        { text: "⬇️ Download APK Channel", url: apkUrl },
+        { text: "📢 Official Channel", url: settings.official_channel_link || 'https://t.me/KalamFFPanelChannel' }
+      ],
+      [
+        { text: "👤 View in My Profile", callback_data: "menu_profile", style: "success" },
+        { text: "🛒 Continue Shopping", callback_data: "menu_shop", style: "danger" }
+      ],
+      [
+        { text: "🏠 Main Menu", callback_data: "back_main", style: "danger" }
+      ]
+    ];
 
-<i>Tap key above to copy. For setup guide, click Tutorial or 24/7 Support.</i>`;
-
-    pushBotMessage(msg, getBackKeyboard('menu_shop'));
+    pushBotMessage(msg, successKb);
   };
 
   // Main Callback Query Router
@@ -2203,43 +2226,56 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       return;
     }
 
-    // 2. Shop Root: Select Category
-    if (callbackData === 'menu_shop') {
+    // 2. Shop Root: Select Category / Device Type
+    if (
+      callbackData === 'menu_shop' ||
+      callbackData === 'shop_categories' ||
+      callbackData === 'shop' ||
+      callbackData === 'store' ||
+      callbackData === 'buy_now'
+    ) {
       setCurrentFsmState(null);
       logActivity(currentUser.user_id, 'VIEW_SHOP');
 
       const activeProds = products.filter(p => p.is_active !== 0);
       const uniqueCats = Array.from(new Set(activeProds.map(p => (p.category || '').trim()).filter(Boolean)));
 
-      const kb: InlineKeyboardButton[][] = FIXED_CATEGORIES.map(cat => ({
-        text: cat,
-        callback_data: `cat_${cat}`,
-        icon_custom_emoji_id: emojis[`category_${cat.toLowerCase().replace(/ /g, '_')}`] || DEFAULT_EMOJIS.product_store,
-        style: 'primary' as const
-      })).map(btn => [btn]);
+      const kb: InlineKeyboardButton[][] = [
+        [{ text: '🛡️ ANDROID NONROOT', callback_data: 'cat_ANDROID NON ROOT PANEL', style: 'success' }],
+        [{ text: '🌿 ANDROID ROOT', callback_data: 'cat_ANDROID ROOT PANEL', style: 'success' }],
+        [{ text: '💻 PC EMULATOR', callback_data: 'cat_PC PANEL', style: 'success' }]
+      ];
 
-      // Add custom categories dynamically if present
+      // Add custom categories or PC if present
       for (const customCat of uniqueCats) {
-        if (!isCategoryMatch(customCat, 'nonroot') && !isCategoryMatch(customCat, 'root') && !isCategoryMatch(customCat, 'pc')) {
+        if (!isCategoryMatch(customCat, 'nonroot') && !isCategoryMatch(customCat, 'root')) {
+          const icon = customCat.toLowerCase().includes('pc') ? '💻' : (customCat.toLowerCase().includes('ios') ? '🍏' : '📦');
           kb.push([{
-            text: `📦 ${customCat.toUpperCase()}`,
+            text: `${icon} ${customCat.toUpperCase()}`,
             callback_data: `cat_${customCat}`,
-            icon_custom_emoji_id: DEFAULT_EMOJIS.product_store,
-            style: 'primary' as const
+            style: 'success'
           }]);
         }
       }
 
-      kb.push(getBackKeyboard('back_main')[0]);
+      kb.push([
+        { text: '🔙 Back', callback_data: 'back_main', style: 'danger' }
+      ]);
 
-      const text = `${getEmojiTag('product_store')} <b><u>SELECT PRODUCT PANEL</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a category below to view panels:</b>`;
+      const text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n📱 <b>Select your device type:</b>`;
       editLastBotMessage(text, kb);
       return;
     }
 
-    // 3. Category Selected: View Panels
+    // 3. Category Selected: View Products List
     if (callbackData.startsWith('cat_')) {
-      const category = callbackData.replace('cat_', '');
+      let category = callbackData.replace('cat_', '');
+      if (category === 'nonroot') category = 'ANDROID NON ROOT PANEL';
+      else if (category === 'root') category = 'ANDROID ROOT PANEL';
+      else if (category === 'pc') category = 'PC PANEL';
+      else if (category.startsWith('custom_')) {
+        try { category = decodeURIComponent(category.replace('custom_', '')); } catch { category = category.replace('custom_', ''); }
+      }
       const catProds = products.filter(p => p.is_active !== 0 && isCategoryMatch(p.category, category));
 
       // Group panels strictly within this category
@@ -2256,20 +2292,16 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       if (availablePanels.length === 0) {
         editLastBotMessage(
-          `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━\n\n<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`,
+          `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n\n<i>❌ Currently, no products are added in this category. Check back soon or contact support!</i>`,
           [
-            [
-              {
-                text: "BACK TO CATEGORIES",
-                callback_data: "menu_shop",
-                icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
-                style: "danger"
-              }
-            ]
+            [{ text: "🔙 Back", callback_data: "menu_shop", style: "danger" }]
           ]
         );
         return;
       }
+
+      const gameIcons = ['🔥', '📲', '🪓', '🛡️', '🎯', '⚡', '💧', '⚔️', '🧪', '🪝', '🦖', '👑', '💎', '🚀', '🌟'];
+      let iconIdx = 0;
 
       const kb: InlineKeyboardButton[][] = availablePanels.map(panelName => {
         const panelProds = sortProductsByDuration(panelMap.get(panelName) || []);
@@ -2277,38 +2309,35 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         const isAllMaint = panelProds.length > 0 && panelProds.every(p => Boolean(p.is_maintenance));
         const refId = firstProd ? firstProd.id : 0;
 
+        const hasEmoji = /\p{Extended_Pictographic}/u.test(panelName.substring(0, 2));
+        const icon = hasEmoji ? '' : `${gameIcons[iconIdx % gameIcons.length]} `;
+        iconIdx++;
+
         if (isAllMaint) {
           return [{
-            text: `🛠️ ${panelName} (Under Maintenance)`,
+            text: `🛠️ ${panelName} [MAINTENANCE]`,
             callback_data: `maint_pnl_${refId || encodeURIComponent(panelName)}`,
-            icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
             style: 'danger' as const
           }];
         }
 
         return [{
-          text: `📦 ${panelName} (${panelProds.length} ${panelProds.length === 1 ? 'Plan' : 'Plans'})`,
+          text: `${icon}${panelName}`,
           callback_data: refId ? `pnl_${refId}` : `pnl_${encodeURIComponent(panelName)}`,
-          icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
-          style: 'primary' as const
+          style: 'success' as const
         }];
       });
 
       kb.push([
-        {
-          text: "BACK TO CATEGORIES",
-          callback_data: "menu_shop",
-          icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
-          style: "danger"
-        }
+        { text: "🔙 Back", callback_data: "menu_shop", style: "danger" }
       ]);
 
-      const text = `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()} PANELS</u></b>\n━━━━━━━━━━━━━━━━━━\n\n${getEmojiTag('point_down')} <b>Choose a panel to view its duration plans:</b>`;
+      const text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n🔥 <b>Choose a product:</b>`;
       editLastBotMessage(text, kb);
       return;
     }
 
-    // 4. Panel Selected: View Packages & Pricing
+    // 4. Panel Selected: View Access Plans & Pricing
     if (callbackData.startsWith('pnl_')) {
       const rawPayload = callbackData.replace('pnl_', '');
       console.log(`[BotContext] [TRACE] Panel Selected: rawPayload="${rawPayload}"`);
@@ -2368,51 +2397,39 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         return;
       }
 
-      const isReseller = Boolean(currentUser.is_reseller);
+      const tierName = currentUser.is_reseller === 1 ? 'RESELLER VIP' : (currentUser.is_vip === 1 ? 'VIP MEMBER' : 'USER');
 
-      let text = `${getEmojiTag('product_store')} <b><u>${category.toUpperCase()} - ${panelName.toUpperCase()}</u></b>\n━━━━━━━━━━━━━━━━━━\n\n`;
+      let text = `🪓 <b>${panelName.toUpperCase()}</b> 🪓\n\n` +
+        `👑 <b>Your Account Tier:</b> <code>${tierName}</code>\n\n` +
+        `💳 <b>Choose your access plan:</b>\n\n`;
 
       const kb: InlineKeyboardButton[][] = [];
 
       prods.forEach(p => {
         const normalPrice = p.price_inr;
-        const finalPrice = isReseller ? (p.reseller_price ?? p.reseller_price_inr ?? normalPrice) : normalPrice;
+        const finalPrice = currentUser.is_reseller ? (p.reseller_price ?? p.reseller_price_inr ?? normalPrice) : (currentUser.is_vip ? Math.round(normalPrice * 0.85) : normalPrice);
         const isMaint = Boolean(p.is_maintenance);
-        const pStock = p.stock || 0;
-        const stockStatus = isMaint ? '🛠️ Under Maintenance' : (pStock > 0 ? `✅ In Stock (${pStock})` : "❌ Out of Stock");
 
-        text += `${getEmojiTag('product_store')} ⏱ <b>Plan: ${p.name}</b>\n`;
-        if (isReseller) {
-          text += `💰 Regular Price: <s>${fmtCurr(normalPrice)}</s>\n`;
-          text += `👑 <b>Wholesale Reseller Price: ${fmtCurr(finalPrice)}</b>\n`;
-        } else if (currentUser.is_vip) {
-          text += `💎 <b>VIP 15% OFF Price: ${fmtCurr(finalPrice)}</b> (Regular: ${fmtCurr(normalPrice)})\n`;
-        } else {
-          text += `💰 Price: ${fmtCurr(normalPrice)}\n`;
-        }
-        text += `📱 Limit: ${p.device_limit} | 📦 ${stockStatus}\n\n`;
+        text += `💲 ₹${finalPrice.toFixed(2)} — 🎟️ ${p.name.toUpperCase()}\n`;
 
         if (isMaint) {
           kb.push([{
-            text: `🛠️ ${panelName} (${p.name}) - Under Maintenance 🛠️`,
+            text: `🛠️ ${p.name.toUpperCase()} (Under Maintenance)`,
             callback_data: `maint_${p.id}`,
             style: "danger"
           }]);
         } else {
           kb.push([{
-            text: `⚡ ${panelName} - ${p.name} (${fmtCurr(finalPrice)})`,
-            callback_data: `prod_${p.id}`,
-            icon_custom_emoji_id: emojis.product_store || DEFAULT_EMOJIS.product_store,
-            style: "primary"
+            text: `🎟️ ${p.name.toUpperCase()} — ₹${finalPrice.toFixed(2)}`,
+            callback_data: `buy_${p.id}`,
+            style: "success"
           }]);
         }
       });
 
-      text += `${getEmojiTag('point_down')} <b>Select any plan above to view full details & purchase:</b>`;
       kb.push([{
-        text: "BACK TO PANELS",
+        text: "🔙 Back",
         callback_data: `cat_${category}`,
-        icon_custom_emoji_id: emojis.back || DEFAULT_EMOJIS.back,
         style: "danger"
       }]);
 
@@ -2757,26 +2774,32 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       return;
     }
 
-    // 15. Tutorials
-    if (callbackData === 'menu_how_to') {
-      const videoLink = settings.how_to_video !== 'None' ? settings.how_to_video : null;
-      const text = `${getEmojiTag('tutorial')} <b><u>— TUTORIALS & GUIDE —</u></b> ${getEmojiTag('tutorial')}
+    // 15. Tutorials & How To Use
+    if (callbackData === 'menu_how_to' || callbackData === 'how_to_use') {
+      const videoLink = settings.how_to_video && settings.how_to_video !== 'None' ? settings.how_to_video : null;
+      const text = `📖 <b>HOW TO USE & SETUP GUIDE</b> 📖\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `1️⃣ <b>Add Balance:</b> Tap "💲 Add Balance" and pay via any UPI app (GPay, PhonePe, Paytm, FamPay). Balance is credited automatically!\n` +
+        `2️⃣ <b>Select Product:</b> Tap "🛒 Shop / Store Product" ➔ Select device type (Non-Root / Root / PC) ➔ Choose panel.\n` +
+        `3️⃣ <b>Choose Plan & Buy:</b> Select your desired validity plan (1 Day, 7 Days, 30 Days) and confirm purchase.\n` +
+        `4️⃣ <b>Get Key Instantly:</b> Your license key is sent immediately in this chat!\n` +
+        `5️⃣ <b>Download APK & Play:</b> Download the panel APK from the channel link provided with your key and paste your key to activate!\n\n` +
+        `💬 <b>Need Help?</b> Tap Support to reach our admin team 24/7.`;
 
-1️⃣ Add funds via <b>Add Balance</b>
-2️⃣ Navigate to <b>Product Store</b>
-3️⃣ Choose your desired Panel and Package validity.
-4️⃣ The Key and Installation APK link will be instantly provided.`;
+      const kb: InlineKeyboardButton[][] = [
+        [{ text: "🛒 Shop Now", callback_data: "menu_shop", style: "danger" }]
+      ];
 
-      const kb: InlineKeyboardButton[][] = [];
       if (videoLink) {
         kb.push([{
-          text: "Watch Full Video Tutorial",
+          text: "🎥 Watch Setup Video Tutorial",
           url: videoLink,
-          icon_custom_emoji_id: emojis.tutorial || DEFAULT_EMOJIS.tutorial,
-          style: "primary"
+          style: "success"
         }]);
       }
-      kb.push(getBackKeyboard('back_main')[0]);
+
+      kb.push([
+        { text: "🔙 Main Menu", callback_data: "back_main", style: "danger" }
+      ]);
 
       editLastBotMessage(text, kb);
       return;

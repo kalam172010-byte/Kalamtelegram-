@@ -14,95 +14,38 @@ function getButtonStyleClasses(btn: InlineKeyboardButton, rowIndex: number, colI
   const cb = (btn.callback_data || '').toLowerCase();
   const url = (btn.url || '').toLowerCase();
 
-  // Explicit style overrides
+  // Explicit style overrides with rich Telegram themed colors
   if (style === 'danger') {
-    return "bg-[#9b2828] text-white hover:bg-[#b32e2e] active:bg-[#832222] border border-[#e74c3c]/40 font-bold shadow-md shadow-red-950/20";
+    return "bg-gradient-to-b from-[#b71c1c] to-[#880e4f] text-white hover:from-[#c62828] hover:to-[#ad1457] active:from-[#7f0000] active:to-[#560027] border border-[#ef5350]/50 font-bold shadow-lg shadow-red-950/40";
   }
   if (style === 'success') {
-    return "bg-[#157934] text-white hover:bg-[#198f3d] active:bg-[#11632a] border border-[#2ecc71]/40 font-bold shadow-md shadow-emerald-950/20";
+    return "bg-gradient-to-b from-[#1b5e20] to-[#2e7d32] text-white hover:from-[#2e7d32] hover:to-[#388e3c] active:from-[#0d3b10] active:to-[#1b5e20] border border-[#4caf50]/50 font-bold shadow-lg shadow-emerald-950/40";
   }
   if (style === 'primary') {
-    return "bg-[#1d6fa5] text-white hover:bg-[#2282c2] active:bg-[#185c89] border border-[#3498db]/40 font-bold shadow-md shadow-sky-950/20";
+    return "bg-gradient-to-b from-[#1b5e20] to-[#2e7d32] text-white hover:from-[#2e7d32] hover:to-[#388e3c] active:from-[#0d3b10] active:to-[#1b5e20] border border-[#4caf50]/50 font-bold shadow-lg shadow-emerald-950/40";
   }
   if (style === 'secondary') {
-    return "bg-[#3e782e] text-white hover:bg-[#488936] active:bg-[#346527] border border-[#55a23f]/40 font-bold shadow-md shadow-green-950/20";
+    return "bg-gradient-to-b from-[#1b5e20] to-[#2e7d32] text-white hover:from-[#2e7d32] hover:to-[#388e3c] active:from-[#0d3b10] active:to-[#1b5e20] border border-[#4caf50]/50 font-bold shadow-lg shadow-emerald-950/40";
   }
   if (style === 'warning') {
-    return "bg-[#a66a3a] text-white hover:bg-[#bd7843] active:bg-[#8f5a32] border border-[#c98552]/40 font-bold shadow-md shadow-amber-950/20";
+    return "bg-gradient-to-b from-[#b71c1c] to-[#c62828] text-white hover:from-[#c62828] hover:to-[#d32f2f] active:from-[#7f0000] active:to-[#880e4f] border border-[#ef5350]/50 font-bold shadow-lg shadow-red-950/40";
   }
 
-  // Dynamic automatic color classification if style is not explicitly set:
-  // 1. Buy / Confirm / Purchase / Out of Stock / Cancel / Maintenance -> Red (Danger)
+  // Dynamic automatic color classification matching the Telegram Bot in video:
+  // 1. Shop Now / Primary CTA / Buy / Back / Cancel / Maintenance -> Red / Crimson Highlight
   if (
-    text.includes('buy') || text.includes('confirm') || text.includes('purchase') ||
-    text.includes('out of stock') || text.includes('sold out') || text.includes('cancel') ||
-    text.includes('maintenance') || text.includes('under maintenance') ||
-    cb.startsWith('buy_') || cb.startsWith('maint_') || cb.includes('confirm')
+    text.includes('shop') || text.includes('store product') || text.includes('buy now') ||
+    text.includes('confirm') || text.includes('purchase') || text.includes('back') ||
+    text.includes('cancel') || text.includes('maintenance') || text.includes('under maintenance') ||
+    text.includes('out of stock') || text.includes('sold out') ||
+    cb === 'menu_shop' || cb === 'shop_categories' || cb.startsWith('buy_') ||
+    cb.startsWith('maint_') || cb.includes('back') || cb.includes('cancel')
   ) {
-    return "bg-[#9b2828] text-white hover:bg-[#b32e2e] active:bg-[#832222] border border-[#e74c3c]/40 font-bold shadow-md shadow-red-950/20";
+    return "bg-gradient-to-b from-[#b71c1c] to-[#880e4f] text-white hover:from-[#c62828] hover:to-[#ad1457] active:from-[#7f0000] active:to-[#560027] border border-[#ef5350]/50 font-bold shadow-lg shadow-red-950/40";
   }
 
-  // 2. Add Balance / Wallet / Deposit / Pay / Recharge / Cash / Redeem / Gift -> Emerald Green (Success)
-  if (
-    text.includes('balance') || text.includes('wallet') || text.includes('deposit') ||
-    text.includes('pay') || text.includes('recharge') || text.includes('upi') ||
-    text.includes('redeem') || text.includes('gift') || text.includes('claim') ||
-    cb.includes('add_balance') || cb.includes('deposit') || cb.includes('pay') ||
-    cb.includes('redeem') || cb.includes('daily_gift') || cb.includes('gateway')
-  ) {
-    return "bg-[#157934] text-white hover:bg-[#198f3d] active:bg-[#11632a] border border-[#2ecc71]/40 font-bold shadow-md shadow-emerald-950/20";
-  }
-
-  // 3. Products / Panels / Categories / Store / Catalog / Duration Plans -> Cyan / Primary Blue
-  if (
-    text.includes('panel') || text.includes('product') || text.includes('store') ||
-    text.includes('catalog') || text.includes('plan') || text.includes('validity') ||
-    text.includes('non-root') || text.includes('non root') || text.includes('root') ||
-    text.includes('emulator') || text.includes('apk') ||
-    cb.startsWith('cat_') || cb.startsWith('pnl_') || cb.startsWith('prod_') || cb.includes('shop')
-  ) {
-    return "bg-[#1d6fa5] text-white hover:bg-[#2282c2] active:bg-[#185c89] border border-[#3498db]/40 font-bold shadow-md shadow-sky-950/20";
-  }
-
-  // 4. Profile / My Account / VIP / Reseller / Referral / History / Stats -> Royal Purple / Indigo
-  if (
-    text.includes('profile') || text.includes('account') || text.includes('vip') ||
-    text.includes('reseller') || text.includes('referral') || text.includes('earn') ||
-    text.includes('history') || text.includes('my keys') || text.includes('stats') ||
-    cb.includes('profile') || cb.includes('reseller') || cb.includes('referral')
-  ) {
-    return "bg-[#6b21a8] text-white hover:bg-[#7e22ce] active:bg-[#581c87] border border-[#a855f7]/40 font-bold shadow-md shadow-purple-950/20";
-  }
-
-  // 5. Support / Help / Ticket / Tutorial / Video / Channel / Update -> Amber Orange
-  if (
-    text.includes('support') || text.includes('help') || text.includes('ticket') ||
-    text.includes('tutorial') || text.includes('guide') || text.includes('video') ||
-    text.includes('update') || text.includes('status') || text.includes('channel') ||
-    cb.includes('support') || cb.includes('ticket') || cb.includes('update') ||
-    cb.includes('how_to') || url.includes('t.me') || url.includes('youtube')
-  ) {
-    return "bg-[#a66a3a] text-white hover:bg-[#bd7843] active:bg-[#8f5a32] border border-[#c98552]/40 font-bold shadow-md shadow-amber-950/20";
-  }
-
-  // 6. Back / Menu / Return -> Olive Green
-  if (
-    text.includes('back') || text.includes('main menu') || text.includes('return') ||
-    cb.includes('main_menu') || cb.includes('back')
-  ) {
-    return "bg-[#3e782e] text-white hover:bg-[#488936] active:bg-[#346527] border border-[#55a23f]/40 font-bold shadow-md shadow-green-950/20";
-  }
-
-  // Fallback vibrant palette based on row/column so no button is ever dull
-  const vibrantPalette = [
-    "bg-[#1d6fa5] text-white hover:bg-[#2282c2] active:bg-[#185c89] border border-[#3498db]/40 font-bold shadow-md",
-    "bg-[#157934] text-white hover:bg-[#198f3d] active:bg-[#11632a] border border-[#2ecc71]/40 font-bold shadow-md",
-    "bg-[#6b21a8] text-white hover:bg-[#7e22ce] active:bg-[#581c87] border border-[#a855f7]/40 font-bold shadow-md",
-    "bg-[#3e782e] text-white hover:bg-[#488936] active:bg-[#346527] border border-[#55a23f]/40 font-bold shadow-md",
-    "bg-[#a66a3a] text-white hover:bg-[#bd7843] active:bg-[#8f5a32] border border-[#c98552]/40 font-bold shadow-md"
-  ];
-
-  return vibrantPalette[(rowIndex + colIndex) % vibrantPalette.length];
+  // 2. All products, categories, duration plans, balance, profile, lucky, support, share -> Rich Forest Green
+  return "bg-gradient-to-b from-[#1b5e20] to-[#2e7d32] text-white hover:from-[#2e7d32] hover:to-[#388e3c] active:from-[#0d3b10] active:to-[#1b5e20] border border-[#4caf50]/50 font-bold shadow-lg shadow-emerald-950/40";
 }
 
 export const InlineKeyboardRenderer: React.FC<Props> = ({ keyboard, onButtonClick }) => {

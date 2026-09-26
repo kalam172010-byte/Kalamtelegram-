@@ -118,8 +118,8 @@ export class DatabaseStore {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        let products: Product[] = Array.isArray(parsed.products) ? parsed.products : [];
-        let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) ? parsed.productKeys : [];
+        let products: Product[] = Array.isArray(parsed.products) && parsed.products.length > 0 ? parsed.products : INITIAL_PRODUCTS;
+        let productKeys: ProductKey[] = Array.isArray(parsed.productKeys) && parsed.productKeys.length > 0 ? parsed.productKeys : INITIAL_PRODUCT_KEYS;
 
         // Deduplicate and ensure stable unique IDs for all duration plans
         const seenIds = new Set<string | number>();
@@ -139,6 +139,9 @@ export class DatabaseStore {
         });
 
         productKeys = productKeys.filter(k => products.some(p => String(p.id) === String(k.product_id)));
+        if (productKeys.length === 0) {
+          productKeys = INITIAL_PRODUCT_KEYS;
+        }
 
         // Clean up legacy demo products from bot instances to prevent deleted or nonexistent products from reappearing
         let bots: BotInstance[] = Array.isArray(parsed.bots) ? parsed.bots : [];
