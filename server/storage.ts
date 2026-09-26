@@ -143,12 +143,12 @@ export class DatabaseStore {
           productKeys = INITIAL_PRODUCT_KEYS;
         }
 
-        // Clean up legacy demo products from bot instances to prevent deleted or nonexistent products from reappearing
+        // Preserve bot-specific products, keys, and settings per bot instance
         let bots: BotInstance[] = Array.isArray(parsed.bots) ? parsed.bots : [];
         bots = bots.map(b => ({
           ...b,
-          products: products,
-          productKeys: productKeys
+          products: Array.isArray(b.products) ? b.products : products.filter(p => !p.bot_id || p.bot_id === b.id),
+          productKeys: Array.isArray(b.productKeys) ? b.productKeys : productKeys
         }));
 
         const data: DatabaseSchema = {
@@ -208,11 +208,15 @@ export class DatabaseStore {
       this.ensureDataDir();
       const target = dataToSave || this.data;
 
-      // Always keep bot instances' products and productKeys in sync with master lists to prevent ghost/demo products
+      // Ensure each bot preserves its own products, keys, and settings
       if (Array.isArray(target.bots)) {
         target.bots.forEach(b => {
-          b.products = target.products || [];
-          b.productKeys = target.productKeys || [];
+          if (!Array.isArray(b.products)) {
+            b.products = (target.products || []).filter(p => !p.bot_id || p.bot_id === b.id);
+          }
+          if (!Array.isArray(b.productKeys)) {
+            b.productKeys = target.productKeys || [];
+          }
         });
       }
 
@@ -595,8 +599,29 @@ export class DatabaseStore {
     }
 
     syncProductToFirestore(finalProduct).catch(() => {});
+    
+    // Also sync into target bot's products array if bot_id is present
+    if (finalProduct.bot_id && Array.isArray(this.data.bots)) {
+      const targetBot = this.data.bots.find(b => b.id === finalProduct.bot_id);
+      if (targetBot) {
+        if (!Array.isArray(targetBot.products)) targetBot.products = [];
+        const bIdx = targetBot.products.findIndex(p => String(p.id) === String(finalId));
+        if (bIdx >= 0) targetBot.products[bIdx] = finalProduct;
+        else targetBot.products.unshift(finalProduct);
+      }
+    }
+
     this.saveData(undefined, true);
     return finalProduct;
+  }
+
+  public getBotProducts(botId?: string): Product[] {
+    if (!botId) return this.data.products;
+    const bot = this.data.bots?.find(b => b.id === botId);
+    if (bot && Array.isArray(bot.products) && bot.products.length > 0) {
+      return bot.products;
+    }
+    return this.data.products.filter(p => !p.bot_id || p.bot_id === botId);
   }
 
   public addProductsBatch(products: Product[], keysMap?: Record<string, string[]>): Product[] {

@@ -120,6 +120,7 @@ export interface BotContextType {
 
   // Database Tables
   products: Product[];
+  rawProducts?: Product[];
   productKeys: ProductKey[];
   orders: Order[];
   tickets: Ticket[];
@@ -455,31 +456,57 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Strictly filter bots to the logged in user (Multi-Tenant Isolation)
-  const myBots = bots.filter(b => {
-    const isOwnerId = b.owner_id === currentUserId;
-    const isOwnerEmail = Boolean(currentUser.email && b.owner_email && b.owner_email.toLowerCase() === currentUser.email.toLowerCase());
-    return isOwnerId || isOwnerEmail;
-  });
+  const myBots = useMemo(() => {
+    const isGlobalAdmin = currentUser.user_id === 12846461 || (currentUser.email && ['kalam172010@gmail.com', 'kk7953926@gmail.com', 'kalamkalam1234kd@gmail.com'].includes(currentUser.email.toLowerCase()));
+    if (isGlobalAdmin) {
+      return bots;
+    }
+    return bots.filter(b => {
+      const isOwnerId = b.owner_id === currentUserId;
+      const isOwnerEmail = Boolean(currentUser.email && b.owner_email && b.owner_email.toLowerCase() === currentUser.email.toLowerCase());
+      return isOwnerId || isOwnerEmail;
+    });
+  }, [bots, currentUserId, currentUser.email, currentUser.user_id]);
 
-  // Active bot is selected from user's own bots or fallback to system store bots
-  const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || bots.find(b => b.id === activeBotId) || bots[0] || INITIAL_BOTS[0];
+  // Active bot is selected ONLY from user's own bots (myBots)
+  const activeBot: BotInstance = useMemo(() => {
+    if (myBots.length === 0) {
+      return null as any;
+    }
+    const found = myBots.find(b => b.id === activeBotId);
+    return found || myBots[0];
+  }, [myBots, activeBotId]);
 
-  // Scoped users filtered strictly by the active bot and owner bots (Multi-Tenant Isolation)
+  // Scoped products filtered strictly for the active bot
+  const scopedProducts = useMemo(() => {
+    if (!activeBot) {
+      return products;
+    }
+    const currentBotId = activeBot.id;
+    // 1. If activeBot has embedded products and they are specific to this bot
+    if (Array.isArray(activeBot.products) && activeBot.products.length > 0) {
+      return activeBot.products;
+    }
+    // 2. Otherwise filter global products list by activeBot.id
+    const filtered = products.filter(p => p.bot_id === currentBotId);
+    if (filtered.length > 0) return filtered;
+    return products.filter(p => !p.bot_id || p.bot_id === currentBotId);
+  }, [products, activeBot]);
+
+  // Scoped users filtered strictly by the active bot (multi-tenant & bot-level user isolation)
   const scopedUsers = useMemo(() => {
-    if (!activeBot) return users;
+    if (!activeBot) {
+      return users.filter(u => u.user_id === currentUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase()));
+    }
     const currentBotId = activeBot.id;
     const currentBotUser = (activeBot.username || '').replace(/^@/, '').toLowerCase().trim();
-    
-    // Check if user has specific bots
-    const myBotIds = myBots.map(b => b.id);
-    const myBotUsernames = myBots.map(b => (b.username || '').replace(/^@/, '').toLowerCase().trim()).filter(Boolean);
 
     return users.filter(u => {
       // 1. If user is the currently logged in account
       if (u.user_id === currentUserId || (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())) {
         return true;
       }
-      // 2. If user was created under this active bot
+      // 2. If user registered or interacted under this active bot
       if (u.bot_id && (u.bot_id === currentBotId || u.bot_id.replace(/^@/, '').toLowerCase().trim() === currentBotUser)) {
         return true;
       }
@@ -491,20 +518,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (u.bot_username && currentBotUser && u.bot_username.replace(/^@/, '').toLowerCase().trim() === currentBotUser) {
         return true;
       }
-      // 5. If user was created under one of the owner's bots
-      if (u.owner_id && u.owner_id === currentUserId) {
-        return true;
-      }
-      if (u.owner_email && currentUser.email && u.owner_email.toLowerCase() === currentUser.email.toLowerCase()) {
-        return true;
-      }
-      // 6. If user's bot_id matches any of owner's bots
-      if (u.bot_id && (myBotIds.includes(u.bot_id) || myBotUsernames.includes(u.bot_id.replace(/^@/, '').toLowerCase().trim()))) {
-        return true;
-      }
       return false;
     });
-  }, [users, activeBot, myBots, currentUserId, currentUser.email]);
+  }, [users, activeBot, currentUserId, currentUser.email]);
 
   // Sync state to local storage & offline storage cache
   useEffect(() => {
@@ -619,11 +635,11 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return merged;
               });
 
-              // Continuously sync bot instances' internal products list to match merged products
+              // Safely preserve bot instances' internal products list
               setBots(prev => prev.map(b => ({
                 ...b,
-                products: cleanProds,
-                productKeys: Array.isArray(serverData.productKeys) ? serverData.productKeys : b.productKeys
+                products: Array.isArray(b.products) && b.products.length > 0 ? b.products : cleanProds.filter((p: Product) => !p.bot_id || p.bot_id === b.id),
+                productKeys: Array.isArray(b.productKeys) ? b.productKeys : (Array.isArray(serverData.productKeys) ? serverData.productKeys : [])
               })));
             }
             if (Array.isArray(serverData.productKeys)) {
@@ -800,7 +816,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setProducts(parsed.products);
               localStorage.setItem('kalam_bot_products', JSON.stringify(parsed.products));
               offlineStorage.saveProducts(parsed.products);
-              setBots(prev => prev.map(b => ({ ...b, products: parsed.products })));
+              setBots(prev => prev.map(b => ({
+                ...b,
+                products: Array.isArray(b.products) && b.products.length > 0 ? b.products : parsed.products.filter((p: any) => !p.bot_id || p.bot_id === b.id)
+              })));
             }
             if (Array.isArray(parsed.productKeys)) {
               setProductKeys(parsed.productKeys);
@@ -3921,9 +3940,13 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   const addProduct = async (prodData: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]): Promise<void> => {
     const newId = prodData.id || (Date.now() + Math.floor(Math.random() * 100000));
     const cleanKeys = keys.map(k => k.trim()).filter(Boolean);
+    const botIdToUse = activeBot?.id;
     const newProduct: Product = {
       ...prodData,
       id: newId,
+      bot_id: botIdToUse,
+      owner_id: activeBot?.owner_id || currentUserId,
+      owner_email: activeBot?.owner_email || currentUser.email,
       is_active: prodData.is_active !== undefined ? (prodData.is_active === 0 ? 0 : 1) : 1,
       stock: cleanKeys.length
     };
@@ -3946,11 +3969,16 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       return updated;
     });
     setBots(prev => {
-      const updated = prev.map(b => ({
-        ...b,
-        products: [newProduct, ...(b.products || []).filter(p => p.id !== newId)],
-        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
-      }));
+      const updated = prev.map(b => {
+        if (!botIdToUse || b.id === botIdToUse) {
+          return {
+            ...b,
+            products: [newProduct, ...(b.products || []).filter(p => p.id !== newId)],
+            productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+          };
+        }
+        return b;
+      });
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
@@ -3976,7 +4004,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       if (data) {
         if (Array.isArray(data.products)) {
           setProducts(data.products);
-          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
         }
         if (Array.isArray(data.productKeys)) {
           setProductKeys(data.productKeys);
@@ -3990,6 +4017,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   const addProductsBatch = async (newProducts: Product[], keysMap?: Record<string, string[]>): Promise<void> => {
     const cleanProducts: Product[] = [];
     const newKeyEntities: ProductKey[] = [];
+    const botIdToUse = activeBot?.id;
 
     for (let i = 0; i < newProducts.length; i++) {
       const p = newProducts[i];
@@ -4000,6 +4028,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       const cleanP: Product = {
         ...p,
         id: pId,
+        bot_id: botIdToUse,
+        owner_id: activeBot?.owner_id || currentUserId,
+        owner_email: activeBot?.owner_email || currentUser.email,
         is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
         stock: cleanKeys.length > 0 ? cleanKeys.length : (p.stock || 0)
       };
@@ -4030,11 +4061,16 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     });
 
     setBots(prev => {
-      const updated = prev.map(b => ({
-        ...b,
-        products: [...cleanProducts, ...(b.products || []).filter(p => !newIdSet.has(String(p.id)))],
-        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
-      }));
+      const updated = prev.map(b => {
+        if (!botIdToUse || b.id === botIdToUse) {
+          return {
+            ...b,
+            products: [...cleanProducts, ...(b.products || []).filter(p => !newIdSet.has(String(p.id)))],
+            productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+          };
+        }
+        return b;
+      });
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
@@ -4060,7 +4096,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       if (data) {
         if (Array.isArray(data.products)) {
           setProducts(data.products);
-          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
         }
         if (Array.isArray(data.productKeys)) {
           setProductKeys(data.productKeys);
@@ -5510,7 +5545,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         updateActiveBotGateway,
         updateActiveBotResellerApi,
         toggleBotStatus,
-        products,
+        products: scopedProducts,
+        rawProducts: products,
         productKeys,
         orders,
         tickets,

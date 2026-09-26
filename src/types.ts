@@ -106,6 +106,9 @@ export interface User {
 
 export interface Product {
   id: number;
+  bot_id?: string; // ID of the bot this product belongs to
+  owner_id?: number; // User ID of the bot owner
+  owner_email?: string; // Email of the bot owner
   category: string; // 'ANDROID NON ROOT PANEL' | 'ANDROID ROOT PANEL' | 'PC PANEL' | string
   panel_name: string; // e.g., 'MST PANEL', 'DRIP PANEL', 'VIP ZERO'
   name: string; // Package/duration e.g., '24 Hours', '7 Days', '1 Month', 'Lifetime'

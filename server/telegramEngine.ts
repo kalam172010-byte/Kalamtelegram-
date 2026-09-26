@@ -1192,8 +1192,24 @@ class TelegramEngine {
     const settings = dbStore.getData().settings;
 
     const isExistingUser = dbStore.getUser(fromUser.id);
-    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
+    const currentBots = dbStore.getBots();
+    const matchingBot = currentBots.find(b => 
+      (this.botInfo?.username && b.username?.replace('@','').toLowerCase() === this.botInfo.username.toLowerCase()) ||
+      (settings.bot_token && b.bot_token === settings.bot_token)
+    ) || (currentBots.length > 0 ? currentBots[0] : null);
+
+    const activeBotId = matchingBot?.id || (this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot'));
+    const activeBotUsername = matchingBot?.username || this.botInfo?.username || settings.bot_username || '';
+    const user = dbStore.getOrCreateUser(
+      fromUser.id,
+      fromUser.first_name,
+      fromUser.username,
+      chatId,
+      activeBotId,
+      activeBotUsername,
+      matchingBot?.owner_id,
+      matchingBot?.owner_email
+    );
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, `🚫 <b>Account Suspended</b>\n\nYour account has been banned from using ${this.getBotDisplayName()}. Contact support if you believe this is an error.`);
@@ -2486,8 +2502,24 @@ class TelegramEngine {
     const messageId = msg.message_id;
 
     const settings = dbStore.getData().settings;
-    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
-    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
+    const currentBots = dbStore.getBots();
+    const matchingBot = currentBots.find(b => 
+      (this.botInfo?.username && b.username?.replace('@','').toLowerCase() === this.botInfo.username.toLowerCase()) ||
+      (settings.bot_token && b.bot_token === settings.bot_token)
+    ) || (currentBots.length > 0 ? currentBots[0] : null);
+
+    const activeBotId = matchingBot?.id || (this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot'));
+    const activeBotUsername = matchingBot?.username || this.botInfo?.username || settings.bot_username || '';
+    const user = dbStore.getOrCreateUser(
+      fromUser.id,
+      fromUser.first_name,
+      fromUser.username,
+      chatId,
+      activeBotId,
+      activeBotUsername,
+      matchingBot?.owner_id,
+      matchingBot?.owner_email
+    );
 
     if (user.is_banned === 1) {
       await this.answerCallback(cb.id, 'Your account is suspended.', true);

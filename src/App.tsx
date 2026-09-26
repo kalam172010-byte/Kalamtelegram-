@@ -97,8 +97,7 @@ const AppContent: React.FC = () => {
     currentUser.user_id === 12846461 ||
     currentUser.email?.toLowerCase() === 'kalam172010@gmail.com' ||
     currentUser.email?.toLowerCase() === 'kk7953926@gmail.com' ||
-    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com' ||
-    true;
+    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com';
 
   // Strict Auth Guard: If user is not authenticated, show ONLY the secure login/registration portal
   if (!isAuthenticated) {

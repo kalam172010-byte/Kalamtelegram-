@@ -24,13 +24,15 @@ import {
   Activity,
   Terminal,
   Database,
-  FileText
+  FileText,
+  Building2
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useBot } from '../../context/BotContext';
 import { Order, Product, ProductKey, User } from '../../types';
 import { db, onSnapshot, collection } from '../../lib/firebase';
+import { generateProductSalesReportPDF } from '../../utils/accountingPdfGenerator';
 
 export const PurchaseLogs: React.FC = () => {
   const { 
@@ -39,6 +41,9 @@ export const PurchaseLogs: React.FC = () => {
     productKeys, 
     allUsers, 
     logs, 
+    activeBot,
+    bots,
+    settings,
     updateUserBalance 
   } = useBot();
 
@@ -362,6 +367,26 @@ export const PurchaseLogs: React.FC = () => {
               <span className="text-[10px] text-slate-400">Synced: {lastEventTime}</span>
             </div>
 
+            <button
+              onClick={() => {
+                generateProductSalesReportPDF({
+                  orders: mergedOrders,
+                  transactions: [],
+                  products,
+                  users: allUsers,
+                  logs,
+                  bots,
+                  activeBot,
+                  settings,
+                  options: { dateRange: 'all', category: categoryFilter }
+                });
+              }}
+              className="px-3 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white border border-emerald-400/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-600/20 active:scale-95"
+              title="Download Certified Product Sales & Revenue Accounting Statement (PDF)"
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-200" />
+              <span>Accounting Sales (PDF)</span>
+            </button>
             <button
               onClick={exportAsPDF}
               className="px-3 py-2 bg-gradient-to-r from-rose-600/90 to-red-600/90 hover:from-rose-500 hover:to-red-500 text-white border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/20 active:scale-95"

@@ -59,7 +59,11 @@ import {
   AlertCircle,
   ShoppingBag,
   Palette,
-  QrCode
+  QrCode,
+  Building2,
+  FileSpreadsheet,
+  Calculator,
+  Coins
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -68,6 +72,12 @@ import { SystemHealthWidget } from './SystemHealthWidget';
 import { PurchaseLogs } from './PurchaseLogs';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
 import { PWAInstallCard } from '../Common/PWAInstallCard';
+import { AccountingExportModal } from './AccountingExportModal';
+import {
+  generateProductSalesReportPDF,
+  generateUserTransactionsReportPDF,
+  generateComprehensiveAccountingStatementPDF
+} from '../../utils/accountingPdfGenerator';
 
 interface DurationPresetConfig {
   validity: string;
@@ -118,6 +128,7 @@ export const AdminDashboard: React.FC = () => {
     orders,
     tickets,
     coupons,
+    transactions,
     logs,
     settings,
     emojis,
@@ -179,6 +190,57 @@ export const AdminDashboard: React.FC = () => {
   const [botToDelete, setBotToDelete] = useState<BotInstance | null>(null);
   const [copiedBotTokenId, setCopiedBotTokenId] = useState<string | null>(null);
   const [createBotSuccessMsg, setCreateBotSuccessMsg] = useState<string | null>(null);
+
+  // Accounting & Financial PDF Export Modal State
+  const [showAccountingModal, setShowAccountingModal] = useState<boolean>(false);
+  const [accountingModalType, setAccountingModalType] = useState<'sales' | 'transactions' | 'comprehensive'>('sales');
+
+  const openAccountingModal = (type: 'sales' | 'transactions' | 'comprehensive' = 'sales') => {
+    setAccountingModalType(type);
+    setShowAccountingModal(true);
+  };
+
+  const handleQuickProductSalesPDF = () => {
+    generateProductSalesReportPDF({
+      orders,
+      transactions,
+      products,
+      users: allUsers,
+      logs,
+      bots,
+      activeBot,
+      settings,
+      options: { dateRange: 'all', category: 'ALL' }
+    });
+  };
+
+  const handleQuickUserTransactionsPDF = () => {
+    generateUserTransactionsReportPDF({
+      orders,
+      transactions,
+      products,
+      users: allUsers,
+      logs,
+      bots,
+      activeBot,
+      settings,
+      options: { dateRange: 'all', txnStatus: 'all' }
+    });
+  };
+
+  const handleQuickComprehensiveAccountingPDF = () => {
+    generateComprehensiveAccountingStatementPDF({
+      orders,
+      transactions,
+      products,
+      users: allUsers,
+      logs,
+      bots,
+      activeBot,
+      settings,
+      options: { dateRange: 'all', category: 'ALL', txnStatus: 'all' }
+    });
+  };
 
   const [newBotForm, setNewBotForm] = useState({
     name: 'Kalam VIP Store #2',
@@ -1129,16 +1191,16 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center gap-1.5 bg-slate-900/90 px-2.5 py-1 rounded-xl border border-cyan-500/30 min-h-[38px]">
             <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
             <select
-              value={activeBot?.id || bots[0]?.id || ''}
+              value={activeBot?.id || myBots[0]?.id || ''}
               onChange={(e) => switchActiveBot(e.target.value)}
               className="bg-transparent text-cyan-300 text-xs font-bold outline-none cursor-pointer max-w-[120px] sm:max-w-[160px] truncate"
             >
-              {bots.length === 0 ? (
+              {myBots.length === 0 ? (
                 <option value="" className="bg-slate-900 text-slate-400">
                   No bots (Create +)
                 </option>
               ) : (
-                bots.map((b, idx) => (
+                myBots.map((b, idx) => (
                   <option key={`bot-sel-${b.id || idx}`} value={b.id} className="bg-slate-900 text-slate-200">
                     {b.name} (@{b.username})
                   </option>
@@ -1146,6 +1208,17 @@ export const AdminDashboard: React.FC = () => {
               )}
             </select>
           </div>
+
+          {/* Accounting & Financial Statements (PDF) Hub Button */}
+          <button
+            type="button"
+            onClick={() => openAccountingModal('sales')}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border border-emerald-400/40 min-h-[38px] active:scale-95 shadow-lg shadow-emerald-600/20"
+            title="Export Product Sales, User Transactions, and Accounting Statements as PDF for External Bookkeeping"
+          >
+            <Building2 className="w-3.5 h-3.5 text-emerald-200" />
+            <span>Accounting Reports (PDF)</span>
+          </button>
 
           {/* Master Backup Database (PDF) Button */}
           <button
@@ -1713,6 +1786,149 @@ export const AdminDashboard: React.FC = () => {
 
             {/* System Health & Outgoing API Diagnostics Widget */}
             <SystemHealthWidget onRefreshParent={() => {}} />
+
+            {/* External Accounting & Financial Statements Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-emerald-500/40 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 shadow-inner">
+                    <Building2 className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs uppercase font-extrabold tracking-wider text-emerald-400">
+                        External Accounting & Bookkeeping Hub
+                      </span>
+                      <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
+                        PDF Statements
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black text-white">
+                      Export Financial Statements & Sales Ledgers
+                    </h3>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openAccountingModal('comprehensive')}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-95 border border-emerald-400/30"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Custom Statement Builder (PDF)</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {/* 1. Product Sales Statement */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/90 flex flex-col justify-between hover:border-cyan-500/40 transition">
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                        <ShoppingBag className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                        {orders.length} Fulfilled Orders
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white">Product Sales PDF</h4>
+                    <p className="text-xs text-slate-400">
+                      Product-by-product revenue matrix, category breakdown & itemized key delivery journal.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleQuickProductSalesPDF}
+                      className="flex-1 py-2 px-3 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Quick PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAccountingModal('sales')}
+                      className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                      title="Filter by date range or category"
+                    >
+                      Filters...
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. User Transactions & Deposits Ledger */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/90 flex flex-col justify-between hover:border-emerald-500/40 transition">
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-300 font-bold">
+                        {allUsers.length} Customer Accounts
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white">User Transactions Ledger</h4>
+                    <p className="text-xs text-slate-400">
+                      UPI deposits inflow, UTR verification status, and outstanding customer wallet liabilities schedule.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleQuickUserTransactionsPDF}
+                      className="flex-1 py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Quick PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAccountingModal('transactions')}
+                      className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                      title="Filter by date range or status"
+                    >
+                      Filters...
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Full Financial & Audit Statement */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800/90 flex flex-col justify-between hover:border-indigo-500/40 transition">
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-mono text-indigo-300 font-bold">
+                        Complete Package
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white">Financial Audit Statement</h4>
+                    <p className="text-xs text-slate-400">
+                      Master external accounting document with executive P&L, sales, inflows & auditor sign-off block.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleQuickComprehensiveAccountingPDF}
+                      className="flex-1 py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Quick PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAccountingModal('comprehensive')}
+                      className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                      title="Open full export configuration"
+                    >
+                      Filters...
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Quick Actions & Recent Feed */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2847,14 +3063,36 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <button
-                type="button"
-                onClick={handleDownloadUserList}
-                className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs md:text-sm font-semibold cursor-pointer transition"
-              >
-                <Download className="w-4 h-4" />
-                Export DB (.txt)
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleQuickUserTransactionsPDF}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs md:text-sm font-bold cursor-pointer transition active:scale-95"
+                  title="Export User Deposits & Wallet Ledger as PDF"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Transactions PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openAccountingModal('transactions')}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-teal-600/30 to-cyan-600/30 hover:from-teal-600/40 hover:to-cyan-600/40 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs md:text-sm font-bold cursor-pointer transition active:scale-95"
+                  title="Filter & Export Custom Accounting Statement as PDF"
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>Accounting Hub (PDF)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadUserList}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs md:text-sm font-semibold cursor-pointer transition"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export DB (.txt)</span>
+                </button>
+              </div>
             </div>
 
             {/* Mobile Users Cards (Optimized for One-Handed Phone Operation) */}
@@ -7769,6 +8007,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ================= ACCOUNTING & FINANCIAL EXPORT MODAL ================= */}
+      <AccountingExportModal
+        isOpen={showAccountingModal}
+        onClose={() => setShowAccountingModal(false)}
+        defaultReportType={accountingModalType}
+      />
     </div>
   );
 };
