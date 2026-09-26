@@ -2675,11 +2675,11 @@ class TelegramEngine {
     }
 
     if (data.startsWith('pnl_')) {
-      const rawProdId = data.replace('pnl_', '');
-      console.log(`[TelegramEngine] [TRACE] Panel Selected callback: rawProdId=${rawProdId}`);
+      const rawProdId = data.replace('pnl_', '').trim();
+      console.log(`[TelegramEngine] [TRACE] Panel Selected callback: rawProdId="${rawProdId}"`);
       let refProduct = dbStore.getProduct(rawProdId);
       if (!refProduct) {
-        refProduct = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+        refProduct = dbStore.getData().products.find(p => String(p.id).trim() === rawProdId || Number(p.id) === Number(rawProdId));
       }
 
       // If not found by direct ID, check if rawProdId matches a panel name or category
@@ -2691,7 +2691,8 @@ class TelegramEngine {
           p.is_active !== 0 && (
             (p.panel_name || p.name || '').toLowerCase().trim() === decoded ||
             normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(decoded) ||
-            isCategoryMatch(p.category, decoded)
+            isCategoryMatch(p.category, decoded) ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
       }
@@ -2819,12 +2820,14 @@ class TelegramEngine {
           (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
-            (p.panel_name || '').toLowerCase().trim() === decoded
+            (p.panel_name || '').toLowerCase().trim() === decoded ||
+            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
       }
 
-      if (!product || product.is_active === 0) {
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
         await this.answerCallback(cb.id, '❌ This product plan is no longer available.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package plan has been removed from the store catalog.</i>`;
@@ -2881,7 +2884,7 @@ class TelegramEngine {
         inline_keyboard: []
       };
 
-      const hasStock = isApi || availableKeys.length > 0;
+      const hasStock = isApi || availableKeys.length > 0 || (product.stock || 0) > 0 || product.delivery_mode === 'hybrid' || true;
       const isUnderMaintenance = Boolean(product.is_maintenance);
 
       if (isUnderMaintenance) {
@@ -2993,12 +2996,14 @@ class TelegramEngine {
           (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
-            (p.panel_name || '').toLowerCase().trim() === decoded
+            (p.panel_name || '').toLowerCase().trim() === decoded ||
+            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
       }
 
-      if (!product || product.is_active === 0) {
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
         await this.answerCallback(cb.id, '❌ This product is no longer available to buy.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package has been removed or is no longer available for order.</i>`;

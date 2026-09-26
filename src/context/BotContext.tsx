@@ -515,7 +515,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
 
-            if (Array.isArray(serverData.products)) {
+            if (Array.isArray(serverData.products) && serverData.products.length > 0) {
               const cleanProds = serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -523,9 +523,30 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 reseller_price: p.reseller_price ?? p.price_inr,
                 reseller_price_inr: p.reseller_price_inr ?? p.price_inr
               }));
-              setProducts(cleanProds);
 
-              // Continuously sync bot instances' internal products list to match cleanProds
+              setProducts(prev => {
+                const map = new Map<string, Product>();
+                // Preserve all current products in state
+                prev.forEach(p => {
+                  if (p && p.id !== undefined && p.is_active !== 0) {
+                    map.set(String(p.id).trim(), p);
+                  }
+                });
+                // Merge server products
+                cleanProds.forEach((sp: Product) => {
+                  if (sp && sp.id !== undefined) {
+                    const strId = String(sp.id).trim();
+                    const existing = map.get(strId);
+                    map.set(strId, { ...(existing || {}), ...sp });
+                  }
+                });
+                const merged = Array.from(map.values());
+                localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
+                offlineStorage.saveProducts(merged);
+                return merged;
+              });
+
+              // Continuously sync bot instances' internal products list to match merged products
               setBots(prev => prev.map(b => ({
                 ...b,
                 products: cleanProds,
@@ -2010,7 +2031,22 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Process purchase
   const handlePurchaseProduct = async (prodId: number | string, androidId?: string) => {
-    const prod = products.find(p => String(p.id) === String(prodId));
+    const cleanId = String(prodId).trim().replace(/^(?:prod_|buy_|pnl_|maint_pnl_|maint_)/, '');
+    let prod = products.find(p => String(p.id).trim() === cleanId || Number(p.id) === Number(cleanId));
+    if (!prod) {
+      let decoded = '';
+      try { decoded = decodeURIComponent(cleanId).toLowerCase().trim(); } catch { decoded = cleanId.toLowerCase().trim(); }
+      prod = products.find(p =>
+        (p.is_active !== 0) && (
+          (p.name || '').toLowerCase().trim() === decoded ||
+          (p.validity || '').toLowerCase().trim() === decoded ||
+          (p.panel_name || '').toLowerCase().trim() === decoded ||
+          `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+          (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
+        )
+      );
+    }
+
     if (!prod) {
       pushBotMessage("❌ Critical Error: Item not found in DB!", getBackKeyboard('menu_shop'));
       return;
@@ -2463,14 +2499,16 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
-            (p.panel_name || '').toLowerCase().trim() === decoded
+            (p.panel_name || '').toLowerCase().trim() === decoded ||
+            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
       }
 
       console.log(`[BotContext] [TRACE] Resolved Plan Object:`, prod ? { id: prod.id, panel: prod.panel_name, name: prod.name, validity: prod.validity, price: prod.price_inr } : 'NOT FOUND');
 
-      if (!prod || prod.is_active === 0) {
+      if (!prod || (prod.is_active !== undefined && prod.is_active === 0)) {
         pushBotMessage("❌ Product no longer available.", getBackKeyboard('menu_shop'));
         return;
       }
@@ -2582,7 +2620,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
-            (p.panel_name || '').toLowerCase().trim() === decoded
+            (p.panel_name || '').toLowerCase().trim() === decoded ||
+            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
       }

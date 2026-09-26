@@ -96,7 +96,7 @@
       "chat_id": 5255460348,
       "first_name": "𝙐𝙣𝙠𝙣𝙤𝙬𝙣 𝙑𝙞𝙗𝙚 👤",
       "username": "Unknown_143_1",
-      "balance": 0.5,
+      "balance": 1.5,
       "account_type": "Regular",
       "orders_count": 0,
       "spent": 0,
@@ -719,6 +719,27 @@
     }
   ],
   "logs": [
+    {
+      "id": 1790401925145,
+      "user_id": 5255460348,
+      "action": "DAILY_GIFT",
+      "details": "Claimed daily reward bonus of ₹1.00",
+      "timestamp": "2026-09-26 05:52:05"
+    },
+    {
+      "id": 1790398095084,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-26 04:48:15"
+    },
+    {
+      "id": 1790398090309,
+      "user_id": 12846461,
+      "action": "TG_CONNECT_SUCCESS",
+      "details": "Connected to Telegram Bot: @KALAMFFPANEL1BOT (𝙆𝘼𝙇𝘼𝙈 𝙁𝙁 𝙋𝘼𝙉𝙀𝙇 ⚡)",
+      "timestamp": "2026-09-26 04:48:10"
+    },
     {
       "id": 1790398066185,
       "user_id": 12345678,
@@ -1946,6 +1967,9 @@
   },
   "fsmStates": {
     "8282895979": {
+      "state": ""
+    },
+    "5255460348": {
       "state": ""
     }
   },

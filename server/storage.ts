@@ -465,13 +465,35 @@ export class DatabaseStore {
 
   public getProduct(id: number | string): Product | undefined {
     if (id === undefined || id === null) return undefined;
-    const strId = String(id).trim();
-    const numId = Number(strId);
-    return this.data.products.find(p => {
-      if (String(p.id).trim() === strId) return true;
+    let cleanStr = String(id).trim();
+    // Strip common callback prefixes if accidentally forwarded
+    cleanStr = cleanStr.replace(/^(?:prod_|buy_|pnl_|maint_pnl_|maint_)/, '').trim();
+    try {
+      cleanStr = decodeURIComponent(cleanStr).trim();
+    } catch {
+      // keep cleanStr
+    }
+
+    const numId = Number(cleanStr);
+    // 1. Direct ID match
+    const byId = this.data.products.find(p => {
+      if (String(p.id).trim() === cleanStr) return true;
       if (!isNaN(numId) && Number(p.id) === numId) return true;
       return false;
     });
+    if (byId) return byId;
+
+    // 2. Direct name, panel name, or validity matching
+    const lower = cleanStr.toLowerCase();
+    const byName = this.data.products.find(p => {
+      const pName = (p.name || '').trim().toLowerCase();
+      const panelName = (p.panel_name || '').trim().toLowerCase();
+      const combined = `${panelName} ${pName}`.trim().toLowerCase();
+      return pName === lower || panelName === lower || combined === lower;
+    });
+    if (byName) return byName;
+
+    return undefined;
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
@@ -498,7 +520,7 @@ export class DatabaseStore {
     if (existingIdx !== -1) {
       this.data.products[existingIdx] = finalProduct;
     } else {
-      this.data.products.unshift(finalProduct);
+      this.data.products.push(finalProduct);
     }
 
     if (cleanKeys.length > 0) {
@@ -547,7 +569,7 @@ export class DatabaseStore {
       if (existingIdx !== -1) {
         this.data.products[existingIdx] = finalProduct;
       } else {
-        this.data.products.unshift(finalProduct);
+        this.data.products.push(finalProduct);
       }
 
       if (cleanKeys.length > 0) {
