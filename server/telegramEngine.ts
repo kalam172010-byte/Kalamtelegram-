@@ -2788,7 +2788,7 @@ class TelegramEngine {
         } else {
           buttons.push([{
             text: `🎟️ ${plan.name.toUpperCase()} — ₹${userPrice.toFixed(2)}`,
-            callback_data: `buy_${plan.id}`,
+            callback_data: `prod_${plan.id}`,
             style: 'success'
           }]);
         }
@@ -2803,11 +2803,25 @@ class TelegramEngine {
     }
 
     if (data.startsWith('prod_')) {
-      const rawProdId = data.replace('prod_', '');
+      const rawProdId = data.replace('prod_', '').trim();
       console.log(`[TelegramEngine] [TRACE] Duration Plan Clicked: rawProdId="${rawProdId}"`);
       let product = dbStore.getProduct(rawProdId);
       if (!product) {
-        product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+        product = dbStore.getData().products.find(p => 
+          String(p.id).trim() === rawProdId || 
+          Number(p.id) === Number(rawProdId)
+        );
+      }
+      if (!product) {
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+        product = dbStore.getData().products.find(p =>
+          (p.is_active !== 0) && (
+            (p.name || '').toLowerCase().trim() === decoded ||
+            (p.validity || '').toLowerCase().trim() === decoded ||
+            (p.panel_name || '').toLowerCase().trim() === decoded
+          )
+        );
       }
 
       if (!product || product.is_active === 0) {
@@ -2964,10 +2978,24 @@ class TelegramEngine {
     }
 
     if (data.startsWith('buy_')) {
-      const rawProdId = data.replace('buy_', '');
+      const rawProdId = data.replace('buy_', '').trim();
       let product = dbStore.getProduct(rawProdId);
       if (!product) {
-        product = dbStore.getData().products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+        product = dbStore.getData().products.find(p => 
+          String(p.id).trim() === rawProdId || 
+          Number(p.id) === Number(rawProdId)
+        );
+      }
+      if (!product) {
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+        product = dbStore.getData().products.find(p =>
+          (p.is_active !== 0) && (
+            (p.name || '').toLowerCase().trim() === decoded ||
+            (p.validity || '').toLowerCase().trim() === decoded ||
+            (p.panel_name || '').toLowerCase().trim() === decoded
+          )
+        );
       }
 
       if (!product || product.is_active === 0) {

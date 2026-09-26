@@ -639,22 +639,36 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
       if (snapshot && !snapshot.empty) {
         const cloudProducts: Product[] = [];
+        const inactiveOrDeletedIds = new Set<string>();
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
-          if (p && p.id !== undefined && p.id !== null && p.is_active !== 0) {
+          const id = p?.id !== undefined && p?.id !== null ? String(p.id) : docSnap.id;
+          if (p && (p.is_active === 0 || (p as any).is_deleted)) {
+            inactiveOrDeletedIds.add(id);
+          } else if (p && p.id !== undefined && p.id !== null) {
             cloudProducts.push({
               ...p,
+              id: p.id,
               is_active: 1,
               reseller_price: p.reseller_price ?? p.price_inr,
               reseller_price_inr: p.reseller_price_inr ?? p.price_inr
             });
           }
         });
-        if (cloudProducts.length > 0) {
-          setProducts(cloudProducts);
-          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
-          offlineStorage.saveProducts(cloudProducts);
-          setBots(prev => prev.map(b => ({ ...b, products: cloudProducts })));
+        if (cloudProducts.length > 0 || inactiveOrDeletedIds.size > 0) {
+          setProducts(prev => {
+            const map = new Map<string, Product>();
+            prev.forEach(p => map.set(String(p.id), p));
+            inactiveOrDeletedIds.forEach(id => map.delete(id));
+            cloudProducts.forEach(cp => {
+              map.set(String(cp.id), { ...(map.get(String(cp.id)) || {}), ...cp });
+            });
+            const merged = Array.from(map.values());
+            localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
+            offlineStorage.saveProducts(merged);
+            setBots(prevBots => prevBots.map(b => ({ ...b, products: merged })));
+            return merged;
+          });
         }
       }
     }, (err: any) => {
@@ -2421,7 +2435,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           kb.push([{
             text: `🎟️ ${p.name.toUpperCase()} — ₹${finalPrice.toFixed(2)}`,
-            callback_data: `buy_${p.id}`,
+            callback_data: `prod_${p.id}`,
             style: "success"
           }]);
         }
@@ -2439,9 +2453,20 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4a. Single Product Plan View
     if (callbackData.startsWith('prod_')) {
-      const rawProdId = callbackData.replace('prod_', '');
+      const rawProdId = callbackData.replace('prod_', '').trim();
       console.log(`[BotContext] [TRACE] Plan Clicked: rawProdId="${rawProdId}"`);
-      const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      let prod = products.find(p => String(p.id).trim() === rawProdId || Number(p.id) === Number(rawProdId));
+      if (!prod) {
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+        prod = products.find(p =>
+          (p.is_active !== 0) && (
+            (p.name || '').toLowerCase().trim() === decoded ||
+            (p.validity || '').toLowerCase().trim() === decoded ||
+            (p.panel_name || '').toLowerCase().trim() === decoded
+          )
+        );
+      }
 
       console.log(`[BotContext] [TRACE] Resolved Plan Object:`, prod ? { id: prod.id, panel: prod.panel_name, name: prod.name, validity: prod.validity, price: prod.price_inr } : 'NOT FOUND');
 
@@ -2548,8 +2573,19 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 6. Buy Product
     if (callbackData.startsWith('buy_')) {
-      const rawProdId = callbackData.replace('buy_', '');
-      const prod = products.find(p => String(p.id) === String(rawProdId) || Number(p.id) === Number(rawProdId));
+      const rawProdId = callbackData.replace('buy_', '').trim();
+      let prod = products.find(p => String(p.id).trim() === rawProdId || Number(p.id) === Number(rawProdId));
+      if (!prod) {
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+        prod = products.find(p =>
+          (p.is_active !== 0) && (
+            (p.name || '').toLowerCase().trim() === decoded ||
+            (p.validity || '').toLowerCase().trim() === decoded ||
+            (p.panel_name || '').toLowerCase().trim() === decoded
+          )
+        );
+      }
       if (prod) {
         handlePurchaseProduct(prod.id);
       } else {
@@ -3825,6 +3861,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_ADD_PRODUCT', `Added ${newProduct.name} (${cleanKeys.length} keys)`);
 
+    // Sync directly to Firestore and offline storage
+    setDoc(doc(db, 'products', String(newId)), newProduct).catch(() => {});
+    offlineStorage.saveProducts([newProduct, ...products.filter(p => p.id !== newId)]);
+
     // Sync in Real-Time to Backend Server (Live Telegram Engine Storage & Cloud Firestore)
     try {
       const res = await fetch('/api/products', {
@@ -4044,7 +4084,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // CRITICAL: Delete from Firestore directly and update offline storage
     deleteDoc(doc(db, 'products', strId)).catch(() => {});
-    updateDoc(doc(db, 'products', strId), { is_active: 0 }).catch(() => {});
     offlineStorage.saveProducts(products.filter(p => String(p.id) !== strId));
 
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
@@ -4098,7 +4137,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     ids.forEach(id => {
       const sId = String(id);
       deleteDoc(doc(db, 'products', sId)).catch(() => {});
-      updateDoc(doc(db, 'products', sId), { is_active: 0 }).catch(() => {});
     });
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCTS', `Batch deleted ${ids.length} products`);
@@ -4178,7 +4216,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     // CRITICAL: Delete each document directly from Firestore
     deletedIds.forEach(id => {
       deleteDoc(doc(db, 'products', id)).catch(() => {});
-      updateDoc(doc(db, 'products', id), { is_active: 0 }).catch(() => {});
     });
 
     logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);

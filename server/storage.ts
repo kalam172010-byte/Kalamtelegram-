@@ -465,7 +465,13 @@ export class DatabaseStore {
 
   public getProduct(id: number | string): Product | undefined {
     if (id === undefined || id === null) return undefined;
-    return this.data.products.find(p => String(p.id) === String(id));
+    const strId = String(id).trim();
+    const numId = Number(strId);
+    return this.data.products.find(p => {
+      if (String(p.id).trim() === strId) return true;
+      if (!isNaN(numId) && Number(p.id) === numId) return true;
+      return false;
+    });
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
