@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useBot, isMaintenanceActive } from '../../context/BotContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatTelegramHTML } from '../../utils/telegramFormatter';
+import { sortProductsByDuration, isCategoryMatch, getCanonicalCategory, getCanonicalPanelName } from '../../utils/durationSorter';
 import {
   Users,
   Package,
@@ -61,7 +62,6 @@ import {
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Product, BotInstance } from '../../types';
-import { sortProductsByDuration } from '../../utils/durationSorter';
 import { SystemHealthWidget } from './SystemHealthWidget';
 import { PurchaseLogs } from './PurchaseLogs';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
@@ -574,18 +574,9 @@ export const AdminDashboard: React.FC = () => {
     String(u.chat_id || u.user_id || '').includes(userSearch)
   );
 
-  const filteredProducts = selectedCategory === 'ALL'
-    ? products
-    : products.filter(p => {
-        const catNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const selNorm = selectedCategory.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (catNorm === selNorm) return true;
-        if (catNorm.includes('nonroot') && selNorm.includes('nonroot')) return true;
-        if (!catNorm.includes('non') && catNorm.includes('root') && !selNorm.includes('non') && selNorm.includes('root')) return true;
-        if (catNorm.includes('pc') && selNorm.includes('pc')) return true;
-        if ((catNorm.includes('ios') || catNorm.includes('ipa')) && (selNorm.includes('ios') || selNorm.includes('ipa'))) return true;
-        return false;
-      });
+  const filteredProducts = products
+    .filter(p => p.is_active !== 0)
+    .filter(p => selectedCategory === 'ALL' ? true : isCategoryMatch(p.category, selectedCategory));
 
   // Accordion state: Panels collapsed by default or tapped to open
   const [expandedPanels, setExpandedPanels] = useState<Record<string, boolean>>({});
@@ -697,7 +688,7 @@ export const AdminDashboard: React.FC = () => {
 
   const resetAddProductState = () => {
     setMultiProdForm({
-      category: '',
+      category: 'ANDROID NON ROOT PANEL',
       panel_name: '',
       apk_link: '',
       device_limit: '',
@@ -715,7 +706,10 @@ export const AdminDashboard: React.FC = () => {
     if (!multiProdForm.panel_name.trim() || multiProdForm.plans.length === 0) return;
 
     try {
-      const category = multiProdForm.category.trim() || 'ANDROID NON ROOT PANEL';
+      let category = multiProdForm.category.trim();
+      if (!category || category === 'ALL PRODUCTS' || category === 'ALL') {
+        category = 'ANDROID NON ROOT PANEL';
+      }
       const panelName = multiProdForm.panel_name.trim();
       const productsToCreate: Product[] = [];
       const keysMap: Record<string, string[]> = {};
@@ -2012,9 +2006,10 @@ export const AdminDashboard: React.FC = () => {
                   className="bg-[#1a1638] text-purple-200 border border-purple-800/60 rounded-xl px-3 py-2 text-xs font-semibold outline-none cursor-pointer hover:border-purple-600 transition"
                 >
                   <option value="ALL">All Categories</option>
-                  <option value="ANDROID NON ROOT PANEL">ANDROID NON ROOT PANEL</option>
-                  <option value="ANDROID ROOT PANEL">ANDROID ROOT PANEL</option>
-                  <option value="PC PANEL">PC PANEL</option>
+                  <option value="ANDROID NON ROOT PANEL">📱 ANDROID NON ROOT PANEL</option>
+                  <option value="ANDROID ROOT PANEL">⚡ ANDROID ROOT PANEL</option>
+                  <option value="PC PANEL">💻 PC PANEL</option>
+                  <option value="IOS / IPA PANEL">🍏 IOS / IPA PANEL</option>
                 </select>
 
                 <div className="flex items-center bg-[#130f2b] p-1 rounded-xl border border-purple-900/60 text-xs">
@@ -2082,12 +2077,14 @@ export const AdminDashboard: React.FC = () => {
                   }>();
 
                   filteredProducts.forEach(p => {
-                    const groupKey = `${p.category}:::${p.panel_name || p.name}`;
+                    const cat = getCanonicalCategory(p.category);
+                    const pName = getCanonicalPanelName(p);
+                    const groupKey = `${cat}:::${pName.toUpperCase()}`;
                     if (!panelMap.has(groupKey)) {
                       panelMap.set(groupKey, {
                         key: groupKey,
-                        category: p.category,
-                        panel_name: p.panel_name || p.name,
+                        category: cat,
+                        panel_name: pName,
                         apk_link: p.apk_link,
                         device_limit: p.device_limit,
                         delivery_mode: p.delivery_mode,
@@ -2098,7 +2095,11 @@ export const AdminDashboard: React.FC = () => {
                       });
                     }
                     const grp = panelMap.get(groupKey)!;
-                    grp.plans.push(p);
+                    grp.plans.push({
+                      ...p,
+                      category: cat,
+                      panel_name: pName
+                    });
                     const inStock = productKeys.filter(k => k.product_id === p.id && !k.is_used).length;
                     grp.totalStock += inStock;
                   });
@@ -6132,19 +6133,17 @@ export const AdminDashboard: React.FC = () => {
                   Device Category <span className="text-slate-500 font-normal">(optional)</span>
                 </label>
                 <select
-                  value={multiProdForm.category}
+                  value={multiProdForm.category || 'ANDROID NON ROOT PANEL'}
                   onChange={(e) => setMultiProdForm({ ...multiProdForm, category: e.target.value })}
                   className="w-full bg-[#0b0e1b] border border-slate-700/80 rounded-xl p-2.5 text-slate-200 outline-none font-medium focus:border-indigo-500 transition"
                 >
-                  <option value="ALL PRODUCTS">Choose Category</option>
-                  <option value="ANDROID NON ROOT PANEL">ANDROID NON ROOT PANEL</option>
-                  <option value="ANDROID ROOT PANEL">ANDROID ROOT PANEL</option>
-                  <option value="PC PANEL">PC PANEL</option>
-                  <option value="IOS / IPA PANEL">IOS / IPA PANEL</option>
-                  <option value="ALL PRODUCTS">ALL PRODUCTS (General)</option>
+                  <option value="ANDROID NON ROOT PANEL">📱 ANDROID NON ROOT PANEL</option>
+                  <option value="ANDROID ROOT PANEL">⚡ ANDROID ROOT PANEL</option>
+                  <option value="PC PANEL">💻 PC PANEL</option>
+                  <option value="IOS / IPA PANEL">🍏 IOS / IPA PANEL</option>
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Leave unchosen and this product shows under &quot;All Products&quot; instead of a specific device type.
+                  Select the exact device target environment for this panel package.
                 </p>
               </div>
 

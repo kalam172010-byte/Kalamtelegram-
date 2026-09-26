@@ -84,6 +84,44 @@ export function isCategoryMatch(prodCategory?: string, targetCategory?: string):
   return pNorm === tNorm;
 }
 
+export function getCanonicalCategory(catStr?: string): string {
+  if (!catStr) return 'ANDROID NON ROOT PANEL';
+  const c = catStr.trim();
+  if (isCategoryMatch(c, 'nonroot')) return 'ANDROID NON ROOT PANEL';
+  if (isCategoryMatch(c, 'root')) return 'ANDROID ROOT PANEL';
+  if (isCategoryMatch(c, 'pc')) return 'PC PANEL';
+  if (isCategoryMatch(c, 'ios')) return 'IOS / IPA PANEL';
+  const upper = c.toUpperCase();
+  if (upper === 'ALL' || upper === 'ALL PRODUCTS' || upper === 'ALL PANELS') {
+    return 'ANDROID NON ROOT PANEL';
+  }
+  return upper;
+}
+
+export function getCanonicalPanelName(prod?: { panel_name?: string; name?: string }): string {
+  if (!prod) return 'VIP PANEL';
+  const rawPanel = (prod.panel_name || '').trim();
+  const rawName = (prod.name || '').trim();
+
+  const durationKeywords = [
+    '1 day', '2 days', '3 days', '7 days', '15 days', '30 days', 
+    'lifetime', '1 month', '2 months', '3 months', '1 year', 
+    '1 hour', '2 hours', '3 hours', '5 hours', '6 hours', '12 hours', 'plan'
+  ];
+
+  if (rawPanel && !durationKeywords.includes(rawPanel.toLowerCase())) {
+    return rawPanel;
+  }
+
+  if (rawName.includes(' - ')) {
+    return rawName.split(' - ')[0].trim();
+  }
+
+  if (rawPanel) return rawPanel;
+  return rawName || 'VIP PANEL';
+}
+
+
 class TelegramEngine {
   private isRunning: boolean = false;
   private isStarting: boolean = false;
@@ -2583,7 +2621,7 @@ class TelegramEngine {
       // Group products by unique panel_name
       const panelMap = new Map<string, typeof allCatProducts>();
       for (const prod of allCatProducts) {
-        const pName = prod.panel_name || prod.name || 'VIP PANEL';
+        const pName = getCanonicalPanelName(prod);
         if (!panelMap.has(pName)) {
           panelMap.set(pName, []);
         }
@@ -2682,13 +2720,14 @@ class TelegramEngine {
         return;
       }
 
-      const targetCategory = refProduct.category;
-      const targetPanelName = refProduct.panel_name || refProduct.name;
+      const targetCategory = getCanonicalCategory(refProduct.category);
+      const targetPanelName = getCanonicalPanelName(refProduct);
 
       let panelPlans = dbStore.getData().products.filter(p =>
         p.is_active !== 0 &&
         isCategoryMatch(p.category, targetCategory) &&
         (
+          getCanonicalPanelName(p).toLowerCase() === targetPanelName.toLowerCase() ||
           (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
           normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
         )

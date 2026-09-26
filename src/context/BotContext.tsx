@@ -55,7 +55,7 @@ import { DEFAULT_EMOJIS,
 } from '../data/defaultData';
 import { generateQrDataUrl, buildUpiUri } from '../utils/qrGenerator';
 import { offlineStorage } from '../utils/offlineStorage';
-import { sortProductsByDuration, isCategoryMatch, normalizeCategoryName } from '../utils/durationSorter';
+import { sortProductsByDuration, isCategoryMatch, normalizeCategoryName, getCanonicalCategory, getCanonicalPanelName } from '../utils/durationSorter';
 
 export function isMaintenanceActive(settings?: { bot_status?: string; maintenance_mode?: boolean | string | number } | null): boolean {
   if (!settings) return false;
@@ -641,10 +641,10 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cloudProducts: Product[] = [];
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
-          if (p && p.id !== undefined && p.id !== null) {
+          if (p && p.id !== undefined && p.id !== null && p.is_active !== 0) {
             cloudProducts.push({
               ...p,
-              is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
+              is_active: 1,
               reseller_price: p.reseller_price ?? p.price_inr,
               reseller_price_inr: p.reseller_price_inr ?? p.price_inr
             });
@@ -2245,7 +2245,7 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
       // Group panels strictly within this category
       const panelMap = new Map<string, Product[]>();
       for (const prod of catProds) {
-        const pName = (prod.panel_name || prod.name || 'VIP PANEL').trim();
+        const pName = getCanonicalPanelName(prod);
         if (!panelMap.has(pName)) {
           panelMap.set(pName, []);
         }
@@ -2318,13 +2318,16 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
 
       const refProd = products.find(p => String(p.id) === String(rawPayload) || Number(p.id) === Number(rawPayload));
       if (refProd) {
-        category = refProd.category;
-        panelName = (refProd.panel_name || refProd.name).trim();
+        category = getCanonicalCategory(refProd.category);
+        panelName = getCanonicalPanelName(refProd);
         const targetPanelNorm = panelName.toLowerCase();
         prods = products.filter(p =>
           p.is_active !== 0 &&
           isCategoryMatch(p.category, category) &&
-          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelNorm
+          (
+            getCanonicalPanelName(p).toLowerCase() === targetPanelNorm ||
+            (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelNorm
+          )
         );
         if (prods.length === 0) {
           prods = [refProd];
@@ -2333,11 +2336,14 @@ ${androidId ? `🔒 <b>Bound HWID:</b> <code>${androidId}</code>\n` : ''}━━�
         const decodedPayload = decodeURIComponent(rawPayload).toLowerCase().trim();
         prods = products.filter(p =>
           p.is_active !== 0 &&
-          (p.panel_name || p.name || '').trim().toLowerCase() === decodedPayload
+          (
+            getCanonicalPanelName(p).toLowerCase() === decodedPayload ||
+            (p.panel_name || p.name || '').trim().toLowerCase() === decodedPayload
+          )
         );
         if (prods.length > 0) {
-          panelName = (prods[0].panel_name || prods[0].name).trim();
-          category = prods[0].category;
+          panelName = getCanonicalPanelName(prods[0]);
+          category = getCanonicalCategory(prods[0].category);
         }
       }
 
@@ -3876,6 +3882,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_ADD_PRODUCTS_BATCH', `Added ${cleanProducts.length} plans (${newKeyEntities.length} keys)`);
 
+    // Sync directly to Firestore
+    cleanProducts.forEach(prod => {
+      setDoc(doc(db, 'products', String(prod.id)), prod).catch(() => {});
+    });
+
     try {
       const res = await fetch('/api/products', {
         method: 'POST',
@@ -3928,6 +3939,10 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     logActivity(12846461, 'ADMIN_UPDATE_PRODUCT', `Product #${id} updated`);
 
     if (updatedProduct) {
+      // Sync directly to Firestore
+      updateDoc(doc(db, 'products', strId), { ...updatedProduct } as any).catch(() => {});
+      offlineStorage.saveProducts(products.map(p => String(p.id) === strId ? updatedProduct! : p));
+
       // Sync in Real-Time to Backend Server (Live Telegram Engine Storage & Cloud Firestore)
       fetch('/api/products', {
         method: 'POST',
@@ -4004,6 +4019,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${strId} deleted`);
 
+    // CRITICAL: Delete from Firestore directly and update offline storage
+    deleteDoc(doc(db, 'products', strId)).catch(() => {});
+    updateDoc(doc(db, 'products', strId), { is_active: 0 }).catch(() => {});
+    offlineStorage.saveProducts(products.filter(p => String(p.id) !== strId));
+
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
       method: 'POST',
@@ -4033,6 +4053,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setProducts(prev => {
       const updated = prev.filter(p => !strIds.has(String(p.id)));
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      offlineStorage.saveProducts(updated);
       return updated;
     });
     setProductKeys(prev => {
@@ -4048,6 +4069,13 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
+    });
+
+    // CRITICAL: Delete from Firestore directly
+    ids.forEach(id => {
+      const sId = String(id);
+      deleteDoc(doc(db, 'products', sId)).catch(() => {});
+      updateDoc(doc(db, 'products', sId), { is_active: 0 }).catch(() => {});
     });
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCTS', `Batch deleted ${ids.length} products`);
@@ -4102,6 +4130,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         return true;
       });
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      offlineStorage.saveProducts(updated);
       return updated;
     });
 
@@ -4121,6 +4150,12 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
+    });
+
+    // CRITICAL: Delete each document directly from Firestore
+    deletedIds.forEach(id => {
+      deleteDoc(doc(db, 'products', id)).catch(() => {});
+      updateDoc(doc(db, 'products', id), { is_active: 0 }).catch(() => {});
     });
 
     logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);

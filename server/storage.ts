@@ -274,9 +274,9 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Sync Products & Keys (Only restore from remote if local disk is empty)
+      // 3. Sync Products & Keys (Do NOT resurrect deleted products if local store explicitly initialized)
       if (Array.isArray(remote.products) && remote.products.length > 0) {
-        if (!this.data.products || this.data.products.length === 0) {
+        if (this.data.products === undefined || this.data.products === null) {
           console.log(`⚡ Firestore: Restoring ${remote.products.length} products to fresh disk store...`);
           this.data.products = remote.products.map((p: any, idx: number) => ({
             ...p,
