@@ -261,6 +261,10 @@ export interface SystemHealthData {
 export interface Settings {
   bot_token: string;
   bot_username: string;
+  creator_bot_token?: string;
+  creator_bot_username?: string;
+  creator_bot_name?: string;
+  creator_bot_status?: 'ON' | 'OFF';
   admin_id: number;
   admin_contact: string;
   reseller_system_status: 'ON' | 'OFF';
@@ -314,7 +318,9 @@ export interface InlineKeyboardButton {
   callback_data?: string;
   url?: string;
   icon_custom_emoji_id?: string;
-  style?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning';
+  style?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning' | 'purple' | 'amber' | 'cyan' | 'rose' | 'emerald' | 'gold' | 'neon' | string;
+  color?: string;
+  bg_color?: string;
 }
 
 export interface ChatMessage {
@@ -340,9 +346,9 @@ export interface ChatMessage {
   };
 }
 
-export type ViewTab = 'dashboard' | 'my_bots' | 'create_bot' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
+export type ViewTab = 'dashboard' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
-export type AdminTab = 'overview' | 'appinstall' | 'bots' | 'health' | 'products' | 'purchases' | 'users' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'gateways' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine';
+export type AdminTab = 'overview' | 'appinstall' | 'products' | 'purchases' | 'users' | 'gateways' | 'health' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine';
 
 export interface ProviderBalanceState {
   success: boolean;

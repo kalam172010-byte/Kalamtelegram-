@@ -522,7 +522,9 @@ export const AdminDashboard: React.FC = () => {
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [showAddKeysModal, setShowAddKeysModal] = useState<number | null>(null);
   const [newKeysText, setNewKeysText] = useState('');
-  const [panelToDelete, setPanelToDelete] = useState<{ category: string; panelName: string } | null>(null);
+  const [panelToDelete, setPanelToDelete] = useState<{ category: string; panelName: string; plans?: Product[] } | null>(null);
+  const [planToDelete, setPlanToDelete] = useState<Product | null>(null);
+  const [deleteToast, setDeleteToast] = useState<string | null>(null);
 
   // Multi-Plan Product Creation Form State
   const [multiProdForm, setMultiProdForm] = useState({
@@ -864,8 +866,19 @@ export const AdminDashboard: React.FC = () => {
     });
   };
 
-  const handleDeleteEntirePanel = (category: string, panelName: string) => {
-    deletePanel(category, panelName);
+  const handleDeleteEntirePanel = (category: string, panelName: string, plans?: Product[]) => {
+    const planIds = plans ? plans.map(p => p.id) : undefined;
+    deletePanel(category, panelName, planIds);
+    setPanelToDelete(null);
+    setDeleteToast(`✅ Product "${panelName}" deleted successfully.`);
+    setTimeout(() => setDeleteToast(null), 3500);
+  };
+
+  const handleConfirmDeletePlan = (plan: Product) => {
+    deleteProduct(plan.id);
+    setPlanToDelete(null);
+    setDeleteToast(`✅ Plan "${plan.name || plan.validity}" deleted successfully.`);
+    setTimeout(() => setDeleteToast(null), 3500);
   };
 
   const handleOpenEditProduct = (prod: Product) => {
@@ -1234,7 +1247,7 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Top Mobile-First Command Action Hub (Large Touch Cards - Always at Top & Fully Visible) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 shrink-0">
         {[
           {
             id: 'overview',
@@ -1242,14 +1255,6 @@ export const AdminDashboard: React.FC = () => {
             subtitle: `₹${totalRevenue.toFixed(0)} Rev`,
             icon: Zap,
             color: 'from-cyan-500/20 to-blue-600/20 border-cyan-500/30 text-cyan-300'
-          },
-          {
-            id: 'bots',
-            title: 'Bot Fleet',
-            subtitle: `${bots.length} Active`,
-            icon: Bot,
-            badge: `${bots.length}`,
-            color: 'from-indigo-500/20 to-purple-600/20 border-indigo-500/30 text-indigo-300'
           },
           {
             id: 'products',
@@ -1333,18 +1338,17 @@ export const AdminDashboard: React.FC = () => {
       <div className="liquid-glass-pill rounded-2xl p-1 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
         {[
           { id: 'overview', label: '📊 Overview', icon: Zap },
-          { id: 'appinstall', label: '📱 App Download (PWA)', icon: Smartphone },
-          { id: 'bots', label: `🤖 Bot Fleet (${bots.length})`, icon: Bot },
-          { id: 'botcommands', label: '🤖 Bot Commands', icon: Code2 },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
           { id: 'purchases', label: `🛍️ Purchase Logs (${orders.length})`, icon: ShoppingBag },
           { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
+          { id: 'gateways', label: '💳 Payment & Settings', icon: CreditCard },
           { id: 'referrals', label: '🎁 Referral Program', icon: Gift },
           { id: 'broadcast', label: '📢 Broadcast', icon: Megaphone },
-          { id: 'gateways', label: '💳 Payment & Settings', icon: CreditCard },
           { id: 'health', label: '⚡ Health & Diagnostics', icon: Activity },
           { id: 'tickets', label: `🎫 Tickets (${openTicketsCount})`, icon: TicketIcon, badge: openTicketsCount > 0 },
           { id: 'coupons', label: `🏷️ Coupons (${coupons.length})`, icon: Tag },
+          { id: 'botcommands', label: '🤖 Bot Commands', icon: Code2 },
+          { id: 'appinstall', label: '📱 App Download (PWA)', icon: Smartphone },
           { id: 'emojis', label: '✨ Custom Emojis', icon: Sparkles },
           { id: 'logs', label: '📜 Live Logs', icon: FileText },
           { id: 'code', label: '💻 Python Source', icon: Code2 }
@@ -1379,357 +1383,6 @@ export const AdminDashboard: React.FC = () => {
         {adminTab === 'appinstall' && (
           <div className="space-y-6 max-w-6xl mx-auto">
             <PWAInstallCard />
-          </div>
-        )}
-
-        {/* ================= OVERVIEW TAB ================= */}
-        {adminTab === 'overview' && (
-          <div className="space-y-6 max-w-6xl mx-auto">
-            <PWAInstallCard />
-          </div>
-        )}
-
-        {/* ================= BOT FLEET & CLONER TAB ================= */}
-        {adminTab === 'bots' && (
-          <div className="space-y-6 max-w-6xl mx-auto">
-            {/* Header & Clone Call-to-action */}
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-4 relative z-10">
-                <div className="space-y-1.5 max-w-2xl">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-cyan-500/20 text-cyan-300 font-bold px-2.5 py-0.5 rounded-full border border-cyan-500/30">
-                      Multi-Bot Architecture
-                    </span>
-                    <span className="text-xs bg-purple-500/20 text-purple-300 font-bold px-2.5 py-0.5 rounded-full border border-purple-500/30">
-                      Isolated API Keys & Admins
-                    </span>
-                  </div>
-                  <h2 className="text-xl md:text-2xl font-black text-white">
-                    Telegram Bot Fleet & Instance Cloner
-                  </h2>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Clone as many independent bots as you need. Every cloned bot instance runs with its own <b>Telegram Bot Token</b>, <b>Admin Chat ID</b> (which allows running <code className="text-amber-300 font-mono">@admin</code> or <code className="text-amber-300 font-mono">/admin</code> within that specific bot), <b>FamGateway UPI Key</b>, and <b>BantiBhaiya Reseller API Key</b>.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBotForm({
-                        name: `Kalam Store Bot #${bots.length + 1}`,
-                        username: `kalam_store${bots.length + 1}_bot`,
-                        bot_token: '',
-                        admin_id: String(activeBot?.admin_id || settings.admin_id || 12846461),
-                        description: 'Automated Telegram Shop with independent API keys and admin authorization.',
-                        fampay_upi_id: activeBot?.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam',
-                        famgateway_api_key: '',
-                        bantibhaiya_api_key: '',
-                        bantibhaiya_master_key: '',
-                        clone_products: true
-                      });
-                      setShowCreateBotModal(true);
-                    }}
-                    className="px-5 py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-2xl text-xs md:text-sm font-bold shadow-lg shadow-cyan-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Clone New Bot Instance</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Currently Active Bot Spotlight Banner */}
-            {activeBot && (
-              <div className="bg-slate-900 border-2 border-cyan-500/40 rounded-2xl p-5 shadow-lg space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg">
-                      🤖
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs uppercase tracking-wider font-bold text-cyan-400">Currently Active Bot</span>
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
-                          LIVE ENGINE
-                        </span>
-                      </div>
-                      <h3 className="text-base font-bold text-white">
-                        {activeBot.name} <span className="text-cyan-300 text-xs font-mono">(@{activeBot.username})</span>
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('my_bots')}
-                      className="px-3.5 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Bot className="w-3.5 h-3.5" />
-                      Manage Bot Fleet
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminTab('gateways')}
-                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Wrench className="w-3.5 h-3.5" />
-                      Configure APIs
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[11px] mb-1">Admin Chat ID (@admin root):</span>
-                    <div className="flex items-center justify-between font-mono text-amber-300 font-bold">
-                      <span>{activeBot.admin_id || activeBot.admin_chat_id || settings.admin_id}</span>
-                      <span className="text-[10px] bg-amber-500/10 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
-                        Root Access
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[11px] mb-1">Bot Token Status:</span>
-                    <div className="text-slate-200 font-mono text-[11px] truncate">
-                      {activeBot.bot_token ? `${activeBot.bot_token.substring(0, 10)}...` : 'Using Server Token'}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[11px] mb-1">FamGateway UPI:</span>
-                    <div className="text-slate-200 font-mono text-[11px] truncate">
-                      {activeBot.payment_gateway?.upi_id || settings.fampay_upi_id || 'Not set'}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[11px] mb-1">Reseller Provider API:</span>
-                    <div className="text-indigo-300 font-mono text-[11px] truncate">
-                      {activeBot.reseller_api?.api_key ? 'Isolated Key Set ✅' : 'Default Key'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* List of All Bots in Fleet */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Bot className="w-5 h-5 text-cyan-400" />
-                  Your Registered Bot Fleet ({bots.length} Bots)
-                </h3>
-                <span className="text-xs text-slate-400">Click &quot;Switch Active&quot; to manage any bot&apos;s isolated products and API keys.</span>
-              </div>
-
-              {bots.length === 0 ? (
-                <div className="bg-slate-900/80 border border-dashed border-slate-700 rounded-3xl p-8 text-center space-y-4">
-                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto text-2xl">
-                    🤖
-                  </div>
-                  <div className="space-y-1 max-w-md mx-auto">
-                    <h4 className="text-base font-bold text-white">No Bots Configured Yet</h4>
-                    <p className="text-xs text-slate-400">
-                      All demo bots have been removed. Click <b>&quot;+ Clone New Bot Instance&quot;</b> or <b>&quot;Create First Bot&quot;</b> above to connect your real Telegram bot with your bot token and admin ID.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBotForm({
-                        name: 'My Telegram Shop Bot',
-                        username: '',
-                        bot_token: '',
-                        admin_id: String(settings.admin_id || 12846461),
-                        description: 'Automated Telegram Shop with independent API keys and admin authorization.',
-                        fampay_upi_id: settings.fampay_upi_id || 'kalampanel@fam',
-                        famgateway_api_key: '',
-                        bantibhaiya_api_key: '',
-                        bantibhaiya_master_key: '',
-                        clone_products: true
-                      });
-                      setShowCreateBotModal(true);
-                    }}
-                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg transition inline-flex items-center gap-2 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Your Bot Now</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {bots.map((bot, idx) => {
-                    const isActive = activeBot?.id === bot.id;
-                    const botAdminId = bot.admin_id || bot.admin_chat_id || settings.admin_id;
-
-                    return (
-                      <div
-                        key={`fleet-bot-${bot.id || idx}`}
-                        className={`bg-slate-900 border rounded-2xl p-5 space-y-4 transition ${
-                          isActive
-                            ? 'border-cyan-500 shadow-md shadow-cyan-500/10 bg-slate-900/90'
-                            : 'border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        {/* Top Row: Info & Status */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-base shadow">
-                              🤖
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-white text-sm md:text-base">{bot.name}</h4>
-                                {isActive && (
-                                  <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
-                                    ACTIVE
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-cyan-400 font-mono">@{bot.username}</p>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
-                              bot.status === 'ONLINE'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                            }`}
-                          >
-                            ● {bot.status}
-                          </span>
-                        </div>
-
-                        {/* Bot Parameters & Isolated APIs */}
-                        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-2 text-xs">
-                          {/* Admin Chat ID (Crucial User Requirement) */}
-                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                            <span className="text-slate-400 font-semibold flex items-center gap-1.5">
-                              <Shield className="w-3.5 h-3.5 text-amber-400" />
-                              Admin Chat ID (@admin auth):
-                            </span>
-                            <span className="font-mono text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                              {botAdminId}
-                            </span>
-                          </div>
-
-                          {/* Bot Token Preview */}
-                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                            <span className="text-slate-400 font-semibold">Bot Token:</span>
-                            <div className="flex items-center gap-1.5 font-mono text-slate-300 text-[11px]">
-                              <span>
-                                {bot.bot_token
-                                  ? copiedBotTokenId === bot.id
-                                    ? bot.bot_token
-                                    : `${bot.bot_token.substring(0, 10)}...`
-                                  : 'Default Token'}
-                              </span>
-                              {bot.bot_token && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(bot.bot_token);
-                                    setCopiedBotTokenId(bot.id);
-                                    setTimeout(() => setCopiedBotTokenId(null), 2000);
-                                  }}
-                                  className="text-cyan-400 hover:text-cyan-300"
-                                >
-                                  {copiedBotTokenId === bot.id ? '✓' : <Copy className="w-3 h-3" />}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* FamGateway UPI */}
-                          <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                            <span className="text-slate-400 font-semibold">FamGateway UPI:</span>
-                            <span className="font-mono text-slate-300 text-[11px]">
-                              {bot.payment_gateway?.upi_id || settings.fampay_upi_id || 'kalampanel@fam'}
-                            </span>
-                          </div>
-
-                          {/* Reseller API */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400 font-semibold">BantiBhaiya API Key:</span>
-                            <span className="font-mono text-indigo-300 text-[11px]">
-                              {bot.reseller_api?.api_key ? '••••' + bot.reseller_api.api_key.slice(-4) : 'Default Provider'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                          <div className="flex items-center gap-2">
-                            {!isActive ? (
-                              <button
-                                type="button"
-                                onClick={() => switchActiveBot(bot.id)}
-                                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow"
-                              >
-                                <Zap className="w-3.5 h-3.5" />
-                                Switch Active
-                              </button>
-                            ) : (
-                              <span className="px-4 py-2 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                Active Live Bot
-                              </span>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => duplicateBot(bot.id)}
-                              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
-                              title="Quick duplicate bot"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-slate-400" />
-                              Clone
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingBotId(bot.id);
-                                setEditBotForm({
-                                  name: bot.name,
-                                  username: bot.username,
-                                  bot_token: bot.bot_token,
-                                  admin_id: String(bot.admin_id || bot.admin_chat_id || settings.admin_id),
-                                  status: bot.status,
-                                  fampay_upi_id: bot.payment_gateway?.upi_id || '',
-                                  famgateway_api_key: bot.payment_gateway?.api_key || '',
-                                  bantibhaiya_api_key: bot.reseller_api?.api_key || '',
-                                  bantibhaiya_master_key: bot.reseller_api?.master_key || ''
-                                });
-                              }}
-                              className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-xl text-xs font-semibold transition cursor-pointer"
-                              title="Edit Bot APIs & Admin ID"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setBotToDelete(bot)}
-                              className="p-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 rounded-xl text-xs font-semibold transition cursor-pointer"
-                              title="Delete Bot"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -2506,7 +2159,7 @@ export const AdminDashboard: React.FC = () => {
                           {/* 4. Delete */}
                           <button
                             type="button"
-                            onClick={() => handleDeleteEntirePanel(group.category, group.panel_name)}
+                            onClick={() => setPanelToDelete({ category: group.category, panelName: group.panel_name, plans: group.plans })}
                             className="py-2.5 px-3 bg-[#24142b] hover:bg-[#381a42] text-rose-300 border border-rose-900/60 hover:border-rose-600/70 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-400" />
@@ -2617,7 +2270,7 @@ export const AdminDashboard: React.FC = () => {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => deleteProduct(plan.id)}
+                                          onClick={() => setPlanToDelete(plan)}
                                           className="py-1 px-1.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 border border-rose-900/40 cursor-pointer"
                                         >
                                           <Trash2 className="w-2.5 h-2.5" />
@@ -2733,7 +2386,7 @@ export const AdminDashboard: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => deleteProduct(prod.id)}
+                                onClick={() => setPlanToDelete(prod)}
                                 className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-lg transition cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -3381,11 +3034,11 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('my_bots')}
+                    onClick={() => handleTabChange('gateways')}
                     className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-semibold cursor-pointer transition"
                   >
                     <Bot className="w-3.5 h-3.5" />
-                    Manage Bot Fleet
+                    Bot Settings
                   </button>
                 </div>
               </div>
@@ -4164,10 +3817,10 @@ export const AdminDashboard: React.FC = () => {
                         </select>
                         <button
                           type="button"
-                          onClick={() => setActiveTab('my_bots')}
+                          onClick={() => handleTabChange('overview')}
                           className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer transition shrink-0"
                         >
-                          View Bots
+                          Overview
                         </button>
                       </div>
                       <p className="text-[10px] text-slate-500">
@@ -4683,11 +4336,11 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setAdminTab('bots')}
+                  onClick={() => setAdminTab('gateways')}
                   className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <Bot className="w-3.5 h-3.5 text-cyan-400" />
-                  View All Bots ({bots.length})
+                  Bot Settings
                 </button>
               </div>
             </div>
@@ -7587,7 +7240,7 @@ export const AdminDashboard: React.FC = () => {
                 setTimeout(() => {
                   setCreateBotSuccessMsg(null);
                   setShowCreateBotModal(false);
-                  setAdminTab('bots');
+                  setAdminTab('gateways');
                 }, 1200);
               }}
               className="space-y-4 text-xs"
@@ -8014,6 +7667,124 @@ export const AdminDashboard: React.FC = () => {
         onClose={() => setShowAccountingModal(false)}
         defaultReportType={accountingModalType}
       />
+
+      {/* ================= CONFIRM DELETE ENTIRE PANEL MODAL ================= */}
+      {panelToDelete && (
+        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6 animate-in fade-in duration-200">
+          <div className="bg-[#120f24] border-2 border-rose-500/50 rounded-3xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl shadow-rose-950/80 my-auto relative overflow-hidden">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 className="w-7 h-7 animate-bounce" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">
+                Delete Product Panel?
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-bold text-rose-400">"{panelToDelete.panelName}"</span> under category <span className="font-semibold text-cyan-300">{panelToDelete.category}</span>?
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1 font-mono">
+              <div className="flex justify-between">
+                <span>Product Name:</span>
+                <span className="text-white font-bold">{panelToDelete.panelName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Category:</span>
+                <span className="text-cyan-300 font-bold">{panelToDelete.category}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Plans:</span>
+                <span className="text-amber-300 font-bold">{panelToDelete.plans?.length || 1} plan(s)</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-rose-950/30 border border-rose-500/30 rounded-xl text-[11px] text-rose-300 font-medium">
+              ⚠️ This will remove all duration plans and keys assigned to this product across client bots and server storage.
+            </div>
+
+            <div className="pt-2 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPanelToDelete(null)}
+                className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs transition cursor-pointer active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteEntirePanel(panelToDelete.category, panelToDelete.panelName, panelToDelete.plans)}
+                className="py-3 px-4 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-rose-950/80 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CONFIRM DELETE SINGLE PLAN MODAL ================= */}
+      {planToDelete && (
+        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 overflow-y-auto pb-28 sm:pb-6 animate-in fade-in duration-200">
+          <div className="bg-[#120f24] border-2 border-rose-500/50 rounded-3xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl shadow-rose-950/80 my-auto relative overflow-hidden">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 className="w-7 h-7 animate-bounce" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">
+                Delete Duration Plan?
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Are you sure you want to remove plan <span className="font-bold text-rose-400">"{planToDelete.name || planToDelete.validity}"</span> from <span className="font-semibold text-cyan-300">{planToDelete.panel_name}</span>?
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1 font-mono">
+              <div className="flex justify-between">
+                <span>Plan Duration:</span>
+                <span className="text-white font-bold">{planToDelete.name || planToDelete.validity}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>User Price:</span>
+                <span className="text-emerald-400 font-bold">₹{planToDelete.price_inr}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Reseller Price:</span>
+                <span className="text-amber-300 font-bold">₹{planToDelete.reseller_price ?? planToDelete.reseller_price_inr ?? 0}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPlanToDelete(null)}
+                className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs transition cursor-pointer active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmDeletePlan(planToDelete)}
+                className="py-3 px-4 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-rose-950/80 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Plan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification Banner */}
+      {deleteToast && (
+        <div className="fixed bottom-6 right-6 z-[130] bg-slate-900/95 border border-emerald-500/60 text-emerald-300 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl flex items-center gap-3 font-semibold text-xs animate-in slide-in-from-bottom duration-300">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{deleteToast}</span>
+        </div>
+      )}
     </div>
   );
 };

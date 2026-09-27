@@ -122,12 +122,16 @@ async function startServer() {
       if (action === 'save' || action === 'create') {
         if (!bot) return res.status(400).json({ success: false, error: 'bot object is required' });
         const saved = dbStore.saveBot(bot);
+        await telegramEngine.syncFleetPollers();
         const allBots = dbStore.getBots();
-        if (allBots.length === 1 || (bot.bot_token && bot.bot_token.trim())) {
+        const currentSettings = dbStore.getData().settings;
+
+        // ONLY change primary bot settings if there is NO primary bot configured yet, or if explicitly requested via setAsPrimary
+        if (!currentSettings.bot_token || req.body.setAsPrimary === true) {
           dbStore.updateSettings({
             bot_token: bot.bot_token,
             bot_username: bot.username,
-            admin_id: bot.admin_id || bot.admin_chat_id || dbStore.getData().settings.admin_id
+            admin_id: bot.admin_id || bot.admin_chat_id || currentSettings.admin_id
           });
           await telegramEngine.restart();
         }
@@ -137,6 +141,7 @@ async function startServer() {
       if (action === 'update') {
         if (!botId || !updates) return res.status(400).json({ success: false, error: 'botId and updates required' });
         const updated = dbStore.updateBot(botId, updates);
+        await telegramEngine.syncFleetPollers();
         if (updates.bot_token || updates.admin_id) {
           const currentToken = dbStore.getData().settings.bot_token;
           if (updated && (updated.bot_token === currentToken || updates.bot_token)) {
@@ -327,7 +332,7 @@ async function startServer() {
         const count = dbStore.deleteProducts(productIds);
         dbStore.logActivity(12846461, 'DELETE_PRODUCTS_BATCH', `Deleted ${count} products`);
       } else if (action === 'delete_panel') {
-        const count = dbStore.deletePanel(category, panelName);
+        const count = dbStore.deletePanel(category, panelName, productIds);
         dbStore.logActivity(12846461, 'DELETE_PANEL', `Deleted panel ${panelName} (${count} plans removed)`);
       } else if (action === 'toggle_panel_maint') {
         const { isMaintenance, note } = req.body;

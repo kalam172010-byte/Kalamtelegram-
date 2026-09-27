@@ -107,6 +107,8 @@ export interface BotContextType {
     description?: string;
     theme_color?: string;
     clone_products?: boolean;
+    products?: Product[];
+    productKeys?: ProductKey[];
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => BotInstance;
@@ -168,7 +170,7 @@ export interface BotContextType {
   providerBalance: ProviderBalanceState;
   isProviderBalanceLoading: boolean;
   fetchProviderBalance: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<ProviderBalanceState>;
-  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; balance?: number; formatted?: string; raw?: any }>;
+  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; balance?: number; formatted?: string; raw?: any; latencyMs?: number; error?: string }>;
   buyProviderKeyDirect: (params: { productId: string; duration: string; androidId?: string; apiKey?: string; masterKey?: string; apiUrl?: string }) => Promise<{ success: boolean; key?: string; orderId?: string | number; error?: string; raw?: any; message?: string }>;
 
   // Admin Broadcast
@@ -195,7 +197,7 @@ export interface BotContextType {
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number | string) => void;
   deleteProducts: (ids: (number | string)[]) => void;
-  deletePanel: (category: string, panelName: string) => void;
+  deletePanel: (category: string, panelName: string, planIds?: (string | number)[]) => void;
   togglePanelMaintenance: (category: string, panelName: string, isMaintenance: boolean, note?: string) => void;
   removeProduct: (id: number | string) => void;
   injectProductKeys: (productId: number, keys: string[]) => void;
@@ -483,14 +485,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return products;
     }
     const currentBotId = activeBot.id;
-    // 1. If activeBot has embedded products and they are specific to this bot
-    if (Array.isArray(activeBot.products) && activeBot.products.length > 0) {
-      return activeBot.products;
-    }
-    // 2. Otherwise filter global products list by activeBot.id
-    const filtered = products.filter(p => p.bot_id === currentBotId);
-    if (filtered.length > 0) return filtered;
-    return products.filter(p => !p.bot_id || p.bot_id === currentBotId);
+    // Directly filter master products state by bot_id to ensure instantaneous updates upon product creation & deletion
+    const filtered = products.filter(p => !p.bot_id || p.bot_id === currentBotId);
+    return filtered;
   }, [products, activeBot]);
 
   // Scoped users filtered strictly by the active bot (multi-tenant & bot-level user isolation)
@@ -604,7 +601,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
 
-            if (Array.isArray(serverData.products) && serverData.products.length > 0) {
+            if (Array.isArray(serverData.products)) {
               const cleanProds = serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -613,32 +610,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 reseller_price_inr: p.reseller_price_inr ?? p.price_inr
               }));
 
-              setProducts(prev => {
-                const map = new Map<string, Product>();
-                // Preserve all current products in state
-                prev.forEach(p => {
-                  if (p && p.id !== undefined && p.is_active !== 0) {
-                    map.set(String(p.id).trim(), p);
-                  }
-                });
-                // Merge server products
-                cleanProds.forEach((sp: Product) => {
-                  if (sp && sp.id !== undefined) {
-                    const strId = String(sp.id).trim();
-                    const existing = map.get(strId);
-                    map.set(strId, { ...(existing || {}), ...sp });
-                  }
-                });
-                const merged = Array.from(map.values());
-                localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
-                offlineStorage.saveProducts(merged);
-                return merged;
-              });
+              setProducts(cleanProds);
+              localStorage.setItem('kalam_bot_products', JSON.stringify(cleanProds));
+              offlineStorage.saveProducts(cleanProds);
 
               // Safely preserve bot instances' internal products list
               setBots(prev => prev.map(b => ({
                 ...b,
-                products: Array.isArray(b.products) && b.products.length > 0 ? b.products : cleanProds.filter((p: Product) => !p.bot_id || p.bot_id === b.id),
+                products: cleanProds.filter((p: Product) => !p.bot_id || p.bot_id === b.id),
                 productKeys: Array.isArray(b.productKeys) ? b.productKeys : (Array.isArray(serverData.productKeys) ? serverData.productKeys : [])
               })));
             }
@@ -749,13 +728,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
       if (snapshot && !snapshot.empty) {
         const cloudProducts: Product[] = [];
-        const inactiveOrDeletedIds = new Set<string>();
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
-          const id = p?.id !== undefined && p?.id !== null ? String(p.id) : docSnap.id;
-          if (p && (p.is_active === 0 || (p as any).is_deleted)) {
-            inactiveOrDeletedIds.add(id);
-          } else if (p && p.id !== undefined && p.id !== null) {
+          if (p && p.id !== undefined && p.id !== null && p.is_active !== 0 && !(p as any).is_deleted) {
             cloudProducts.push({
               ...p,
               id: p.id,
@@ -765,20 +740,14 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         });
-        if (cloudProducts.length > 0 || inactiveOrDeletedIds.size > 0) {
-          setProducts(prev => {
-            const map = new Map<string, Product>();
-            prev.forEach(p => map.set(String(p.id), p));
-            inactiveOrDeletedIds.forEach(id => map.delete(id));
-            cloudProducts.forEach(cp => {
-              map.set(String(cp.id), { ...(map.get(String(cp.id)) || {}), ...cp });
-            });
-            const merged = Array.from(map.values());
-            localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
-            offlineStorage.saveProducts(merged);
-            setBots(prevBots => prevBots.map(b => ({ ...b, products: merged })));
-            return merged;
-          });
+        if (cloudProducts.length > 0) {
+          setProducts(cloudProducts);
+          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
+          offlineStorage.saveProducts(cloudProducts);
+          setBots(prevBots => prevBots.map(b => ({
+            ...b,
+            products: cloudProducts.filter((p: any) => !p.bot_id || p.bot_id === b.id)
+          })));
         }
       }
     }, (err: any) => {
@@ -990,6 +959,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     description?: string;
     theme_color?: string;
     clone_products?: boolean;
+    products?: Product[];
+    productKeys?: ProductKey[];
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => {
@@ -1031,8 +1002,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auto_fallback: params.reseller_api?.auto_fallback ?? true,
         sync_balance: params.reseller_api?.sync_balance || 0
       },
-      products: shouldClone ? [...products] : [],
-      productKeys: shouldClone ? [...productKeys] : [],
+      products: Array.isArray(params.products) ? params.products : (shouldClone ? [...products] : []),
+      productKeys: Array.isArray(params.productKeys) ? params.productKeys : (shouldClone ? [...productKeys] : []),
       settings: {
         ...settings,
         bot_name: params.name.trim(),
@@ -1056,33 +1027,38 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBots(prev => [newBot, ...prev]);
     setActiveBotId(newBot.id);
-    setSettings(prev => ({
-      ...prev,
-      bot_name: newBot.name,
-      admin_id: adminIdToUse,
-      bot_token: newBot.bot_token,
-      bot_username: newBot.username,
-      famgateway_api_key: newBot.payment_gateway?.api_key || prev.famgateway_api_key,
-      fampay_upi_id: newBot.payment_gateway?.upi_id || prev.fampay_upi_id,
-      bantibhaiya_api_key: newBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
-      bantibhaiya_master_key: newBot.reseller_api?.master_key || prev.bantibhaiya_master_key,
-      bantibhaiya_api_url: newBot.reseller_api?.api_url || prev.bantibhaiya_api_url
-    }));
 
-    // Immediately push new bot settings to server and restart polling engine
-    fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // ONLY change primary bot settings if there is NO primary bot configured yet, or if this is the first bot
+    const hasExistingPrimaryBot = Boolean(settings.bot_token && settings.bot_token.trim().length > 10);
+    if (!hasExistingPrimaryBot) {
+      setSettings(prev => ({
+        ...prev,
+        bot_name: newBot.name,
+        admin_id: adminIdToUse,
         bot_token: newBot.bot_token,
         bot_username: newBot.username,
-        admin_id: adminIdToUse,
-        famgateway_api_key: newBot.payment_gateway?.api_key,
-        bantibhaiya_api_key: newBot.reseller_api?.api_key,
-        bantibhaiya_master_key: newBot.reseller_api?.master_key,
-        bantibhaiya_api_url: newBot.reseller_api?.api_url
-      })
-    }).catch(() => {});
+        famgateway_api_key: newBot.payment_gateway?.api_key || prev.famgateway_api_key,
+        fampay_upi_id: newBot.payment_gateway?.upi_id || prev.fampay_upi_id,
+        bantibhaiya_api_key: newBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
+        bantibhaiya_master_key: newBot.reseller_api?.master_key || prev.bantibhaiya_master_key,
+        bantibhaiya_api_url: newBot.reseller_api?.api_url || prev.bantibhaiya_api_url
+      }));
+
+      // Push new bot settings to server only if there was no primary bot
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_token: newBot.bot_token,
+          bot_username: newBot.username,
+          admin_id: adminIdToUse,
+          famgateway_api_key: newBot.payment_gateway?.api_key,
+          bantibhaiya_api_key: newBot.reseller_api?.api_key,
+          bantibhaiya_master_key: newBot.reseller_api?.master_key,
+          bantibhaiya_api_url: newBot.reseller_api?.api_url
+        })
+      }).catch(() => {});
+    }
 
     // Sync to Firestore Cloud Database
     setDoc(doc(db, 'bots', newBot.id), newBot, { merge: true }).catch(() => {});
@@ -1821,13 +1797,15 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           formatted: data.formatted || `₹${Number(data.balance).toFixed(2)}`,
           status: data.success ? 'CONNECTED' : 'ERROR',
           lastChecked: new Date().toISOString(),
-          message: data.message || 'Connected',
-          raw: data.raw
+          message: data.message || (data.success ? 'Connected' : 'Connection error'),
+          latencyMs: data.latencyMs || 0,
+          raw: data.raw,
+          error: data.error
         }));
       }
       return data;
     } catch (err: any) {
-      return { success: false, message: err.message };
+      return { success: false, message: err.message, error: err.message };
     }
   };
 
@@ -4163,22 +4141,48 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const deleteProduct = (id: number | string) => {
-    const strId = String(id);
+    const strId = String(id).trim();
+    const numId = Number(strId);
     setProducts(prev => {
-      const updated = prev.filter(p => String(p.id) !== strId);
+      const updated = prev.filter(p => {
+        const pStr = String(p.id).trim();
+        const pNum = Number(pStr);
+        if (pStr === strId) return false;
+        if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
+        return true;
+      });
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
+      offlineStorage.saveProducts(updated);
       return updated;
     });
     setProductKeys(prev => {
-      const updated = prev.filter(k => String(k.product_id) !== strId);
+      const updated = prev.filter(k => {
+        const kStr = String(k.product_id).trim();
+        const kNum = Number(kStr);
+        if (kStr === strId) return false;
+        if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
+        return true;
+      });
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => String(p.id) !== strId),
-        productKeys: (b.productKeys || []).filter(k => String(k.product_id) !== strId)
+        products: (b.products || []).filter(p => {
+          const pStr = String(p.id).trim();
+          const pNum = Number(pStr);
+          if (pStr === strId) return false;
+          if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
+          return true;
+        }),
+        productKeys: (b.productKeys || []).filter(k => {
+          const kStr = String(k.product_id).trim();
+          const kNum = Number(kStr);
+          if (kStr === strId) return false;
+          if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
+          return true;
+        })
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -4186,7 +4190,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Invalidate active Telegram FSM state if it was referencing the deleted product
     setFsmData(prev => {
-      if (prev && String(prev.productId) === strId) {
+      if (prev && String(prev.productId).trim() === strId) {
         setCurrentFsmState(null);
         return {};
       }
@@ -4213,9 +4217,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${strId} deleted`);
 
-    // CRITICAL: Delete from Firestore directly and update offline storage
+    // CRITICAL: Delete from Firestore directly
     deleteDoc(doc(db, 'products', strId)).catch(() => {});
-    offlineStorage.saveProducts(products.filter(p => String(p.id) !== strId));
 
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
@@ -4242,23 +4245,51 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const deleteProducts = (ids: (number | string)[]) => {
-    const strIds = new Set(ids.map(id => String(id)));
+    const strIds = new Set(ids.map(id => String(id).trim()));
+    const numIds = new Set(ids.map(id => Number(id)).filter(n => !isNaN(n)));
+
     setProducts(prev => {
-      const updated = prev.filter(p => !strIds.has(String(p.id)));
+      const updated = prev.filter(p => {
+        const pStr = String(p.id).trim();
+        const pNum = Number(pStr);
+        if (strIds.has(pStr)) return false;
+        if (!isNaN(pNum) && numIds.has(pNum)) return false;
+        return true;
+      });
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
       offlineStorage.saveProducts(updated);
       return updated;
     });
+
     setProductKeys(prev => {
-      const updated = prev.filter(k => !strIds.has(String(k.product_id)));
+      const updated = prev.filter(k => {
+        const kStr = String(k.product_id).trim();
+        const kNum = Number(kStr);
+        if (strIds.has(kStr)) return false;
+        if (!isNaN(kNum) && numIds.has(kNum)) return false;
+        return true;
+      });
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
+
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => !strIds.has(String(p.id))),
-        productKeys: (b.productKeys || []).filter(k => !strIds.has(String(k.product_id)))
+        products: (b.products || []).filter(p => {
+          const pStr = String(p.id).trim();
+          const pNum = Number(pStr);
+          if (strIds.has(pStr)) return false;
+          if (!isNaN(pNum) && numIds.has(pNum)) return false;
+          return true;
+        }),
+        productKeys: (b.productKeys || []).filter(k => {
+          const kStr = String(k.product_id).trim();
+          const kNum = Number(kStr);
+          if (strIds.has(kStr)) return false;
+          if (!isNaN(kNum) && numIds.has(kNum)) return false;
+          return true;
+        })
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -4266,7 +4297,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // CRITICAL: Delete from Firestore directly
     ids.forEach(id => {
-      const sId = String(id);
+      const sId = String(id).trim();
       deleteDoc(doc(db, 'products', sId)).catch(() => {});
     });
 
@@ -4295,15 +4326,20 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .catch(err => console.warn('Failed to sync batch product deletion to server:', err));
   };
 
-  const deletePanel = (category: string, panelName: string) => {
-    const deletedIds: string[] = [];
-    
+  const deletePanel = (category: string, panelName: string, planIds?: (string | number)[]) => {
     const catNorm = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const nameNorm = (panelName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const targetName = (panelName || '').trim().toLowerCase();
 
-    setProducts(prev => {
-      const updated = prev.filter(p => {
+    // Compute all target product IDs upfront across both provided planIds and products matching category + panel name
+    const targetProductIds: string[] = [];
+    if (Array.isArray(planIds) && planIds.length > 0) {
+      planIds.forEach(id => targetProductIds.push(String(id).trim()));
+    }
+
+    products.forEach(p => {
+      const pIdStr = String(p.id).trim();
+      if (!targetProductIds.includes(pIdStr)) {
         const pCatNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const pName = (p.panel_name || p.name || '').trim().toLowerCase();
         const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
@@ -4313,43 +4349,45 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           (!pCatNorm.includes('non') && pCatNorm.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
           ((pCatNorm.includes('pc') || pCatNorm.includes('emulator')) && (catNorm.includes('pc') || catNorm.includes('emulator')));
 
-        const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === nameNorm);
+        const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === nameNorm) ||
+          (Boolean(p.panel_name) && p.panel_name.trim().toLowerCase() === targetName);
 
         if (matchCat && matchName) {
-          deletedIds.push(String(p.id));
-          return false;
+          targetProductIds.push(pIdStr);
         }
-        return true;
-      });
+      }
+    });
+
+    const deleteSet = new Set(targetProductIds);
+    setProducts(prev => {
+      const updated = prev.filter(p => !deleteSet.has(String(p.id).trim()));
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
       offlineStorage.saveProducts(updated);
       return updated;
     });
 
     setProductKeys(prev => {
-      const deletedSet = new Set(deletedIds);
-      const updated = prev.filter(k => !deletedSet.has(String(k.product_id)));
+      const updated = prev.filter(k => !deleteSet.has(String(k.product_id).trim()));
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
 
     setBots(prev => {
-      const deletedSet = new Set(deletedIds);
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => !deletedSet.has(String(p.id))),
-        productKeys: (b.productKeys || []).filter(k => !deletedSet.has(String(k.product_id)))
+        products: (b.products || []).filter(p => !deleteSet.has(String(p.id).trim())),
+        productKeys: (b.productKeys || []).filter(k => !deleteSet.has(String(k.product_id).trim()))
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
 
     // CRITICAL: Delete each document directly from Firestore
-    deletedIds.forEach(id => {
+    targetProductIds.forEach(id => {
       deleteDoc(doc(db, 'products', id)).catch(() => {});
     });
 
-    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);
+    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category}) - ${targetProductIds.length} plans`);
 
     fetch('/api/products', {
       method: 'POST',
@@ -4357,7 +4395,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       body: JSON.stringify({
         action: 'delete_panel',
         category,
-        panelName
+        panelName,
+        productIds: targetProductIds
       })
     })
     .then(res => res.json())
@@ -5283,7 +5322,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
-    setActiveTab('my_bots');
+    setActiveTab('dashboard');
     // Sync to Firestore
     setDoc(doc(db, 'users', String(matched.user_id)), matched, { merge: true }).catch(() => {});
     confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
@@ -5327,7 +5366,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       setIsAuthenticated(true);
       localStorage.setItem('kalam_bot_auth_logged_in', 'true');
       setIsAuthModalOpen(false);
-      setActiveTab('my_bots');
+      setActiveTab('dashboard');
       setDoc(doc(db, 'users', String(updated.user_id)), updated, { merge: true }).catch(() => {});
       return { success: true, user: updated };
     }
@@ -5363,7 +5402,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
-    setActiveTab('my_bots');
+    setActiveTab('dashboard');
     // Sync to Cloud Firestore
     setDoc(doc(db, 'users', String(newUser.user_id)), newUser, { merge: true }).catch(() => {});
     confetti({ particleCount: 80, spread: 80, origin: { y: 0.6 } });

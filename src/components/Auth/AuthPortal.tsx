@@ -77,7 +77,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
       const res = await loginWithEmail(loginEmail, loginPassword);
       if (res.success) {
         setSuccessMsg(`Welcome back, ${res.user?.first_name || 'Admin'}!`);
-        setActiveTab('my_bots');
+        setActiveTab('dashboard');
         if (onClose) setTimeout(onClose, 600);
       } else {
         setErrorMsg(res.error || 'Authentication failed. Please verify your email and password.');
@@ -99,7 +99,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
       const res = await loginWithGoogle();
       if (res.success) {
         setSuccessMsg(`Google Authentication Successful! Welcome, ${res.user?.first_name || 'User'}`);
-        setActiveTab('my_bots');
+        setActiveTab('dashboard');
         if (onClose) setTimeout(onClose, 600);
       } else {
         setErrorMsg(res.error || 'Google sign-in failed.');
@@ -145,7 +145,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ isModal = false, onClose
 
       if (res.success) {
         setSuccessMsg(`Account created successfully! Welcome, ${res.user?.first_name}!`);
-        setActiveTab('my_bots');
+        setActiveTab('dashboard');
         if (onClose) setTimeout(onClose, 600);
       } else {
         setErrorMsg(res.error || 'Registration failed.');

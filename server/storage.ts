@@ -250,13 +250,17 @@ export class DatabaseStore {
 
       console.log('⚡ Firestore: Restoring cloud backup and merging state...');
 
-      // 1. Restore & Merge Settings (Preserves bot_token, admin_id, bot_username)
+      // 1. Restore & Merge Settings (Preserves bot_token, admin_id, bot_username, creator_bot_token)
       if (remote.settings && typeof remote.settings === 'object') {
         this.data.settings = {
           ...this.data.settings,
           ...remote.settings,
           bot_token: remote.settings.bot_token || this.data.settings.bot_token,
           bot_username: remote.settings.bot_username || this.data.settings.bot_username,
+          creator_bot_token: remote.settings.creator_bot_token || this.data.settings.creator_bot_token,
+          creator_bot_username: remote.settings.creator_bot_username || this.data.settings.creator_bot_username,
+          creator_bot_name: remote.settings.creator_bot_name || this.data.settings.creator_bot_name,
+          creator_bot_status: remote.settings.creator_bot_status || this.data.settings.creator_bot_status || 'ON',
           admin_id: remote.settings.admin_id || this.data.settings.admin_id
         };
       }
@@ -711,48 +715,150 @@ export class DatabaseStore {
   }
 
   public deleteProduct(id: number | string): boolean {
+    const strId = String(id).trim();
+    const numId = Number(strId);
     const initialLen = this.data.products.length;
-    this.data.products = this.data.products.filter(p => String(p.id) !== String(id));
-    this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id));
+
+    this.data.products = this.data.products.filter(p => {
+      const pStr = String(p.id).trim();
+      const pNum = Number(pStr);
+      if (pStr === strId) return false;
+      if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
+      return true;
+    });
+
+    this.data.productKeys = this.data.productKeys.filter(k => {
+      const kStr = String(k.product_id).trim();
+      const kNum = Number(kStr);
+      if (kStr === strId) return false;
+      if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
+      return true;
+    });
+
+    // CRITICAL: Also purge from all bot instances
+    if (Array.isArray(this.data.bots)) {
+      this.data.bots.forEach(b => {
+        if (Array.isArray(b.products)) {
+          b.products = b.products.filter(p => {
+            const pStr = String(p.id).trim();
+            const pNum = Number(pStr);
+            if (pStr === strId) return false;
+            if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
+            return true;
+          });
+        }
+        if (Array.isArray(b.productKeys)) {
+          b.productKeys = b.productKeys.filter(k => {
+            const kStr = String(k.product_id).trim();
+            const kNum = Number(kStr);
+            if (kStr === strId) return false;
+            if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
+            return true;
+          });
+        }
+      });
+    }
+
     deleteProductFromFirestore(id).catch(() => {});
     this.saveData(undefined, true);
     return this.data.products.length < initialLen;
   }
 
   public deleteProducts(ids: (number | string)[]): number {
-    const strIds = new Set(ids.map(id => String(id)));
+    const strIds = new Set(ids.map(id => String(id).trim()));
+    const numIds = new Set(ids.map(id => Number(id)).filter(n => !isNaN(n)));
     const initialLen = this.data.products.length;
-    this.data.products = this.data.products.filter(p => !strIds.has(String(p.id)));
-    this.data.productKeys = this.data.productKeys.filter(k => !strIds.has(String(k.product_id)));
+
+    this.data.products = this.data.products.filter(p => {
+      const pStr = String(p.id).trim();
+      const pNum = Number(pStr);
+      if (strIds.has(pStr)) return false;
+      if (!isNaN(pNum) && numIds.has(pNum)) return false;
+      return true;
+    });
+
+    this.data.productKeys = this.data.productKeys.filter(k => {
+      const kStr = String(k.product_id).trim();
+      const kNum = Number(kStr);
+      if (strIds.has(kStr)) return false;
+      if (!isNaN(kNum) && numIds.has(kNum)) return false;
+      return true;
+    });
+
+    if (Array.isArray(this.data.bots)) {
+      this.data.bots.forEach(b => {
+        if (Array.isArray(b.products)) {
+          b.products = b.products.filter(p => {
+            const pStr = String(p.id).trim();
+            const pNum = Number(pStr);
+            if (strIds.has(pStr)) return false;
+            if (!isNaN(pNum) && numIds.has(pNum)) return false;
+            return true;
+          });
+        }
+        if (Array.isArray(b.productKeys)) {
+          b.productKeys = b.productKeys.filter(k => {
+            const kStr = String(k.product_id).trim();
+            const kNum = Number(kStr);
+            if (strIds.has(kStr)) return false;
+            if (!isNaN(kNum) && numIds.has(kNum)) return false;
+            return true;
+          });
+        }
+      });
+    }
+
     deleteProductsFromFirestore(ids).catch(() => {});
     this.saveData(undefined, true);
     return initialLen - this.data.products.length;
   }
 
-  public deletePanel(category: string, panelName: string): number {
+  public deletePanel(category: string, panelName: string, productIds?: (string | number)[]): number {
     const initialLen = this.data.products.length;
     const deletedProductIds = new Set<string>();
-    
+
+    if (Array.isArray(productIds) && productIds.length > 0) {
+      productIds.forEach(id => deletedProductIds.add(String(id).trim()));
+    }
+
     const targetCat = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const targetName = (panelName || '').trim().toLowerCase();
     const targetNameNorm = targetName.replace(/[^a-z0-9]/g, '');
 
     this.data.products = this.data.products.filter(p => {
+      const pIdStr = String(p.id).trim();
+      if (deletedProductIds.has(pIdStr)) {
+        return false;
+      }
+
       const pCat = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const pName = (p.panel_name || p.name || '').trim().toLowerCase();
       const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
 
       const matchCat = !targetCat || pCat === targetCat || matchCategoryFlexible(p.category, category);
-      const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === targetNameNorm);
+      const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === targetNameNorm) ||
+        (Boolean(p.panel_name) && matchNameFlexible(p.panel_name, panelName));
 
       if (matchCat && matchName) {
-        deletedProductIds.add(String(p.id));
+        deletedProductIds.add(pIdStr);
         return false;
       }
       return true;
     });
 
-    this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id)));
+    this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id).trim()));
+
+    if (Array.isArray(this.data.bots)) {
+      this.data.bots.forEach(b => {
+        if (Array.isArray(b.products)) {
+          b.products = b.products.filter(p => !deletedProductIds.has(String(p.id).trim()));
+        }
+        if (Array.isArray(b.productKeys)) {
+          b.productKeys = b.productKeys.filter(k => !deletedProductIds.has(String(k.product_id).trim()));
+        }
+      });
+    }
+
     deleteProductsFromFirestore(Array.from(deletedProductIds)).catch(() => {});
     this.saveData(undefined, true);
     return initialLen - this.data.products.length;

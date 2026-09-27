@@ -59,8 +59,6 @@ export function usePageRouter({
       else if (currentRoute.includes('emoji')) setAdminTab('emojis');
       else if (currentRoute.includes('code')) setAdminTab('code');
       else setAdminTab('overview');
-    } else if (currentRoute.startsWith('my_bot') || currentRoute.startsWith('bot') || currentRoute === 'bots') {
-      setActiveTab('my_bots');
     } else if (currentRoute.startsWith('gateway')) {
       setActiveTab('gateways');
     } else if (currentRoute.startsWith('reseller') || currentRoute.startsWith('api')) {
@@ -98,8 +96,6 @@ export function usePageRouter({
         else if (currentRoute.includes('emoji')) setAdminTab('emojis');
         else if (currentRoute.includes('code')) setAdminTab('code');
         else setAdminTab('overview');
-      } else if (currentRoute === 'my_bots' || currentRoute === 'bots' || currentRoute.startsWith('bot')) {
-        setActiveTab('my_bots');
       } else if (currentRoute === 'gateways') {
         setActiveTab('gateways');
       } else if (currentRoute === 'reseller_api') {
@@ -143,7 +139,6 @@ export function usePageRouter({
           const adminSubTitleMap: Record<AdminTab, string> = {
             overview: 'Admin Overview',
             appinstall: 'Mobile App Download & PWA Center',
-            bots: 'Bot Fleet Master Control',
             health: 'System Health & Server Diagnostics',
             products: 'Product Store Management & Key Vault',
             purchases: 'Purchase & Key Deduction Logs',
@@ -169,11 +164,6 @@ export function usePageRouter({
           targetHash = `admin/${adminTab}`;
           break;
         }
-        case 'my_bots':
-          pageTitle = 'Bot Fleet Manager (My Bots) | Kalam FF Panel';
-          targetPath = '/bots';
-          targetHash = 'bots';
-          break;
         case 'gateways':
           pageTitle = 'Payment Gateways & UPI QR | Kalam FF Panel';
           targetPath = '/gateways';

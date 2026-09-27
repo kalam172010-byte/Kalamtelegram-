@@ -90,6 +90,10 @@ export const UI_TEXTS = {
 export const DEFAULT_SETTINGS: Settings = {
   bot_token: '',
   bot_username: '',
+  creator_bot_token: '',
+  creator_bot_username: '',
+  creator_bot_name: 'VIP Store Bot Maker',
+  creator_bot_status: 'ON',
   admin_id: 12846461,
   admin_contact: '',
   reseller_system_status: 'ON',
