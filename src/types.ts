@@ -67,7 +67,8 @@ export interface ReferralRecord {
 
 export interface SubdomainStore {
   id: string;
-  subdomain: string; // e.g. 'kalamvip' -> kalamvip.kalampanel.com or ?store=kalamvip
+  subdomain: string; // e.g. 'kalamvip'
+  custom_domain?: string; // Optional custom domain e.g. 'kalamvip.com' or 'vip.yourdomain.com'
   store_name: string; // e.g. 'KALAM VIP STORE'
   owner_id: number;
   owner_email?: string;

@@ -147,6 +147,7 @@ export interface BotContextType {
   activeSubdomainSlug: string | null;
   createSubdomainStore: (params: {
     subdomain: string;
+    custom_domain?: string;
     store_name: string;
     assigned_product_ids?: (number | string)[];
     theme_color?: string;
@@ -495,6 +496,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createSubdomainStore = useCallback((params: {
     subdomain: string;
+    custom_domain?: string;
     store_name: string;
     assigned_product_ids?: (number | string)[];
     theme_color?: string;
@@ -509,6 +511,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newStore: SubdomainStore = {
       id: `store_${cleanSlug}_${Date.now().toString(36)}`,
       subdomain: cleanSlug || `store${Date.now().toString().slice(-4)}`,
+      custom_domain: params.custom_domain?.trim().toLowerCase() || undefined,
       store_name: params.store_name.trim() || 'VIP PANEL STORE',
       owner_id: currentUserId,
       owner_email: ownerObj?.email || '',
@@ -1090,6 +1093,29 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore coupons sync notice:', err?.message || err);
     });
 
+    // 8. Firestore Real-Time Sync for Subdomain Stores
+    const unsubSubdomainStores = onSnapshot(collection(db, 'subdomain_stores'), (snapshot: any) => {
+      if (snapshot && !snapshot.empty) {
+        const cloudSubdomainStores: SubdomainStore[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const s = docSnap.data() as SubdomainStore;
+          if (s && s.subdomain) cloudSubdomainStores.push(s);
+        });
+        if (cloudSubdomainStores.length > 0) {
+          setSubdomainStores(prev => {
+            const storeMap = new Map<string, SubdomainStore>();
+            prev.forEach(p => storeMap.set(p.subdomain.toLowerCase(), p));
+            cloudSubdomainStores.forEach(cs => storeMap.set(cs.subdomain.toLowerCase(), { ...storeMap.get(cs.subdomain.toLowerCase()), ...cs }));
+            const merged = Array.from(storeMap.values());
+            localStorage.setItem('kalam_subdomain_stores', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      }
+    }, (err: any) => {
+      console.warn('Firestore subdomain_stores sync notice:', err?.message || err);
+    });
+
     return () => {
       clearInterval(syncInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -1098,6 +1124,12 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBots();
       unsubProducts();
       unsubKeys();
+      unsubSettings();
+      unsubUsers();
+      unsubOrders();
+      unsubTickets();
+      unsubCoupons();
+      unsubSubdomainStores();
       unsubSettings();
       unsubUsers();
       unsubOrders();

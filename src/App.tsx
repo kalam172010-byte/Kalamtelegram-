@@ -103,6 +103,15 @@ const AppContent: React.FC = () => {
     currentUser.email?.toLowerCase() === 'kk7953926@gmail.com' ||
     currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com';
 
+  // Subdomain Storefront Guard: If user is visiting a standalone subdomain store URL, render the subdomain storefront FIRST (for public visitors & users)
+  if (activeSubdomainStore) {
+    return (
+      <SubdomainStorefront
+        store={activeSubdomainStore}
+      />
+    );
+  }
+
   // Strict Auth Guard: If user is not authenticated, show ONLY the secure login/registration portal
   if (!isAuthenticated) {
     return (
@@ -128,16 +137,6 @@ const AppContent: React.FC = () => {
           <AuthPortal isModal={false} />
         </main>
       </div>
-    );
-  }
-
-  // Subdomain Storefront Guard: If user is visiting a standalone subdomain store URL, render the subdomain storefront
-  if (activeSubdomainStore) {
-    return (
-      <SubdomainStorefront
-        store={activeSubdomainStore}
-        onExitSubdomain={() => setActiveSubdomainSlug(null)}
-      />
     );
   }
 

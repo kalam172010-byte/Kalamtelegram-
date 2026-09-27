@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBot } from '../../context/BotContext';
-import { SubdomainStore, Product } from '../../types';
+import { SubdomainStore } from '../../types';
 import {
   Globe,
   Plus,
@@ -29,6 +29,7 @@ export const SubdomainStoreManager: React.FC = () => {
   // Form State for creating a new subdomain store
   const [form, setForm] = useState({
     subdomain: '',
+    custom_domain: '',
     store_name: '',
     logo_url: '',
     banner_announcement: '',
@@ -45,6 +46,7 @@ export const SubdomainStoreManager: React.FC = () => {
 
     createSubdomainStore({
       subdomain: form.subdomain,
+      custom_domain: form.custom_domain,
       store_name: form.store_name,
       logo_url: form.logo_url,
       banner_announcement: form.banner_announcement,
@@ -58,6 +60,7 @@ export const SubdomainStoreManager: React.FC = () => {
     setShowCreateModal(false);
     setForm({
       subdomain: '',
+      custom_domain: '',
       store_name: '',
       logo_url: '',
       banner_announcement: '',
@@ -69,19 +72,24 @@ export const SubdomainStoreManager: React.FC = () => {
     });
   };
 
-  const getDirectStoreUrl = (subdomain: string) => {
-    return `${window.location.origin}/?store=${subdomain}`;
+  const currentHost = window.location.host;
+
+  const getDirectStoreUrl = (store: SubdomainStore) => {
+    if (store.custom_domain) {
+      return store.custom_domain.startsWith('http') ? store.custom_domain : `https://${store.custom_domain}`;
+    }
+    return `${window.location.origin}/?store=${store.subdomain}`;
   };
 
   const handleCopyStoreLink = (store: SubdomainStore) => {
-    const fullUrl = getDirectStoreUrl(store.subdomain);
+    const fullUrl = getDirectStoreUrl(store);
     navigator.clipboard.writeText(fullUrl);
     setCopiedStoreId(store.id);
     setTimeout(() => setCopiedStoreId(null), 2000);
   };
 
   const handleOpenStandaloneTab = (store: SubdomainStore) => {
-    const fullUrl = getDirectStoreUrl(store.subdomain);
+    const fullUrl = getDirectStoreUrl(store);
     window.open(fullUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -101,14 +109,14 @@ export const SubdomainStoreManager: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase text-cyan-400 tracking-wider">Subdomain Website Manager</span>
+            <span className="text-xs font-black uppercase text-cyan-400 tracking-wider">Subdomain &amp; Custom Domain Manager</span>
             <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
               {subdomainStores.length} Stores Configured
             </span>
           </div>
           <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 mt-1">
             <Globe className="w-5 h-5 text-cyan-400" />
-            Standalone Subdomain Store URLs &amp; Websites
+            Standalone Subdomain Store &amp; Custom Domains
           </h2>
         </div>
 
@@ -118,7 +126,7 @@ export const SubdomainStoreManager: React.FC = () => {
           className="px-4 py-2 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-600/30 active:scale-95 border border-cyan-400/30"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Create Subdomain Website</span>
+          <span>+ Create Subdomain / Custom Domain Website</span>
         </button>
       </div>
 
@@ -126,17 +134,17 @@ export const SubdomainStoreManager: React.FC = () => {
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 border border-indigo-500/40 rounded-2xl p-4 sm:p-5 space-y-2 text-xs">
         <div className="flex items-center gap-2 text-indigo-300 font-bold">
           <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>Standalone Web Store URL Directions:</span>
+          <span>Dynamic Custom Domain Setup:</span>
         </div>
         <p className="text-slate-300 leading-relaxed">
-          Copy the standalone URL below to share directly with your customers on Telegram or WhatsApp. Clicking <b>"Open in New Tab ↗"</b> opens the subdomain store as a separate independent website!
+          Stores dynamically detect your exact domain or custom domain (e.g. <b>{currentHost}</b> or <b>kalamvip.com</b>). Copy the URL below to share directly with your customers or open in a new tab!
         </p>
       </div>
 
       {/* Subdomain Stores List Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-          <span>Your Created Subdomain Web Stores ({subdomainStores.length})</span>
+          <span>Your Created Web Stores ({subdomainStores.length})</span>
           <span className="text-[10px] text-cyan-400 font-mono">1-Click Direct Copy &amp; Open</span>
         </div>
 
@@ -153,7 +161,8 @@ export const SubdomainStoreManager: React.FC = () => {
             {subdomainStores.map(store => {
               const isDefaultAll = !store.assigned_product_ids || store.assigned_product_ids.length === 0;
               const productCount = isDefaultAll ? products.length : store.assigned_product_ids.length;
-              const storeDirectUrl = getDirectStoreUrl(store.subdomain);
+              const storeDirectUrl = getDirectStoreUrl(store);
+              const storeDisplayDomain = store.custom_domain || `${store.subdomain}.${currentHost}`;
 
               return (
                 <div
@@ -171,7 +180,7 @@ export const SubdomainStoreManager: React.FC = () => {
                             {store.store_name}
                           </h3>
                           <span className="font-mono text-xs text-cyan-300 font-bold block">
-                            Subdomain: {store.subdomain}
+                            Domain: {storeDisplayDomain}
                           </span>
                         </div>
                       </div>
@@ -268,7 +277,7 @@ export const SubdomainStoreManager: React.FC = () => {
                   🌐
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Create New Subdomain Website</h3>
+                  <h3 className="text-base font-bold text-white">Create Subdomain or Custom Domain Store</h3>
                   <p className="text-xs text-slate-400">Generate a custom white-label panel store website</p>
                 </div>
               </div>
@@ -283,7 +292,7 @@ export const SubdomainStoreManager: React.FC = () => {
 
             <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="text-slate-300 font-bold mb-1 block">Subdomain Name / Slug (e.g. kalamvip)</label>
+                <label className="text-slate-300 font-bold mb-1 block">Subdomain Slug (e.g. kalamvip)</label>
                 <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2">
                   <input
                     type="text"
@@ -293,8 +302,22 @@ export const SubdomainStoreManager: React.FC = () => {
                     placeholder="kalamvip"
                     className="bg-transparent text-cyan-300 font-mono font-bold outline-none flex-1 text-xs"
                   />
-                  <span className="text-slate-500 font-mono text-[11px]">.kalampanel.com</span>
+                  <span className="text-slate-500 font-mono text-[11px]">.{currentHost}</span>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold mb-1 block">Custom Domain (Optional, e.g. kalamvip.com)</label>
+                <input
+                  type="text"
+                  value={form.custom_domain}
+                  onChange={(e) => setForm({ ...form, custom_domain: e.target.value })}
+                  placeholder="e.g. kalamvip.com or vip.yourbrand.org"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-mono font-bold outline-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Optional: If you bought a custom domain, enter it here. Otherwise leave blank!
+                </p>
               </div>
 
               <div>
@@ -315,7 +338,7 @@ export const SubdomainStoreManager: React.FC = () => {
                   type="text"
                   value={form.banner_announcement}
                   onChange={(e) => setForm({ ...form, banner_announcement: e.target.value })}
-                  placeholder="🔥 Official Subdomain Store: Buy Anti-Ban Panels with Instant Delivery!"
+                  placeholder="🔥 Official Store: Buy Anti-Ban Panels with Instant Delivery!"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none"
                 />
               </div>
@@ -360,7 +383,7 @@ export const SubdomainStoreManager: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg cursor-pointer transition"
                 >
-                  🚀 Create Subdomain Website
+                  🚀 Create Subdomain / Custom Domain Website
                 </button>
               </div>
             </form>

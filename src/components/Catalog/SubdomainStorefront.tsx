@@ -48,7 +48,16 @@ export const SubdomainStorefront: React.FC<SubdomainStorefrontProps> = ({
     return products.filter(p => store.assigned_product_ids.map(String).includes(String(p.id)));
   }, [products, store.assigned_product_ids]);
 
-  const fullSubdomainUrl = `${window.location.origin}/?store=${store.subdomain}`;
+  const currentHost = window.location.hostname;
+  const displayDomain = store.custom_domain
+    ? store.custom_domain
+    : (currentHost.includes('.') && !currentHost.includes('localhost') && !currentHost.includes('127.0.0.1'))
+      ? currentHost
+      : `${store.subdomain}.${window.location.host}`;
+
+  const fullSubdomainUrl = store.custom_domain
+    ? (store.custom_domain.startsWith('http') ? store.custom_domain : `https://${store.custom_domain}`)
+    : `${window.location.origin}/?store=${store.subdomain}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(fullSubdomainUrl);
@@ -100,7 +109,7 @@ export const SubdomainStorefront: React.FC<SubdomainStorefrontProps> = ({
               </span>
             </div>
             <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-1.5 mt-0.5">
-              <span>{store.subdomain}.kalampanel.com</span>
+              <span>{displayDomain}</span>
               <button
                 type="button"
                 onClick={handleCopyLink}
@@ -122,18 +131,6 @@ export const SubdomainStorefront: React.FC<SubdomainStorefrontProps> = ({
             {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{copiedLink ? 'Link Copied' : 'Share Store Link'}</span>
           </button>
-
-          {onExitSubdomain && (
-            <button
-              type="button"
-              onClick={onExitSubdomain}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="Exit Subdomain Store View"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden min-[480px]:inline">Main Platform</span>
-            </button>
-          )}
         </div>
       </header>
 
