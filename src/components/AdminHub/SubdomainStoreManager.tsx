@@ -5,35 +5,24 @@ import {
   Globe,
   Plus,
   Trash2,
-  Edit3,
   Copy,
   Check,
   ExternalLink,
-  Package,
   ShoppingBag,
   Sparkles,
-  Send,
-  Building2,
-  Megaphone,
-  CheckCircle2,
-  XCircle,
-  AlertCircle
+  Link,
+  Share2
 } from 'lucide-react';
 
 export const SubdomainStoreManager: React.FC = () => {
   const {
     subdomainStores,
     createSubdomainStore,
-    updateSubdomainStore,
     deleteSubdomainStore,
-    setActiveSubdomainSlug,
-    products,
-    settings,
-    currentUser
+    products
   } = useBot();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingStoreId, setEditingBotId] = useState<string | null>(null);
   const [copiedStoreId, setCopiedStoreId] = useState<string | null>(null);
   const [deleteConfirmStore, setDeleteConfirmStore] = useState<SubdomainStore | null>(null);
 
@@ -80,11 +69,20 @@ export const SubdomainStoreManager: React.FC = () => {
     });
   };
 
+  const getDirectStoreUrl = (subdomain: string) => {
+    return `${window.location.origin}/?store=${subdomain}`;
+  };
+
   const handleCopyStoreLink = (store: SubdomainStore) => {
-    const fullUrl = `${window.location.origin}/?store=${store.subdomain}`;
+    const fullUrl = getDirectStoreUrl(store.subdomain);
     navigator.clipboard.writeText(fullUrl);
     setCopiedStoreId(store.id);
     setTimeout(() => setCopiedStoreId(null), 2000);
+  };
+
+  const handleOpenStandaloneTab = (store: SubdomainStore) => {
+    const fullUrl = getDirectStoreUrl(store.subdomain);
+    window.open(fullUrl, '_blank', 'noopener,noreferrer');
   };
 
   const toggleProductSelection = (productId: number | string) => {
@@ -103,14 +101,14 @@ export const SubdomainStoreManager: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase text-cyan-400 tracking-wider">Multi-Tenant Store Engine</span>
+            <span className="text-xs font-black uppercase text-cyan-400 tracking-wider">Subdomain Website Manager</span>
             <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
-              Subdomains Active
+              {subdomainStores.length} Stores Configured
             </span>
           </div>
           <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 mt-1">
             <Globe className="w-5 h-5 text-cyan-400" />
-            Subdomain Website Builder &amp; Storefronts Manager
+            Standalone Subdomain Store URLs &amp; Websites
           </h2>
         </div>
 
@@ -125,21 +123,21 @@ export const SubdomainStoreManager: React.FC = () => {
       </div>
 
       {/* Guidance Notice Box */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/40 rounded-2xl p-4 sm:p-5 space-y-2 text-xs">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 border border-indigo-500/40 rounded-2xl p-4 sm:p-5 space-y-2 text-xs">
         <div className="flex items-center gap-2 text-indigo-300 font-bold">
           <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>How Subdomain Website Stores Work:</span>
+          <span>Standalone Web Store URL Directions:</span>
         </div>
         <p className="text-slate-300 leading-relaxed">
-          Create white-label subdomain websites (e.g. <code className="text-cyan-300 font-mono font-bold">kalamvip.kalampanel.com</code> or <code className="text-cyan-300 font-mono font-bold">?store=kalamvip</code>). Each subdomain website displays assigned panel products and allows direct purchasing right on that subdomain website!
+          Copy the standalone URL below to share directly with your customers on Telegram or WhatsApp. Clicking <b>"Open in New Tab ↗"</b> opens the subdomain store as a separate independent website!
         </p>
       </div>
 
       {/* Subdomain Stores List Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-          <span>Configured Subdomain Websites ({subdomainStores.length})</span>
-          <span className="text-[10px] text-cyan-400 font-mono">Live Multi-Tenant Routing</span>
+          <span>Your Created Subdomain Web Stores ({subdomainStores.length})</span>
+          <span className="text-[10px] text-cyan-400 font-mono">1-Click Direct Copy &amp; Open</span>
         </div>
 
         {subdomainStores.length === 0 ? (
@@ -155,6 +153,7 @@ export const SubdomainStoreManager: React.FC = () => {
             {subdomainStores.map(store => {
               const isDefaultAll = !store.assigned_product_ids || store.assigned_product_ids.length === 0;
               const productCount = isDefaultAll ? products.length : store.assigned_product_ids.length;
+              const storeDirectUrl = getDirectStoreUrl(store.subdomain);
 
               return (
                 <div
@@ -172,7 +171,7 @@ export const SubdomainStoreManager: React.FC = () => {
                             {store.store_name}
                           </h3>
                           <span className="font-mono text-xs text-cyan-300 font-bold block">
-                            {store.subdomain}.kalampanel.com
+                            Subdomain: {store.subdomain}
                           </span>
                         </div>
                       </div>
@@ -186,18 +185,37 @@ export const SubdomainStoreManager: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5 text-[11px] font-mono">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Subdomain Link:</span>
-                        <span className="text-cyan-300 font-bold font-mono">?store={store.subdomain}</span>
+                    {/* Direct Copyable Web URL Box */}
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 font-bold flex items-center gap-1">
+                          <Link className="w-3.5 h-3.5 text-cyan-400" />
+                          Standalone Direct URL:
+                        </span>
+                        <span className="text-slate-400 text-[10px]">
+                          {productCount} Panels Included
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Products Catalog:</span>
-                        <span className="text-slate-200 font-bold">{isDefaultAll ? 'All Panels' : `${productCount} Selected Panels`}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Created Date:</span>
-                        <span className="text-slate-400">{store.created_at}</span>
+
+                      <div className="flex items-center gap-2 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2 font-mono text-[11px] text-cyan-200 select-all">
+                        <span className="truncate flex-1">{storeDirectUrl}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyStoreLink(store)}
+                          className="px-2 py-1 bg-cyan-600/30 hover:bg-cyan-600 text-cyan-300 hover:text-white rounded-lg transition text-[10px] font-bold shrink-0 flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedStoreId === store.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy URL</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -206,11 +224,11 @@ export const SubdomainStoreManager: React.FC = () => {
                   <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveSubdomainSlug(store.subdomain)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
+                      onClick={() => handleOpenStandaloneTab(store)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg active:scale-95"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Launch Website</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-cyan-300" />
+                      <span>Open in New Tab ↗</span>
                     </button>
 
                     <div className="flex items-center gap-1.5">
@@ -218,9 +236,9 @@ export const SubdomainStoreManager: React.FC = () => {
                         type="button"
                         onClick={() => handleCopyStoreLink(store)}
                         className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl transition cursor-pointer"
-                        title="Copy Subdomain URL"
+                        title="Copy Subdomain Link"
                       >
-                        {copiedStoreId === store.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedStoreId === store.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
                       </button>
 
                       <button

@@ -454,13 +454,39 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (parts[1]) return parts[1].split('?')[0].split('/')[0].toLowerCase().trim();
     }
 
-    const host = window.location.hostname;
-    if (host.includes('.') && !host.includes('localhost') && !host.includes('run.app') && !host.includes('127.0.0.1')) {
-      const sub = host.split('.')[0].toLowerCase().trim();
-      if (sub && sub !== 'www' && sub !== 'app' && sub !== 'store') return sub;
+    const host = window.location.hostname.toLowerCase().trim();
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      const parts = host.split('.');
+      const sub = parts[0];
+      if (sub && sub !== 'www' && sub !== 'app' && sub !== 'store' && sub !== 'ais-dev-3udqoacmhh72nf7nq5cjz2-128464619421' && sub !== 'ais-pre-3udqoacmhh72nf7nq5cjz2-128464619421') {
+        return sub;
+      }
     }
     return null;
   });
+
+  // Re-evaluate automatic subdomain detection whenever subdomainStores update
+  useEffect(() => {
+    if (subdomainStores.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const storeFromQuery = urlParams.get('store') || urlParams.get('subdomain');
+      if (storeFromQuery) {
+        const found = subdomainStores.find(s => s.subdomain.toLowerCase() === storeFromQuery.toLowerCase().trim());
+        if (found) setActiveSubdomainSlugState(found.subdomain);
+        return;
+      }
+
+      const host = window.location.hostname.toLowerCase().trim();
+      if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+        const sub = host.split('.')[0];
+        const matchedBySub = subdomainStores.find(s => s.subdomain.toLowerCase() === sub);
+        if (matchedBySub) {
+          setActiveSubdomainSlugState(matchedBySub.subdomain);
+          return;
+        }
+      }
+    }
+  }, [subdomainStores]);
 
   const activeSubdomainStore = useMemo(() => {
     if (!activeSubdomainSlug) return null;
