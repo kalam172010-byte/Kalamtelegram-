@@ -392,15 +392,6 @@ export const ProductCatalog: React.FC = () => {
                               <Wrench className="w-3.5 h-3.5" />
                               <span>Under Maintenance</span>
                             </button>
-                          ) : !hasSufficientBalance ? (
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('gateways')}
-                              className="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/10"
-                            >
-                              <Zap className="w-3.5 h-3.5" />
-                              <span>Low Balance (Add Funds)</span>
-                            </button>
                           ) : (
                             <button
                               type="button"
