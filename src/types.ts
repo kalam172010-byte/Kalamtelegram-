@@ -1,4 +1,4 @@
-export type AccountType = 'Regular' | 'Reseller';
+export type AccountType = 'Regular' | 'Reseller' | 'Admin' | 'VIP';
 
 export interface PaymentGatewayConfig {
   upi_id: string;
@@ -65,6 +65,26 @@ export interface ReferralRecord {
   status: 'completed' | 'pending';
 }
 
+export interface SubdomainStore {
+  id: string;
+  subdomain: string; // e.g. 'kalamvip' -> kalamvip.kalampanel.com or ?store=kalamvip
+  store_name: string; // e.g. 'KALAM VIP STORE'
+  owner_id: number;
+  owner_email?: string;
+  logo_url?: string;
+  banner_announcement?: string;
+  theme_color?: string; // 'cyan' | 'emerald' | 'purple' | 'amber' | 'rose'
+  assigned_product_ids: (number | string)[]; // List of product IDs displayed on this subdomain store
+  custom_price_margin_percent?: number;
+  upi_id?: string;
+  support_telegram?: string;
+  support_whatsapp?: string;
+  status: 'LIVE' | 'MAINTENANCE' | 'DISABLED';
+  created_at: string;
+  total_orders: number;
+  total_revenue: number;
+}
+
 export interface User {
   user_id: number;
   chat_id?: number;
@@ -94,14 +114,15 @@ export interface User {
   total_saved: number;
   is_banned: number; // 0 or 1
   warnings: number;
+  is_admin?: number;
+  admin_since?: string;
+  role?: string;
   is_vip?: number;
   vip_since?: string;
   referral_code?: string;
   referred_by?: number;
   referral_count?: number;
   referral_earnings?: number;
-  is_admin?: number;
-  role?: string;
 }
 
 export interface Product {
@@ -310,6 +331,31 @@ export interface Settings {
   payment_qr_logo_url?: string;
   payment_qr_dark_color?: string;
   payment_qr_light_color?: string;
+
+  // Web Customization & Branding Settings
+  web_site_title?: string;
+  web_site_tagline?: string;
+  web_logo_url?: string;
+  web_favicon_url?: string;
+  web_announcement_bar?: string;
+  web_show_announcement?: boolean | string;
+  web_announcement_bg?: string;
+  web_primary_theme?: string;
+  web_hero_headline?: string;
+  web_hero_subheadline?: string;
+  web_hero_cta_text?: string;
+  web_hero_banner_url?: string;
+  web_footer_copyright?: string;
+  web_seo_meta_title?: string;
+  web_seo_meta_description?: string;
+  web_contact_email?: string;
+
+  // Bot Management & Settings
+  bot_welcome_msg?: string;
+  bot_auto_notify_purchases?: boolean;
+  bot_auto_notify_deposits?: boolean;
+  bot_auto_notify_new_users?: boolean;
+
   [key: string]: any;
 }
 
@@ -348,7 +394,7 @@ export interface ChatMessage {
 
 export type ViewTab = 'dashboard' | 'admin' | 'auth' | 'gateways' | 'reseller_api' | 'database' | 'code' | 'logs';
 
-export type AdminTab = 'overview' | 'appinstall' | 'products' | 'purchases' | 'users' | 'gateways' | 'health' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine';
+export type AdminTab = 'overview' | 'appinstall' | 'products' | 'purchases' | 'users' | 'gateways' | 'health' | 'referrals' | 'resellers' | 'broadcast' | 'tickets' | 'support' | 'coupons' | 'emojis' | 'settings' | 'texts' | 'logs' | 'code' | 'botcommands' | 'bot_engine' | 'web_customize' | 'bot_settings' | 'subdomains';
 
 export interface ProviderBalanceState {
   success: boolean;

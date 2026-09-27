@@ -434,11 +434,108 @@ async function startServer() {
       }
 
       if (action === 'update_role') {
-        if (is_reseller !== undefined) user.is_reseller = is_reseller ? 1 : 0;
-        if (is_vip !== undefined) user.is_vip = is_vip ? 1 : 0;
+        const { role, account_type, is_admin } = req.body;
+
+        if (is_admin !== undefined) {
+          user.is_admin = is_admin ? 1 : 0;
+          if (is_admin) {
+            user.role = 'admin';
+            user.account_type = 'Admin';
+            user.admin_since = new Date().toISOString();
+          }
+        }
+
+        if (is_reseller !== undefined) {
+          user.is_reseller = is_reseller ? 1 : 0;
+          if (is_reseller) {
+            user.account_type = 'Reseller';
+            user.reseller_since = new Date().toISOString().substring(0, 10);
+            if (!user.role || user.role === 'user') user.role = 'reseller';
+          } else if (user.role === 'reseller') {
+            user.role = 'user';
+            user.account_type = 'Regular';
+          }
+        }
+
+        if (is_vip !== undefined) {
+          user.is_vip = is_vip ? 1 : 0;
+          if (is_vip) {
+            user.vip_since = new Date().toISOString().substring(0, 10);
+            if (!user.role || user.role === 'user') user.role = 'vip';
+          }
+        }
+
+        if (role !== undefined) {
+          user.role = role;
+          if (role === 'admin') {
+            user.is_admin = 1;
+            user.account_type = 'Admin';
+            user.admin_since = new Date().toISOString();
+          } else if (role === 'reseller') {
+            user.is_reseller = 1;
+            user.is_admin = 0;
+            user.account_type = 'Reseller';
+            user.reseller_since = new Date().toISOString().substring(0, 10);
+          } else if (role === 'vip') {
+            user.is_vip = 1;
+            user.is_admin = 0;
+            user.account_type = 'VIP';
+            user.vip_since = new Date().toISOString().substring(0, 10);
+          } else if (role === 'regular' || role === 'user') {
+            user.is_admin = 0;
+            user.is_reseller = 0;
+            user.is_vip = 0;
+            user.account_type = 'Regular';
+            user.role = 'user';
+          }
+        }
+
+        if (account_type !== undefined) user.account_type = account_type;
         if (is_banned !== undefined) user.is_banned = is_banned ? 1 : 0;
         if (warning_count !== undefined) user.warnings = warning_count;
-        dbStore.logActivity(user.user_id, 'USER_ROLE_UPDATE', `Permissions updated by admin`);
+
+        dbStore.logActivity(user.user_id, 'USER_ROLE_UPDATE', `Role/Permissions updated to ${user.role || user.account_type} by admin`);
+
+        // Send Telegram notification if enabled
+        if (notifyTelegram !== false && telegramEngine) {
+          try {
+            if (user.is_admin === 1) {
+              const adminMsg = `👑 <b>ADMIN PERMISSIONS GRANTED</b>\n\n` +
+                `🎉 <i>Congratulations!</i> You have been promoted to <b>Administrator & Co-Admin</b> by the Master Admin.\n\n` +
+                `⚡ <b>Your Admin Capabilities:</b>\n` +
+                `• Access to <code>/admin</code> control panel\n` +
+                `• Live stock, product & order oversight\n` +
+                `• User management & broadcast messaging\n\n` +
+                `<i>Type /admin or click below to launch the admin portal.</i>`;
+              await telegramEngine.sendMessage(numUserId, adminMsg, {
+                inline_keyboard: [[{ text: '👑 Open Admin Dashboard', callback_data: 'admin_home' }]]
+              });
+            } else if (user.is_reseller === 1) {
+              const resMsg = `🌟 <b>WHOLESALE RESELLER STATUS ACTIVATED</b>\n\n` +
+                `🎉 <i>Congratulations!</i> Your account has been upgraded to <b>Wholesale Reseller</b>.\n\n` +
+                `💰 <b>Reseller Privileges:</b>\n` +
+                `• Exclusive wholesale discounted pricing on all panel keys\n` +
+                `• Dedicated <code>/reseller</code> wholesale tools\n` +
+                `• Priority key dispensing & order tracking\n\n` +
+                `<i>Open the store to buy keys with your wholesale discount!</i>`;
+              await telegramEngine.sendMessage(numUserId, resMsg, {
+                inline_keyboard: [
+                  [{ text: '🛒 Open Reseller Store', callback_data: 'shop_categories' }],
+                  [{ text: '🌟 Reseller Center', callback_data: 'reseller_panel' }]
+                ]
+              });
+            } else if (user.is_vip === 1) {
+              const vipMsg = `💎 <b>VIP MEMBERSHIP GRANTED</b>\n\n` +
+                `🎉 <i>Congratulations!</i> You have been upgraded to <b>VIP Member</b>.\n\n` +
+                `Enjoy 15% VIP discounts and priority server access!`;
+              await telegramEngine.sendMessage(numUserId, vipMsg, {
+                inline_keyboard: [[{ text: '🛒 Browse Store', callback_data: 'shop_categories' }]]
+              });
+            }
+          } catch (notifErr: any) {
+            console.warn(`Telegram role notification notice for UID ${numUserId}:`, notifErr.message);
+          }
+        }
       }
 
       dbStore.saveData();

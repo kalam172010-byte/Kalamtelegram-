@@ -36,6 +36,7 @@ import {
   InlineKeyboardButton,
   ViewTab,
   AdminTab,
+  SubdomainStore,
   BotInstance,
   PaymentGatewayConfig,
   ResellerApiConfig,
@@ -140,6 +141,25 @@ export interface BotContextType {
   fsmData: Record<string, any>;
   isBotTyping: boolean;
 
+  // Subdomain Store Builder & Multi-Tenant Engine
+  subdomainStores: SubdomainStore[];
+  activeSubdomainStore: SubdomainStore | null;
+  activeSubdomainSlug: string | null;
+  createSubdomainStore: (params: {
+    subdomain: string;
+    store_name: string;
+    assigned_product_ids?: (number | string)[];
+    theme_color?: string;
+    upi_id?: string;
+    logo_url?: string;
+    banner_announcement?: string;
+    support_telegram?: string;
+    support_whatsapp?: string;
+  }) => SubdomainStore;
+  updateSubdomainStore: (id: string, updates: Partial<SubdomainStore>) => void;
+  deleteSubdomainStore: (id: string) => void;
+  setActiveSubdomainSlug: (slug: string | null) => void;
+
   // View state
   activeTab: ViewTab;
   setActiveTab: (tab: ViewTab) => void;
@@ -207,6 +227,8 @@ export interface BotContextType {
   warnUser: (userId: number, message: string) => void;
   toggleUserVip: (userId: number) => void;
   toggleUserReseller: (userId: number) => void;
+  toggleUserAdmin: (userId: number) => void;
+  promoteUserRole: (userId: number, role: 'admin' | 'reseller' | 'vip' | 'regular', notifyTelegram?: boolean) => Promise<void>;
   createNewCoupon: (code: string, amount: number, uses: number) => void;
   deleteCoupon: (code: string) => void;
   replyToTicket: (ticketId: number, replyText: string) => void;
@@ -390,6 +412,126 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProviderBalanceLoading, setIsProviderBalanceLoading] = useState<boolean>(false);
 
   // Multi-Bot Management State
+  const [subdomainStores, setSubdomainStores] = useState<SubdomainStore[]>(() => {
+    const saved = localStorage.getItem('kalam_subdomain_stores');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error('Error parsing subdomain stores', e);
+      }
+    }
+    return [
+      {
+        id: 'store_kalamvip',
+        subdomain: 'kalamvip',
+        store_name: 'KALAM VIP STORE',
+        owner_id: 12846461,
+        owner_email: 'kalam172010@gmail.com',
+        logo_url: '',
+        banner_announcement: '🔥 Official Subdomain Store: Buy Anti-Ban Panels with Instant Delivery!',
+        theme_color: 'cyan',
+        assigned_product_ids: [],
+        upi_id: 'kalam@upi',
+        support_telegram: 'https://t.me/KalamPanelSupport',
+        status: 'LIVE',
+        created_at: new Date().toISOString().substring(0, 10),
+        total_orders: 12,
+        total_revenue: 1450
+      }
+    ];
+  });
+
+  const [activeSubdomainSlug, setActiveSubdomainSlugState] = useState<string | null>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const storeFromQuery = urlParams.get('store') || urlParams.get('subdomain');
+    if (storeFromQuery) return storeFromQuery.toLowerCase().trim();
+
+    const hash = window.location.hash;
+    if (hash.includes('store/')) {
+      const parts = hash.split('store/');
+      if (parts[1]) return parts[1].split('?')[0].split('/')[0].toLowerCase().trim();
+    }
+
+    const host = window.location.hostname;
+    if (host.includes('.') && !host.includes('localhost') && !host.includes('run.app') && !host.includes('127.0.0.1')) {
+      const sub = host.split('.')[0].toLowerCase().trim();
+      if (sub && sub !== 'www' && sub !== 'app' && sub !== 'store') return sub;
+    }
+    return null;
+  });
+
+  const activeSubdomainStore = useMemo(() => {
+    if (!activeSubdomainSlug) return null;
+    return subdomainStores.find(s => s.subdomain.toLowerCase() === activeSubdomainSlug.toLowerCase()) || null;
+  }, [subdomainStores, activeSubdomainSlug]);
+
+  const createSubdomainStore = useCallback((params: {
+    subdomain: string;
+    store_name: string;
+    assigned_product_ids?: (number | string)[];
+    theme_color?: string;
+    upi_id?: string;
+    logo_url?: string;
+    banner_announcement?: string;
+    support_telegram?: string;
+    support_whatsapp?: string;
+  }) => {
+    const cleanSlug = params.subdomain.toLowerCase().replace(/[^a-z0-9_-]/g, '').trim();
+    const ownerObj = users.find(u => u.user_id === currentUserId);
+    const newStore: SubdomainStore = {
+      id: `store_${cleanSlug}_${Date.now().toString(36)}`,
+      subdomain: cleanSlug || `store${Date.now().toString().slice(-4)}`,
+      store_name: params.store_name.trim() || 'VIP PANEL STORE',
+      owner_id: currentUserId,
+      owner_email: ownerObj?.email || '',
+      logo_url: params.logo_url || '',
+      banner_announcement: params.banner_announcement || `🔥 ${params.store_name}: Instant Key Delivery Active!`,
+      theme_color: params.theme_color || 'cyan',
+      assigned_product_ids: params.assigned_product_ids || [],
+      custom_price_margin_percent: 0,
+      upi_id: params.upi_id || settings.fampay_upi_id || '',
+      support_telegram: params.support_telegram || settings.support_telegram || '',
+      support_whatsapp: params.support_whatsapp || settings.support_whatsapp || '',
+      status: 'LIVE',
+      created_at: new Date().toISOString().substring(0, 10),
+      total_orders: 0,
+      total_revenue: 0
+    };
+
+    setSubdomainStores(prev => {
+      const updated = [newStore, ...prev.filter(s => s.subdomain !== newStore.subdomain)];
+      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
+      return updated;
+    });
+
+    setDoc(doc(db, 'subdomain_stores', newStore.id), newStore, { merge: true }).catch(() => {});
+    return newStore;
+  }, [currentUserId, users, settings]);
+
+  const updateSubdomainStore = useCallback((id: string, updates: Partial<SubdomainStore>) => {
+    setSubdomainStores(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, ...updates } : s);
+      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
+      return updated;
+    });
+    setDoc(doc(db, 'subdomain_stores', id), updates, { merge: true }).catch(() => {});
+  }, []);
+
+  const deleteSubdomainStore = useCallback((id: string) => {
+    setSubdomainStores(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
+      return updated;
+    });
+    deleteDoc(doc(db, 'subdomain_stores', id)).catch(() => {});
+  }, []);
+
+  const setActiveSubdomainSlug = useCallback((slug: string | null) => {
+    setActiveSubdomainSlugState(slug);
+  }, []);
+
   const [bots, setBots] = useState<BotInstance[]>(() => {
     const saved = localStorage.getItem('kalam_bot_instances');
     if (saved) {
@@ -563,7 +705,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   const existing = userMap.get(su.user_id);
                   const offBal = offlineStorage.getUserBalance(su.user_id);
                   if (existing) {
-                    const safeBalance = Math.max(existing.balance ?? 0, su.balance ?? 0, offBal ?? 0);
+                    const safeBalance = su.balance !== undefined && su.balance !== null ? Number(su.balance) : (existing.balance ?? 0);
                     const safeSpent = Math.max(existing.spent ?? 0, su.spent ?? 0);
                     const safeSaved = Math.max(existing.total_saved ?? 0, su.total_saved ?? 0);
                     const safeOrders = Math.max(existing.orders_count ?? 0, su.orders_count ?? 0);
@@ -575,6 +717,11 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       spent: safeSpent,
                       total_saved: safeSaved,
                       orders_count: safeOrders,
+                      is_admin: su.is_admin !== undefined ? su.is_admin : existing.is_admin,
+                      is_reseller: su.is_reseller !== undefined ? su.is_reseller : existing.is_reseller,
+                      is_vip: su.is_vip !== undefined ? su.is_vip : existing.is_vip,
+                      role: su.role || existing.role,
+                      account_type: su.account_type || existing.account_type,
                       email: existing.email || su.email,
                       password: existing.password || su.password,
                       avatar_url: existing.avatar_url || su.avatar_url,
@@ -587,10 +734,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       owner_email: existing.owner_email || su.owner_email
                     });
                   } else {
-                    const initialBal = offBal !== null ? Math.max(su.balance ?? 0, offBal) : (su.balance ?? 0);
                     userMap.set(su.user_id, {
                       ...su,
-                      balance: initialBal
+                      balance: Number(su.balance ?? 0)
                     });
                   }
                 });
@@ -835,8 +981,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const existing = map.get(cu.user_id);
               const offBal = offlineStorage.getUserBalance(cu.user_id);
               const safeBal = (cu.balance !== undefined && cu.balance !== null)
-                ? (existing ? Math.max(existing.balance ?? 0, Number(cu.balance), offBal ?? 0) : Number(cu.balance))
-                : (existing?.balance ?? offBal ?? 0);
+                ? Number(cu.balance)
+                : (existing?.balance ?? 0);
               const safeSpent = Math.max(existing?.spent ?? 0, (cu.spent !== undefined && cu.spent !== null) ? Number(cu.spent) : 0);
               const safeOrders = Math.max(existing?.orders_count ?? 0, (cu.orders_count !== undefined && cu.orders_count !== null) ? Number(cu.orders_count) : 0);
               const safeSaved = Math.max(existing?.total_saved ?? 0, (cu.total_saved !== undefined && cu.total_saved !== null) ? Number(cu.total_saved) : 0);
@@ -4641,7 +4787,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
               map.set(su.user_id, {
                 ...su,
                 ...existing,
-                balance: Math.max(existing.balance ?? 0, su.balance ?? 0),
+                balance: su.balance !== undefined && su.balance !== null ? Number(su.balance) : existing.balance,
                 spent: Math.max(existing.spent ?? 0, su.spent ?? 0)
               });
             } else {
@@ -4799,6 +4945,109 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_role', userId, is_reseller: newReseller })
     }).catch(() => {});
+  };
+
+  const toggleUserAdmin = (userId: number) => {
+    let newAdmin = 0;
+    let targetUser: User | undefined;
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          newAdmin = (u.is_admin === 1 || u.role === 'admin') ? 0 : 1;
+          targetUser = {
+            ...u,
+            is_admin: newAdmin,
+            role: newAdmin ? 'admin' : 'user',
+            account_type: newAdmin ? 'Admin' : 'Regular'
+          };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        is_admin: newAdmin,
+        role: newAdmin ? 'admin' : 'user',
+        account_type: newAdmin ? 'Admin' : 'Regular',
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_role', userId, is_admin: newAdmin, role: newAdmin ? 'admin' : 'user' })
+    }).catch(() => {});
+  };
+
+  const promoteUserRole = async (userId: number, role: 'admin' | 'reseller' | 'vip' | 'regular', notifyTelegram = true): Promise<void> => {
+    let targetUser: User | undefined;
+    const nowIso = new Date().toISOString();
+
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.user_id === userId) {
+          const is_admin = role === 'admin' ? 1 : 0;
+          const is_reseller = role === 'reseller' ? 1 : 0;
+          const is_vip = role === 'vip' ? 1 : 0;
+          const account_type = role === 'admin' ? 'Admin' : (role === 'reseller' ? 'Reseller' : (role === 'vip' ? 'VIP' : 'Regular'));
+          const userRole = role === 'regular' ? 'user' : role;
+
+          targetUser = {
+            ...u,
+            is_admin,
+            is_reseller,
+            is_vip,
+            role: userRole,
+            account_type: account_type as any,
+            reseller_since: is_reseller ? nowIso.substring(0, 10) : u.reseller_since,
+            vip_since: is_vip ? nowIso.substring(0, 10) : u.vip_since
+          };
+          return targetUser;
+        }
+        return u;
+      });
+      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
+      offlineStorage.saveUserBalances(updated);
+      return updated;
+    });
+
+    logActivity(12846461, 'ADMIN_PROMOTE_ROLE', `User #${userId} promoted to ${role.toUpperCase()}`);
+
+    if (targetUser) {
+      setDoc(doc(db, 'users', String(userId)), {
+        user_id: userId,
+        balance: targetUser.balance,
+        spent: targetUser.spent,
+        is_admin: targetUser.is_admin,
+        is_reseller: targetUser.is_reseller,
+        is_vip: targetUser.is_vip,
+        role: targetUser.role,
+        account_type: targetUser.account_type,
+        updated_at: nowIso
+      }, { merge: true }).catch(() => {});
+    }
+
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_role',
+          userId,
+          role,
+          notifyTelegram
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to sync role update to server:', err);
+    }
   };
 
   const createNewCoupon = (code: string, amount: number, uses: number) => {
@@ -5572,6 +5821,13 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         logout,
         requestPasswordReset,
         resetPassword,
+        subdomainStores,
+        activeSubdomainStore,
+        activeSubdomainSlug,
+        createSubdomainStore,
+        updateSubdomainStore,
+        deleteSubdomainStore,
+        setActiveSubdomainSlug,
         bots,
         myBots,
         activeBotId,
@@ -5639,6 +5895,8 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         warnUser,
         toggleUserVip,
         toggleUserReseller,
+        toggleUserAdmin,
+        promoteUserRole,
         createNewCoupon,
         deleteCoupon,
         replyToTicket,

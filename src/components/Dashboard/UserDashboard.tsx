@@ -1217,6 +1217,42 @@ export const UserDashboard: React.FC = () => {
         )}
       </div>
 
+      {/* Customizable Public Store Footer */}
+      <footer className="pt-8 pb-12 border-t border-slate-800/80 text-center space-y-3">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-slate-400">
+          {settings.support_telegram && (
+            <a
+              href={settings.support_telegram}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-cyan-300 transition flex items-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Telegram Support</span>
+            </a>
+          )}
+          {settings.support_whatsapp && (
+            <a
+              href={settings.support_whatsapp}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-emerald-300 transition flex items-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5 text-emerald-400" />
+              <span>WhatsApp Support</span>
+            </a>
+          )}
+          {settings.web_contact_email && (
+            <span className="text-slate-500 flex items-center gap-1">
+              ✉️ {settings.web_contact_email}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 font-medium">
+          {settings.web_footer_copyright || '© 2026 KALAM FF PANEL. All Rights Reserved.'}
+        </p>
+      </footer>
+
       {/* User Profile Modal */}
       <UserProfileModal
         isOpen={isProfileOpen}

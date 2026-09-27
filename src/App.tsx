@@ -10,6 +10,7 @@ import { PaymentGatewayManager } from './components/Gateways/PaymentGatewayManag
 import { ResellerApiManager } from './components/ResellerAPI/ResellerApiManager';
 import { WebsiteLogo } from './components/Common/WebsiteLogo';
 import { OfflineIndicator } from './components/Common/OfflineIndicator';
+import { SubdomainStorefront } from './components/Catalog/SubdomainStorefront';
 import { useKeyboardAwareness } from './hooks/useKeyboardAwareness';
 import { usePageRouter } from './hooks/usePageRouter';
 import {
@@ -72,7 +73,9 @@ const AppContent: React.FC = () => {
     openAddProductModal,
     products,
     settings,
-    toggleMaintenanceMode
+    toggleMaintenanceMode,
+    activeSubdomainStore,
+    setActiveSubdomainSlug
   } = useBot();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -128,6 +131,16 @@ const AppContent: React.FC = () => {
     );
   }
 
+  // Subdomain Storefront Guard: If user is visiting a standalone subdomain store URL, render the subdomain storefront
+  if (activeSubdomainStore) {
+    return (
+      <SubdomainStorefront
+        store={activeSubdomainStore}
+        onExitSubdomain={() => setActiveSubdomainSlug(null)}
+      />
+    );
+  }
+
   const navigateTo = (tab: any, subAdminTab?: any) => {
     setActiveTab(tab);
     if (subAdminTab) {
@@ -147,6 +160,20 @@ const AppContent: React.FC = () => {
 
       {/* Top Glowing Ambient Border Line */}
       <div className="h-[2px] w-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-emerald-400 z-50 shrink-0 shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
+
+      {/* Top Custom Announcement Bar */}
+      {Boolean(settings.web_show_announcement ?? true) && settings.web_announcement_bar && (
+        <div className={`px-4 py-1.5 text-xs text-center font-bold z-40 shrink-0 flex items-center justify-center gap-2 border-b shadow-sm ${
+          settings.web_announcement_bg === 'cyan' ? 'bg-cyan-950/90 text-cyan-200 border-cyan-800' :
+          settings.web_announcement_bg === 'purple' ? 'bg-purple-950/90 text-purple-200 border-purple-800' :
+          settings.web_announcement_bg === 'amber' ? 'bg-amber-950/90 text-amber-200 border-amber-800' :
+          settings.web_announcement_bg === 'rose' ? 'bg-rose-950/90 text-rose-200 border-rose-800' :
+          'bg-emerald-950/90 text-emerald-200 border-emerald-800'
+        }`}>
+          <Megaphone className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate max-w-4xl">{settings.web_announcement_bar}</span>
+        </div>
+      )}
 
       {/* Top Application Navigation Bar with Liquid Glass */}
       <header className="bg-slate-950/90 backdrop-blur-2xl border-b border-indigo-500/20 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 z-40 shadow-2xl shadow-black/60 sticky top-0">

@@ -156,7 +156,10 @@ export function usePageRouter({
             logs: 'Security & Activity Audit Logs',
             code: 'Live Source Code & Webhook Architecture',
             botcommands: 'Telegram Slash Commands',
-            bot_engine: 'Bot Engine Diagnostics'
+            bot_engine: 'Bot Engine Diagnostics',
+            web_customize: 'Website Customizer & Full Branding',
+            bot_settings: 'Telegram Bot Settings & Mode',
+            subdomains: 'Subdomain Store Builder & Multi-Tenant Websites'
           };
           const subName = adminSubTitleMap[adminTab] || 'Admin Panel';
           pageTitle = `${subName} | Kalam FF Panel`;

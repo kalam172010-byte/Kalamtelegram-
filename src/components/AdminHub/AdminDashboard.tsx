@@ -73,6 +73,7 @@ import { PurchaseLogs } from './PurchaseLogs';
 import { WebsiteLogo } from '../Common/WebsiteLogo';
 import { PWAInstallCard } from '../Common/PWAInstallCard';
 import { AccountingExportModal } from './AccountingExportModal';
+import { SubdomainStoreManager } from './SubdomainStoreManager';
 import {
   generateProductSalesReportPDF,
   generateUserTransactionsReportPDF,
@@ -117,6 +118,7 @@ export const AdminDashboard: React.FC = () => {
     bots,
     myBots,
     activeBot,
+    activeBotId,
     createBot,
     updateBot,
     deleteBot,
@@ -146,6 +148,8 @@ export const AdminDashboard: React.FC = () => {
     warnUser,
     toggleUserVip,
     toggleUserReseller,
+    toggleUserAdmin,
+    promoteUserRole,
     createNewCoupon,
     deleteCoupon,
     replyToTicket,
@@ -596,6 +600,8 @@ export const AdminDashboard: React.FC = () => {
   const [balanceAdjustReason, setBalanceAdjustReason] = useState<string>('Manual Payment (UPI/Admin)');
   const [balanceNotifyTg, setBalanceNotifyTg] = useState<boolean>(true);
   const [modalBalanceStatus, setModalBalanceStatus] = useState<string | null>(null);
+  const [roleNotifyTg, setRoleNotifyTg] = useState<boolean>(true);
+  const [roleStatusMsg, setRoleStatusMsg] = useState<string | null>(null);
   const [warnMessageText, setWarnMessageText] = useState('');
 
   // Quick Direct Payment Portal state
@@ -1247,7 +1253,7 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Top Mobile-First Command Action Hub (Large Touch Cards - Always at Top & Fully Visible) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 shrink-0">
         {[
           {
             id: 'overview',
@@ -1255,6 +1261,30 @@ export const AdminDashboard: React.FC = () => {
             subtitle: `₹${totalRevenue.toFixed(0)} Rev`,
             icon: Zap,
             color: 'from-cyan-500/20 to-blue-600/20 border-cyan-500/30 text-cyan-300'
+          },
+          {
+            id: 'web_customize',
+            title: 'Web Customizer',
+            subtitle: 'Logo, Hero, Colors',
+            icon: Palette,
+            badge: 'LIVE UI',
+            color: 'from-purple-500/20 to-indigo-600/20 border-purple-500/30 text-purple-300'
+          },
+          {
+            id: 'subdomains',
+            title: 'Subdomain Builder',
+            subtitle: 'Multi-Tenant Stores',
+            icon: Globe,
+            badge: 'SUBDOMAINS',
+            color: 'from-indigo-500/20 to-cyan-600/20 border-indigo-500/30 text-indigo-300'
+          },
+          {
+            id: 'bot_settings',
+            title: 'Bot Settings',
+            subtitle: 'Token, Mode, Auto-Reply',
+            icon: Bot,
+            badge: botStatus?.isRunning ? 'ONLINE' : 'OFFLINE',
+            color: 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-300'
           },
           {
             id: 'products',
@@ -1293,13 +1323,6 @@ export const AdminDashboard: React.FC = () => {
             subtitle: 'UPI & Provider',
             icon: CreditCard,
             color: 'from-teal-500/20 to-cyan-600/20 border-teal-500/30 text-teal-300'
-          },
-          {
-            id: 'appinstall',
-            title: 'App Download',
-            subtitle: 'PWA Mobile App',
-            icon: Smartphone,
-            color: 'from-cyan-500/20 via-indigo-600/20 to-blue-600/20 border-cyan-400/40 text-cyan-300'
           }
         ].map((hub) => {
           const HubIcon = hub.icon;
@@ -1338,6 +1361,9 @@ export const AdminDashboard: React.FC = () => {
       <div className="liquid-glass-pill rounded-2xl p-1 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0 shadow-lg">
         {[
           { id: 'overview', label: '📊 Overview', icon: Zap },
+          { id: 'web_customize', label: '🎨 Website Customizer', icon: Palette },
+          { id: 'subdomains', label: '🌐 Subdomain Stores', icon: Globe },
+          { id: 'bot_settings', label: '🤖 Bot Settings & Mode', icon: Bot },
           { id: 'products', label: `📦 Products (${products.length})`, icon: Package },
           { id: 'purchases', label: `🛍️ Purchase Logs (${orders.length})`, icon: ShoppingBag },
           { id: 'users', label: `👥 Users (${allUsers.length})`, icon: Users },
@@ -2758,8 +2784,9 @@ export const AdminDashboard: React.FC = () => {
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <h4 className="text-base font-bold text-white">{user.first_name}</h4>
-                          {user.is_vip ? <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold border border-amber-500/30">🌟 VIP</span> : null}
+                          {user.is_admin ? <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-bold border border-purple-500/30">⚡ Admin</span> : null}
                           {user.is_reseller ? <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold border border-indigo-500/30">👑 Reseller</span> : null}
+                          {user.is_vip ? <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold border border-amber-500/30">🌟 VIP</span> : null}
                           {user.is_banned ? <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-bold border border-rose-500/30">🚫 Banned</span> : null}
                         </div>
                         <div className="text-xs text-slate-400 font-mono">@{user.username || 'none'}</div>
@@ -2818,6 +2845,23 @@ export const AdminDashboard: React.FC = () => {
                         <span>₹{(user.spent || 0).toFixed(2)} spent</span>
                         <span className="text-[10px] opacity-75">{user.joined_date ? user.joined_date.split(' ')[0] : 'Active'}</span>
                       </div>
+                    </div>
+
+                    {/* Role Promotion Quick Select */}
+                    <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs">
+                      <span className="text-slate-400 font-bold flex items-center gap-1 text-[11px]">
+                        <Crown className="w-3.5 h-3.5 text-amber-400" /> Role Promotion:
+                      </span>
+                      <select
+                        value={user.is_admin ? 'admin' : (user.is_reseller ? 'reseller' : (user.is_vip ? 'vip' : 'regular'))}
+                        onChange={(e) => promoteUserRole(user.user_id, e.target.value as any, true)}
+                        className="bg-slate-900 border border-slate-700 text-cyan-300 font-bold text-xs rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
+                      >
+                        <option value="regular">👤 Regular User</option>
+                        <option value="reseller">👑 Wholesale Reseller</option>
+                        <option value="admin">⚡ Administrator</option>
+                        <option value="vip">🌟 VIP Member</option>
+                      </select>
                     </div>
 
                     {/* Big Finger-Friendly Mobile Action Buttons */}
@@ -2946,13 +2990,23 @@ export const AdminDashboard: React.FC = () => {
                                   🔗 Ref #{user.referred_by}
                                 </span>
                               ) : null}
+                              {user.is_admin ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  ⚡ Admin
+                                </span>
+                              ) : null}
                               {user.is_reseller ? (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                                   👑 Reseller
                                 </span>
                               ) : null}
-                              {!user.referral_count && !user.referred_by && !user.is_reseller && (
-                                <span className="text-slate-400 text-xs">Standard</span>
+                              {user.is_vip ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  🌟 VIP
+                                </span>
+                              ) : null}
+                              {!user.is_admin && !user.is_reseller && !user.is_vip && (
+                                <span className="text-slate-400 text-xs">👤 Standard</span>
                               )}
                             </div>
                           </td>
@@ -2973,6 +3027,19 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="p-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Role Promote Select */}
+                              <select
+                                value={user.is_admin ? 'admin' : (user.is_reseller ? 'reseller' : (user.is_vip ? 'vip' : 'regular'))}
+                                onChange={(e) => promoteUserRole(user.user_id, e.target.value as any, true)}
+                                className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 outline-none font-semibold focus:border-indigo-500 cursor-pointer hover:border-slate-500 transition"
+                                title="Promote user role instantly"
+                              >
+                                <option value="regular">👤 Regular</option>
+                                <option value="reseller">👑 Reseller</option>
+                                <option value="admin">⚡ Admin</option>
+                                <option value="vip">🌟 VIP</option>
+                              </select>
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5942,6 +6009,629 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* ================= WEBSITE FULL CUSTOMIZER TAB ================= */}
+        {adminTab === 'web_customize' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase text-purple-400 tracking-wider">Web Customization Engine</span>
+                  <span className="text-[10px] bg-purple-500/20 text-purple-300 font-bold px-2 py-0.5 rounded-full border border-purple-500/30">Live Sync</span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 mt-1">
+                  <Palette className="w-5 h-5 text-purple-400" />
+                  Website Full Customizer &amp; Branding Panel
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('dashboard')}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95"
+              >
+                <Globe className="w-4 h-4" />
+                <span>View Live Website</span>
+              </button>
+            </div>
+
+            {/* 1. Website Brand Identity & Logo Settings */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Building2 className="w-4 h-4 text-cyan-400" />
+                1. Website Brand Identity, Logo &amp; Title
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Website Title / App Name</label>
+                  <input
+                    type="text"
+                    value={settings.web_site_title || ''}
+                    onChange={(e) => updateSettings({ web_site_title: e.target.value })}
+                    placeholder="KALAM FF PANEL"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-bold outline-none focus:border-purple-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Displayed in website header logo &amp; browser tab title.</p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Website Tagline / Subtitle</label>
+                  <input
+                    type="text"
+                    value={settings.web_site_tagline || ''}
+                    onChange={(e) => updateSettings({ web_site_tagline: e.target.value })}
+                    placeholder="VIP STORE & BOT ENGINE"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Shown under website header logo.</p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Custom Logo Image URL</label>
+                  <input
+                    type="text"
+                    value={settings.web_logo_url || ''}
+                    onChange={(e) => updateSettings({ web_logo_url: e.target.value })}
+                    placeholder="https://example.com/logo.png (leave blank for default SVG)"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-cyan-300 font-mono text-xs outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Custom Favicon Image URL</label>
+                  <input
+                    type="text"
+                    value={settings.web_favicon_url || ''}
+                    onChange={(e) => updateSettings({ web_favicon_url: e.target.value })}
+                    placeholder="https://example.com/favicon.ico"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-cyan-300 font-mono text-xs outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Announcement Bar Customizer */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-amber-400" />
+                  2. Top Announcement Bar Customizer
+                </h3>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.web_show_announcement ?? true)}
+                    onChange={(e) => updateSettings({ web_show_announcement: e.target.checked })}
+                    className="w-4 h-4 accent-purple-500 rounded"
+                  />
+                  <span className="text-xs font-bold text-slate-300">Show Announcement Bar</span>
+                </label>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Announcement Message Text</label>
+                  <textarea
+                    rows={2}
+                    value={settings.web_announcement_bar || ''}
+                    onChange={(e) => updateSettings({ web_announcement_bar: e.target.value })}
+                    placeholder="🔥 SPECIAL OFFER: Instant key delivery, 100% Anti-Ban panels..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Announcement Bar Color Style</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: 'emerald', label: 'Emerald Green', class: 'bg-emerald-950 border-emerald-500 text-emerald-300' },
+                      { id: 'cyan', label: 'Cyan Cyber', class: 'bg-cyan-950 border-cyan-500 text-cyan-300' },
+                      { id: 'purple', label: 'Purple Luxury', class: 'bg-purple-950 border-purple-500 text-purple-300' },
+                      { id: 'amber', label: 'Amber Gold', class: 'bg-amber-950 border-amber-500 text-amber-300' },
+                      { id: 'rose', label: 'Rose Alert', class: 'bg-rose-950 border-rose-500 text-rose-300' }
+                    ].map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        onClick={() => updateSettings({ web_announcement_bg: style.id })}
+                        className={`p-2.5 rounded-xl border text-center font-bold text-xs transition cursor-pointer ${style.class} ${
+                          (settings.web_announcement_bg || 'emerald') === style.id ? 'ring-2 ring-white scale-105' : 'opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        {style.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Hero Section Copy & Visual Banners */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                3. Store Hero Banner &amp; Headline Copy
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="text-slate-300 font-bold mb-1.5 block">Hero Headline Title</label>
+                  <input
+                    type="text"
+                    value={settings.web_hero_headline || ''}
+                    onChange={(e) => updateSettings({ web_hero_headline: e.target.value })}
+                    placeholder="Premium Game Panels & Instant License Vault"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-bold outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-slate-300 font-bold mb-1.5 block">Hero Subheadline Description</label>
+                  <textarea
+                    rows={2}
+                    value={settings.web_hero_subheadline || ''}
+                    onChange={(e) => updateSettings({ web_hero_subheadline: e.target.value })}
+                    placeholder="Automated 24/7 key fulfillment with instant UPI recharge..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Primary CTA Button Text</label>
+                  <input
+                    type="text"
+                    value={settings.web_hero_cta_text || ''}
+                    onChange={(e) => updateSettings({ web_hero_cta_text: e.target.value })}
+                    placeholder="🛒 Browse Panels & Buy Keys"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Hero Banner Background Image URL</label>
+                  <input
+                    type="text"
+                    value={settings.web_hero_banner_url || ''}
+                    onChange={(e) => updateSettings({ web_hero_banner_url: e.target.value })}
+                    placeholder="https://example.com/banner.jpg"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-cyan-300 font-mono text-xs outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Footer & SEO Metadata */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Globe className="w-4 h-4 text-emerald-400" />
+                4. Footer Copyright, Support Email &amp; SEO Meta Tags
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Footer Copyright Text</label>
+                  <input
+                    type="text"
+                    value={settings.web_footer_copyright || ''}
+                    onChange={(e) => updateSettings({ web_footer_copyright: e.target.value })}
+                    placeholder="© 2026 KALAM FF PANEL. All Rights Reserved."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Support Contact Email</label>
+                  <input
+                    type="email"
+                    value={settings.web_contact_email || ''}
+                    onChange={(e) => updateSettings({ web_contact_email: e.target.value })}
+                    placeholder="support@kalampanel.com"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">SEO Meta Title</label>
+                  <input
+                    type="text"
+                    value={settings.web_seo_meta_title || ''}
+                    onChange={(e) => updateSettings({ web_seo_meta_title: e.target.value })}
+                    placeholder="Kalam FF Panel | Official License Key Vault"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">SEO Meta Description</label>
+                  <input
+                    type="text"
+                    value={settings.web_seo_meta_description || ''}
+                    onChange={(e) => updateSettings({ web_seo_meta_description: e.target.value })}
+                    placeholder="Buy 100% Anti-Ban Non-Root & Root FF Injector Panels..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Interactive Real-Time Web Customization Live Preview */}
+            <div className="bg-slate-900 border border-purple-500/40 rounded-2xl p-5 space-y-3 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs font-bold text-purple-300 uppercase flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-purple-400" />
+                  Interactive Real-Time Website Live Preview
+                </span>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  ⚡ Updates Live
+                </span>
+              </div>
+
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl space-y-0">
+                {/* Announcement Bar Preview */}
+                {Boolean(settings.web_show_announcement ?? true) && (
+                  <div className={`px-4 py-2 text-xs text-center font-bold flex items-center justify-center gap-2 ${
+                    settings.web_announcement_bg === 'cyan' ? 'bg-cyan-950 text-cyan-200 border-b border-cyan-800' :
+                    settings.web_announcement_bg === 'purple' ? 'bg-purple-950 text-purple-200 border-b border-purple-800' :
+                    settings.web_announcement_bg === 'amber' ? 'bg-amber-950 text-amber-200 border-b border-amber-800' :
+                    settings.web_announcement_bg === 'rose' ? 'bg-rose-950 text-rose-200 border-b border-rose-800' :
+                    'bg-emerald-950 text-emerald-200 border-b border-emerald-800'
+                  }`}>
+                    <Megaphone className="w-3.5 h-3.5" />
+                    <span>{settings.web_announcement_bar || '🔥 SPECIAL OFFER: Instant key delivery active 24/7!'}</span>
+                  </div>
+                )}
+
+                {/* Website Header Preview */}
+                <div className="px-5 py-3 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
+                  <WebsiteLogo size="sm" />
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 font-bold rounded-lg border border-cyan-500/30">
+                      Store
+                    </span>
+                    <span className="px-3 py-1 bg-slate-800 text-slate-300 font-medium rounded-lg">
+                      Products
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hero Banner Preview */}
+                <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950/80 relative overflow-hidden space-y-3 text-center">
+                  <h3 className="text-lg font-black text-white tracking-tight">
+                    {settings.web_hero_headline || 'Premium Game Panels & Instant License Vault'}
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-xl mx-auto">
+                    {settings.web_hero_subheadline || 'Automated 24/7 key fulfillment with instant UPI recharge, wholesale reseller discounts, and multi-bot management.'}
+                  </p>
+                  <div className="pt-2">
+                    <span className="inline-block px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs rounded-xl shadow-lg">
+                      {settings.web_hero_cta_text || '🛒 Browse Panels & Buy Keys'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer Preview */}
+                <div className="px-5 py-3 bg-slate-900 text-center text-[11px] text-slate-400 border-t border-slate-800">
+                  {settings.web_footer_copyright || '© 2026 KALAM FF PANEL. All Rights Reserved.'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= BOT SETTINGS & MANAGEMENT TAB ================= */}
+        {adminTab === 'bot_settings' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">Bot Control Engine</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    botStatus?.isRunning
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                  }`}>
+                    {botStatus?.isRunning ? '🟢 ONLINE' : '🔴 OFFLINE'}
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 mt-1">
+                  <Bot className="w-5 h-5 text-emerald-400" />
+                  Telegram Bot Settings &amp; Engine Management
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('botcommands')}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Code2 className="w-4 h-4" />
+                  <span>Slash Commands</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 1. Bot Credentials & API Token */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Key className="w-4 h-4 text-amber-400" />
+                1. Bot API Token &amp; Credentials
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Telegram Bot API Token</label>
+                  <input
+                    type="password"
+                    value={settings.bot_token || ''}
+                    onChange={(e) => updateSettings({ bot_token: e.target.value })}
+                    placeholder="8123456789:AAE_x..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-amber-300 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">HTTP API token generated from BotFather.</p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Bot Username</label>
+                  <input
+                    type="text"
+                    value={settings.bot_username || ''}
+                    onChange={(e) => updateSettings({ bot_username: e.target.value.replace('@', '') })}
+                    placeholder="KalamFFPanelBot"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Username without @ symbol.</p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Admin Telegram Chat ID</label>
+                  <input
+                    type="number"
+                    value={settings.admin_id ?? ''}
+                    onChange={(e) => updateSettings({ admin_id: Number(e.target.value) })}
+                    placeholder="12846461"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Support Telegram Handle</label>
+                  <input
+                    type="text"
+                    value={settings.support_telegram || ''}
+                    onChange={(e) => updateSettings({ support_telegram: e.target.value })}
+                    placeholder="https://t.me/KalamPanelSupport"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 outline-none focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={testTelegramBotToken}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-600/20 active:scale-95"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Test Bot API Connection</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Bot Status, Maintenance & Auto-Notification Triggers */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                2. Bot Operations, Maintenance &amp; Notification Triggers
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* Maintenance Mode Toggle */}
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">System Maintenance Mode</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleMaintenanceMode(!settings.maintenance_mode)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        settings.maintenance_mode
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {settings.maintenance_mode ? 'MAINTENANCE ON' : 'OFF (NORMAL)'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    When active, users cannot place orders and are shown a maintenance message.
+                  </p>
+                </div>
+
+                {/* Auto Purchase Notification */}
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">Notify Admin on Purchases</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settings.bot_auto_notify_purchases ?? true)}
+                      onChange={(e) => updateSettings({ bot_auto_notify_purchases: e.target.checked })}
+                      className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Automatically send purchase receipts to Admin Telegram chat ID.
+                  </p>
+                </div>
+
+                {/* Auto Deposit Notification */}
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">Notify Admin on UPI Deposits</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settings.bot_auto_notify_deposits ?? true)}
+                      onChange={(e) => updateSettings({ bot_auto_notify_deposits: e.target.checked })}
+                      className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Send real-time alerts when users add balance via FamPay/UPI.
+                  </p>
+                </div>
+
+                {/* Auto User Registration Notification */}
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">Notify Admin on New Users</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settings.bot_auto_notify_new_users ?? true)}
+                      onChange={(e) => updateSettings({ bot_auto_notify_new_users: e.target.checked })}
+                      className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Alert admin when new users hit /start on Telegram bot.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Welcome & Start Menu Text Editors */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <FileText className="w-4 h-4 text-indigo-400" />
+                3. Bot Welcome &amp; Menu Message Templates (HTML Formatting Enabled)
+              </h3>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Start Menu Message Template (/start)</label>
+                  <textarea
+                    rows={6}
+                    value={settings.ui_start_menu || ''}
+                    onChange={(e) => updateSettings({ ui_start_menu: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold mb-1.5 block">Referral Menu Message Template (/referral)</label>
+                  <textarea
+                    rows={4}
+                    value={settings.ui_referral_menu || ''}
+                    onChange={(e) => updateSettings({ ui_referral_menu: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Delete & Manage Telegram Bot Instances */}
+            <div className="bg-slate-900 border border-rose-500/40 rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    4. Delete &amp; Remove Telegram Bot Fleet Instances
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Select any configured Telegram bot below to permanently delete its token, database records, and server integration.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCreateBotModal(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-cyan-600/20 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Create / Add New Bot</span>
+                </button>
+              </div>
+
+              {bots.length === 0 ? (
+                <div className="p-6 text-center bg-slate-950 rounded-xl border border-dashed border-slate-800 text-slate-400 text-xs space-y-1">
+                  <p className="font-bold text-amber-400">No extra bot instances found in fleet.</p>
+                  <p className="text-slate-500 text-[11px]">You can add new bots or clear your primary bot credentials in Section 1 above.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {bots.map((bot) => {
+                    const isCurrentActive = bot.id === activeBotId;
+                    return (
+                      <div
+                        key={bot.id}
+                        className={`p-4 rounded-2xl border transition flex flex-col justify-between space-y-3 ${
+                          isCurrentActive
+                            ? 'bg-slate-950 border-cyan-500/50 shadow-md shadow-cyan-500/10'
+                            : 'bg-slate-950/80 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-sm text-white">{bot.name}</h4>
+                              {isCurrentActive && (
+                                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-extrabold px-2 py-0.5 rounded-full border border-cyan-500/40">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono text-xs text-indigo-300 font-bold block mt-0.5">
+                              @{bot.username || 'Unassigned'}
+                            </span>
+                          </div>
+
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold border ${
+                            bot.status === 'ONLINE'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          }`}>
+                            {bot.status}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 font-mono bg-slate-900 p-2 rounded-xl border border-slate-800 truncate">
+                          Token: {bot.bot_token ? `${bot.bot_token.slice(0, 10)}...${bot.bot_token.slice(-6)}` : 'Not Configured'}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            type="button"
+                            onClick={() => switchActiveBot(bot.id)}
+                            disabled={isCurrentActive}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                              isCurrentActive
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 opacity-70 cursor-default'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                            }`}
+                          >
+                            {isCurrentActive ? 'Current Active Bot' : 'Switch To This Bot'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setBotToDelete(bot)}
+                            className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-md shadow-rose-600/20"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Bot</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= SUBDOMAIN STORES MANAGER TAB ================= */}
+        {adminTab === 'subdomains' && (
+          <SubdomainStoreManager />
+        )}
+
         {/* ================= ACTIVITY LOGS TAB ================= */}
         {adminTab === 'logs' && (
           <div className="space-y-4 max-w-5xl mx-auto">
@@ -6212,32 +6902,111 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Role & Status Toggles */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => toggleUserVip(u.user_id)}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold cursor-pointer transition ${
-                    u.is_vip ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-300'
-                  }`}
-                >
-                  {u.is_vip ? '🌟 Remove VIP' : '🌟 Grant VIP'}
-                </button>
+              {/* Role & Privileges Promotion Panel */}
+              <div className="space-y-3 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <span>Promote User Level & Privileges</span>
+                  </label>
+                  <span className="text-[10px] text-indigo-400 font-semibold">Instant Real-Time Sync</span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleUserReseller(u.user_id)}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold cursor-pointer transition ${
-                    u.is_reseller ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-300'
-                  }`}
-                >
-                  {u.is_reseller ? '👑 Revoke Reseller' : '👑 Make Reseller'}
-                </button>
+                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Current Level:</span>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                    u.is_admin ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                    u.is_reseller ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
+                    u.is_vip ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                    'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}>
+                    {u.is_admin ? '⚡ Administrator & Co-Admin' : (u.is_reseller ? '👑 Wholesale Reseller' : (u.is_vip ? '🌟 VIP Member' : '👤 Regular User'))}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await promoteUserRole(u.user_id, 'reseller', roleNotifyTg);
+                      setRoleStatusMsg(`Promoted ${u.first_name} to Wholesale Reseller!`);
+                      setTimeout(() => setRoleStatusMsg(null), 3500);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5 shadow ${
+                      u.is_reseller ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : 'bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border border-indigo-500/40'
+                    }`}
+                  >
+                    <Crown className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span>{u.is_reseller ? '👑 Reseller Active' : '👑 Promote to Reseller'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await promoteUserRole(u.user_id, 'admin', roleNotifyTg);
+                      setRoleStatusMsg(`Promoted ${u.first_name} to Administrator & Co-Admin!`);
+                      setTimeout(() => setRoleStatusMsg(null), 3500);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5 shadow ${
+                      u.is_admin ? 'bg-purple-600 text-white ring-2 ring-purple-400' : 'bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-500/40'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span>{u.is_admin ? '⚡ Admin Active' : '⚡ Promote to Admin'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await promoteUserRole(u.user_id, 'vip', roleNotifyTg);
+                      setRoleStatusMsg(`Promoted ${u.first_name} to VIP Member!`);
+                      setTimeout(() => setRoleStatusMsg(null), 3500);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5 shadow ${
+                      u.is_vip ? 'bg-amber-600 text-white ring-2 ring-amber-400' : 'bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40'
+                    }`}
+                  >
+                    <span>🌟</span>
+                    <span>{u.is_vip ? 'VIP Active' : 'Promote to VIP'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await promoteUserRole(u.user_id, 'regular', roleNotifyTg);
+                      setRoleStatusMsg(`Set ${u.first_name} back to Regular User.`);
+                      setTimeout(() => setRoleStatusMsg(null), 3500);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5 shadow ${
+                      !u.is_admin && !u.is_reseller && !u.is_vip ? 'bg-slate-700 text-white' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                    }`}
+                  >
+                    <span>👤</span>
+                    <span>Set as Regular</span>
+                  </button>
+                </div>
+
+                <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={roleNotifyTg}
+                    onChange={(e) => setRoleNotifyTg(e.target.checked)}
+                    className="rounded border-slate-700 text-indigo-500 focus:ring-0"
+                  />
+                  <span>Send Telegram notification to user when role is changed</span>
+                </label>
+
+                {roleStatusMsg && (
+                  <div className="p-2.5 bg-indigo-950/80 border border-indigo-500/50 text-indigo-200 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 shadow">
+                    <CheckCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span>{roleStatusMsg}</span>
+                  </div>
+                )}
 
                 <button
                   type="button"
                   onClick={() => toggleUserBan(u.user_id)}
-                  className={`col-span-2 py-2 px-3 rounded-xl text-xs font-bold cursor-pointer transition ${
+                  className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold cursor-pointer transition ${
                     u.is_banned ? 'bg-emerald-600 text-white' : 'bg-rose-600/80 text-white hover:bg-rose-600'
                   }`}
                 >
