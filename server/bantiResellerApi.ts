@@ -240,7 +240,7 @@ export class BantiResellerService {
           headers['x-master-key'] = creds.masterKey;
         }
 
-        const response = await fetch(testUrl, {
+        let response = await fetch(testUrl, {
           method: 'POST',
           headers,
           body: postParams.toString(),
@@ -249,8 +249,8 @@ export class BantiResellerService {
 
         clearTimeout(timeoutId);
         lastHttpStatus = response.status;
-        const latencyMs = Date.now() - startTime;
-        const rawText = await response.text();
+        let latencyMs = Date.now() - startTime;
+        let rawText = await response.text();
         lastRawText = rawText;
 
         try {
@@ -259,7 +259,103 @@ export class BantiResellerService {
           lastParsed = { raw: rawText.trim() };
         }
 
-        const extractedBalance = this.extractBalance(lastParsed, rawText);
+        let extractedBalance = this.extractBalance(lastParsed, rawText);
+
+        // If endpoint returned "Invalid Action", it uses action=buy for key generation gateway
+        if (lastParsed && (lastParsed.msg === 'Invalid Action' || lastParsed.message === 'Invalid Action' || lastParsed.error === 'Invalid Action')) {
+          try {
+            const probeController = new AbortController();
+            const probeTimeout = setTimeout(() => probeController.abort(), 8000);
+            const probeParams = new URLSearchParams();
+            probeParams.append('api_key', creds.apiKey);
+            probeParams.append('action', 'buy');
+            probeParams.append('product_id', 'probe_check');
+            probeParams.append('duration', '1 Day');
+            if (creds.masterKey) {
+              probeParams.append('master_key', creds.masterKey);
+            }
+
+            const probeRes = await fetch(testUrl, {
+              method: 'POST',
+              headers,
+              body: probeParams.toString(),
+              signal: probeController.signal
+            });
+            clearTimeout(probeTimeout);
+            const probeRaw = await probeRes.text();
+            let probeParsed: any = null;
+            try { probeParsed = JSON.parse(probeRaw); } catch { probeParsed = { raw: probeRaw }; }
+
+            // If API responded with "Invalid Product ID or Duration", the API key is 100% valid and connected
+            const isKeyValid = probeParsed && (
+              probeParsed.msg?.toLowerCase().includes('product') ||
+              probeParsed.message?.toLowerCase().includes('product') ||
+              probeParsed.msg?.toLowerCase().includes('duration') ||
+              probeParsed.message?.toLowerCase().includes('duration') ||
+              probeParsed.status === 'success' ||
+              probeParsed.key
+            );
+
+            if (isKeyValid) {
+              latencyMs = Date.now() - startTime;
+              this.cachedBalance = {
+                success: true,
+                balance: 0,
+                currency: 'INR',
+                formatted: '⚡ Live API Gateway Connected',
+                status: 'CONNECTED',
+                latencyMs,
+                lastChecked: new Date().toISOString(),
+                message: `Live Connected to BantiBhaiya Gateway (${latencyMs}ms)`,
+                apiUrl: testUrl,
+                apiKeyMasked: maskedKey,
+                raw: probeParsed
+              };
+
+              apiLogger.log({
+                service: 'RESELLER_API',
+                endpoint: testUrl,
+                method: 'POST',
+                status: 'SUCCESS',
+                http_code: probeRes.status,
+                duration_ms: latencyMs,
+                message: `BantiBhaiya Live API Gateway Verified & Connected (${latencyMs}ms)`
+              });
+
+              return this.cachedBalance;
+            } else if (probeParsed && (probeParsed.msg?.toLowerCase().includes('invalid api key') || probeParsed.msg?.toLowerCase().includes('access denied'))) {
+              const errMsg = probeParsed.msg || 'Invalid API Key or Access Denied';
+              apiLogger.log({
+                service: 'RESELLER_API',
+                endpoint: testUrl,
+                method: 'POST',
+                status: 'ERROR',
+                http_code: probeRes.status,
+                duration_ms: latencyMs,
+                message: `BantiBhaiya Reseller API Error: ${errMsg}`,
+                payload: probeParsed
+              });
+
+              this.cachedBalance = {
+                success: false,
+                balance: 0,
+                currency: 'INR',
+                formatted: '₹0.00',
+                status: 'ERROR',
+                latencyMs,
+                lastChecked: new Date().toISOString(),
+                message: errMsg,
+                apiUrl: testUrl,
+                apiKeyMasked: maskedKey,
+                raw: probeParsed,
+                error: errMsg
+              };
+              return this.cachedBalance;
+            }
+          } catch (probeErr: any) {
+            console.warn('[BantiBhaiya] Probe check warning:', probeErr.message);
+          }
+        }
 
         // Check for explicit error response from provider API
         const isExplicitError = Boolean(

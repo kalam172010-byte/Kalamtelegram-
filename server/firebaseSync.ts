@@ -10,6 +10,8 @@ import {
   getDoc, 
   setDoc, 
   deleteDoc,
+  collection,
+  getDocs,
   type Firestore
 } from 'firebase/firestore';
 
@@ -317,5 +319,21 @@ export async function deleteProductsFromFirestore(productIds: (string | number)[
   if (!isCloudDbAvailable || isFirestoreQuotaExhausted() || !Array.isArray(productIds)) return;
   for (const id of productIds) {
     await deleteProductFromFirestore(id);
+  }
+}
+
+export async function loadProductsFromFirestoreCollection(): Promise<any[]> {
+  const isConnected = await verifyFirestoreConnection();
+  if (!isConnected || isFirestoreQuotaExhausted()) return [];
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    const prods: any[] = [];
+    snap.forEach(docSnap => {
+      const p = docSnap.data();
+      if (p) prods.push(p);
+    });
+    return prods;
+  } catch (err) {
+    return [];
   }
 }

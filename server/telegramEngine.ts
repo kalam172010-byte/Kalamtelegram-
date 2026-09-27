@@ -84,6 +84,14 @@ export function isCategoryMatch(prodCategory?: string, targetCategory?: string):
   return pNorm === tNorm;
 }
 
+export function isProductActive(p?: any): boolean {
+  if (!p) return false;
+  if (p.is_active === 0 || p.is_active === false || p.is_active === '0' || p.is_active === 'false' || p.is_active === 'inactive') {
+    return false;
+  }
+  return true;
+}
+
 export function getCanonicalCategory(catStr?: string): string {
   if (!catStr) return 'ANDROID NON ROOT PANEL';
   const c = catStr.trim();
@@ -3743,7 +3751,7 @@ class TelegramEngine {
       }
 
       let allCatProducts = dbStore.getData().products.filter(p => 
-        p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
+        isProductActive(p) && isCategoryMatch(p.category, categoryName)
       );
 
       let text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n` +
@@ -3824,22 +3832,25 @@ class TelegramEngine {
       }
 
       // If not found by direct ID, check if rawProdId matches a panel name or category
-      if (!refProduct || refProduct.is_active === 0) {
+      if (!refProduct || !isProductActive(refProduct)) {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
 
-        refProduct = dbStore.getData().products.find(p =>
-          p.is_active !== 0 && (
+        const foundAlt = dbStore.getData().products.find(p =>
+          isProductActive(p) && (
             (p.panel_name || p.name || '').toLowerCase().trim() === decoded ||
             normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(decoded) ||
             isCategoryMatch(p.category, decoded) ||
             (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
+        if (foundAlt) {
+          refProduct = foundAlt;
+        }
       }
 
       // If product not found by ID or panel name, it was deleted or deactivated
-      if (!refProduct || refProduct.is_active === 0) {
+      if (!refProduct || !isProductActive(refProduct)) {
         await this.answerCallback(cb.id, '❌ This panel is no longer available.', true);
         const text = `❌ <b>PANEL NOT AVAILABLE</b>\n\n` +
           `<i>This panel or package has been removed from the store catalog.</i>`;
@@ -3857,12 +3868,17 @@ class TelegramEngine {
       const targetPanelName = getCanonicalPanelName(refProduct);
 
       let panelPlans = dbStore.getData().products.filter(p =>
-        p.is_active !== 0 &&
-        isCategoryMatch(p.category, targetCategory) &&
+        isProductActive(p) &&
         (
-          getCanonicalPanelName(p).toLowerCase() === targetPanelName.toLowerCase() ||
-          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
-          normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
+          String(p.id) === String(refProduct!.id) ||
+          (
+            isCategoryMatch(p.category, targetCategory) &&
+            (
+              getCanonicalPanelName(p).toLowerCase() === targetPanelName.toLowerCase() ||
+              (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
+              normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
+            )
+          )
         )
       );
 
@@ -3958,7 +3974,8 @@ class TelegramEngine {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
         product = dbStore.getData().products.find(p =>
-          (p.is_active !== 0) && (
+          isProductActive(p) && (
+            String(p.id).trim() === decoded ||
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
             (p.panel_name || '').toLowerCase().trim() === decoded ||
@@ -3968,7 +3985,7 @@ class TelegramEngine {
         );
       }
 
-      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
+      if (!product || !isProductActive(product)) {
         await this.answerCallback(cb.id, '❌ This product plan is no longer available.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package plan has been removed from the store catalog.</i>`;
@@ -4133,8 +4150,22 @@ class TelegramEngine {
           Number(p.id) === Number(rawProdId)
         );
       }
+      if (!product) {
+        let decoded = '';
+        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
+        product = dbStore.getData().products.find(p =>
+          isProductActive(p) && (
+            String(p.id).trim() === decoded ||
+            (p.name || '').toLowerCase().trim() === decoded ||
+            (p.validity || '').toLowerCase().trim() === decoded ||
+            (p.panel_name || '').toLowerCase().trim() === decoded ||
+            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
+            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
+          )
+        );
+      }
 
-      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
+      if (!product || !isProductActive(product)) {
         await this.answerCallback(cb.id, '❌ Product no longer available.', true);
         return;
       }
@@ -4274,7 +4305,8 @@ class TelegramEngine {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
         product = dbStore.getData().products.find(p =>
-          (p.is_active !== 0) && (
+          isProductActive(p) && (
+            String(p.id).trim() === decoded ||
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
             (p.panel_name || '').toLowerCase().trim() === decoded ||
@@ -4284,7 +4316,7 @@ class TelegramEngine {
         );
       }
 
-      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
+      if (!product || !isProductActive(product)) {
         await this.answerCallback(cb.id, '❌ This product is no longer available to buy.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package has been removed or is no longer available for order.</i>`;
