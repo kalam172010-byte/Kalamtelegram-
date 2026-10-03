@@ -61,7 +61,17 @@ export class ApiLoggerService {
     }
 
     if (entry.status === 'ERROR') {
-      console.warn(`[SYSTEM_HEALTH_ERROR] [${entry.service}] ${entry.endpoint} -> ${entry.message} ${entry.error ? `(${entry.error})` : ''}`);
+      const errorText = `${entry.message} ${entry.error ? `(${entry.error})` : ''}`.toLowerCase();
+      const isBenign =
+        errorText.includes('message is not modified') ||
+        errorText.includes('message to delete not found') ||
+        errorText.includes('query is too old') ||
+        errorText.includes('query id is invalid') ||
+        errorText.includes('message to edit not found');
+
+      if (!isBenign) {
+        console.warn(`[SYSTEM_HEALTH_ERROR] [${entry.service}] ${entry.endpoint} -> ${entry.message} ${entry.error ? `(${entry.error})` : ''}`);
+      }
     }
 
     return newLog;

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useBot } from '../../context/BotContext';
 import { Product } from '../../types';
 import { sortProductsByDuration, isCategoryMatch, getCanonicalCategory, getCanonicalPanelName } from '../../utils/durationSorter';
+import { WebPurchaseModal } from './WebPurchaseModal';
 import {
   Package,
   Clock,
@@ -43,7 +44,7 @@ export const ProductCatalog: React.FC = () => {
   
   // Keyed state map: [panelKey: string] -> [selectedProductUniqueId: number | string]
   const [selectedDurationMap, setSelectedDurationMap] = useState<Record<string, number | string>>({});
-  const [purchasingPlanId, setPurchasingPlanId] = useState<number | string | null>(null);
+  const [selectedWebPurchaseProduct, setSelectedWebPurchaseProduct] = useState<Product | null>(null);
 
   // Group active products strictly into distinct panels (strictly canonical categories & panel names)
   const groupedPanels: GroupedPanel[] = useMemo(() => {
@@ -160,15 +161,6 @@ export const ProductCatalog: React.FC = () => {
     }));
   };
 
-  const handleBuy = async (plan: Product) => {
-    setPurchasingPlanId(plan.id);
-    try {
-      await handleCallbackQuery(`buy_${plan.id}`, `BUY ${plan.name}`);
-    } finally {
-      setPurchasingPlanId(null);
-    }
-  };
-
   const isReseller = Boolean(currentUser.is_reseller);
 
   return (
@@ -273,7 +265,6 @@ export const ProductCatalog: React.FC = () => {
                     const planKeys = productKeys.filter(k => String(k.product_id) === String(activePlan.id) && !k.is_used);
                     const inStock = activePlan.delivery_mode === 'api_provider' || Boolean(activePlan.provider_product_id) || planKeys.length > 0 || (activePlan.stock || 0) > 0;
                     const hasSufficientBalance = currentUser.balance >= finalPrice;
-                    const isPurchasing = purchasingPlanId === activePlan.id;
 
                     return (
                       <div
@@ -401,32 +392,18 @@ export const ProductCatalog: React.FC = () => {
                               <Wrench className="w-3.5 h-3.5" />
                               <span>Under Maintenance</span>
                             </button>
-                          ) : !hasSufficientBalance ? (
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('gateways')}
-                              className="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/10"
-                            >
-                              <Zap className="w-3.5 h-3.5" />
-                              <span>Low Balance (Add Funds)</span>
-                            </button>
                           ) : (
                             <button
                               type="button"
-                              onClick={() => handleBuy(activePlan)}
-                              disabled={!inStock || isPurchasing}
+                              onClick={() => setSelectedWebPurchaseProduct(activePlan)}
+                              disabled={!inStock}
                               className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-lg active:scale-95 cursor-pointer ${
-                                inStock && !isPurchasing
-                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-500/20 border border-emerald-400/40'
+                                inStock
+                                  ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white shadow-emerald-500/20 border border-emerald-400/40'
                                   : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                               }`}
                             >
-                              {isPurchasing ? (
-                                <>
-                                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                  <span>Processing Order...</span>
-                                </>
-                              ) : inStock ? (
+                              {inStock ? (
                                 <>
                                   <Key className="w-3.5 h-3.5" />
                                   <span>Buy Key Now (₹{finalPrice})</span>
@@ -449,6 +426,14 @@ export const ProductCatalog: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* Web Direct Purchase & Key Fulfillment Checkout Modal */}
+      <WebPurchaseModal
+        isOpen={Boolean(selectedWebPurchaseProduct)}
+        onClose={() => setSelectedWebPurchaseProduct(null)}
+        product={selectedWebPurchaseProduct}
+        onNeedRecharge={() => setActiveTab('gateways')}
+      />
     </div>
   );
 };

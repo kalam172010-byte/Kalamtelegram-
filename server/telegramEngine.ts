@@ -346,6 +346,30 @@ class TelegramEngine {
       const result = await response.json();
       if (!result.ok) {
         const errorDesc = result.description || `Telegram API error on ${method}`;
+
+        // Check for benign / expected non-critical Telegram responses (e.g. content already identical, already deleted)
+        const isBenign = typeof errorDesc === 'string' && (
+          errorDesc.toLowerCase().includes('message is not modified') ||
+          errorDesc.toLowerCase().includes('message to delete not found') ||
+          errorDesc.toLowerCase().includes('message to edit not found') ||
+          errorDesc.toLowerCase().includes('message can\'t be edited') ||
+          errorDesc.toLowerCase().includes('query is too old') ||
+          errorDesc.toLowerCase().includes('query id is invalid')
+        );
+
+        if (isBenign) {
+          apiLogger.log({
+            service: 'TELEGRAM',
+            endpoint: method,
+            method: 'POST',
+            status: 'SUCCESS',
+            http_code: response.status,
+            duration_ms: durationMs,
+            message: `Telegram API call: ${method} (idempotent: ${errorDesc})`
+          });
+          return true;
+        }
+
         apiLogger.log({
           service: 'TELEGRAM',
           endpoint: method,
@@ -374,16 +398,40 @@ class TelegramEngine {
       return result.result;
     } catch (err: any) {
       if (err.name === 'AbortError') throw err;
-      const durationMs = Date.now() - startTime;
-      apiLogger.log({
-        service: 'TELEGRAM',
-        endpoint: method,
-        method: 'POST',
-        status: 'ERROR',
-        duration_ms: durationMs,
-        message: `Telegram request failed: ${method}`,
-        error: err.message
-      });
+
+      const isBenign = typeof err.message === 'string' && (
+        err.message.toLowerCase().includes('message is not modified') ||
+        err.message.toLowerCase().includes('message to delete not found') ||
+        err.message.toLowerCase().includes('message to edit not found') ||
+        err.message.toLowerCase().includes('message can\'t be edited') ||
+        err.message.toLowerCase().includes('query is too old') ||
+        err.message.toLowerCase().includes('query id is invalid')
+      );
+
+      if (isBenign) {
+        return true;
+      }
+
+      // Avoid duplicate logging if already logged in !result.ok branch
+      const alreadyLogged = err.message && (
+        err.message.includes('Telegram API error on') ||
+        err.message.startsWith('Bad Request:') ||
+        err.message.startsWith('Forbidden:') ||
+        err.message.startsWith('Conflict:')
+      );
+
+      if (!alreadyLogged) {
+        const durationMs = Date.now() - startTime;
+        apiLogger.log({
+          service: 'TELEGRAM',
+          endpoint: method,
+          method: 'POST',
+          status: 'ERROR',
+          duration_ms: durationMs,
+          message: `Telegram request failed: ${method}`,
+          error: err.message
+        });
+      }
       throw err;
     }
   }
@@ -481,7 +529,9 @@ class TelegramEngine {
       const defaultCommands = [
         { command: 'start', description: '✨ Launch Shop & Main Menu' },
         { command: 'shop', description: '🛒 Product Catalog & Buy Keys' },
-        { command: 'addbalance', description: '💳 Add Wallet Balance via FamPay UPI' },
+        { command: 'lucky', description: '🎰 Play Live Animated Emoji Games' },
+        { command: 'dice', description: '🎲 Roll Animated Lucky Dice' },
+        { command: 'addbalance', description: '💳 Add Wallet Balance via UPI' },
         { command: 'balance', description: '👛 Check Current Wallet Balance' },
         { command: 'profile', description: '👤 My Profile & Purchased Keys' },
         { command: 'reseller', description: '👑 Reseller VIP Wholesale Dashboard' },
@@ -742,8 +792,16 @@ class TelegramEngine {
       } else if (update.callback_query) {
         await this.handleCallbackQuery(update.callback_query);
       }
-    } catch (err) {
-      console.error('Error processing Telegram update:', err);
+    } catch (err: any) {
+      const isBenign = err?.message && (
+        err.message.toLowerCase().includes('message is not modified') ||
+        err.message.toLowerCase().includes('query is too old') ||
+        err.message.toLowerCase().includes('query id is invalid') ||
+        err.message.toLowerCase().includes('message to delete not found')
+      );
+      if (!isBenign) {
+        console.error('Error processing Telegram update:', err);
+      }
     }
   }
 
@@ -836,45 +894,312 @@ class TelegramEngine {
   }
 
   public async editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: any): Promise<any> {
-    const payload: any = {
-      chat_id: chatId,
-      message_id: messageId,
-      text: text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true
-    };
-    if (replyMarkup) {
-      payload.reply_markup = replyMarkup;
+    try {
+      const payload: any = {
+        chat_id: chatId,
+        message_id: messageId,
+        text: text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (replyMarkup) {
+        payload.reply_markup = replyMarkup;
+      }
+      return await this.callApi('editMessageText', payload);
+    } catch (err: any) {
+      if (err?.message && err.message.toLowerCase().includes('message is not modified')) {
+        return true;
+      }
+      throw err;
     }
-    return await this.callApi('editMessageText', payload);
   }
 
   public async editMessageMedia(chatId: number, messageId: number, photoUrlOrFileId: string, caption?: string, replyMarkup?: any): Promise<any> {
+    try {
+      const payload: any = {
+        chat_id: chatId,
+        message_id: messageId,
+        media: {
+          type: 'photo',
+          media: photoUrlOrFileId,
+          caption: caption ? (caption.length > 1024 ? caption.substring(0, 1020) + '...' : caption) : '',
+          parse_mode: 'HTML'
+        }
+      };
+      if (replyMarkup) {
+        payload.reply_markup = replyMarkup;
+      }
+      return await this.callApi('editMessageMedia', payload);
+    } catch (err: any) {
+      if (err?.message && err.message.toLowerCase().includes('message is not modified')) {
+        return true;
+      }
+      throw err;
+    }
+  }
+
+  public async answerCallback(callbackQueryId: string, text?: string, showAlert: boolean = false): Promise<any> {
+    try {
+      const payload: any = {
+        callback_query_id: callbackQueryId,
+        show_alert: showAlert
+      };
+      if (text) {
+        payload.text = text;
+      }
+      return await this.callApi('answerCallbackQuery', payload);
+    } catch (err: any) {
+      if (err?.message && (err.message.toLowerCase().includes('query is too old') || err.message.toLowerCase().includes('query id is invalid'))) {
+        return true;
+      }
+      throw err;
+    }
+  }
+
+  public async sendDice(chatId: number, emoji: '🎲' | '🎯' | '🏀' | '⚽' | '🎳' | '🎰' = '🎲', replyMarkup?: any): Promise<any> {
     const payload: any = {
       chat_id: chatId,
-      message_id: messageId,
-      media: {
-        type: 'photo',
-        media: photoUrlOrFileId,
-        caption: caption ? (caption.length > 1024 ? caption.substring(0, 1020) + '...' : caption) : '',
-        parse_mode: 'HTML'
-      }
+      emoji: emoji
     };
     if (replyMarkup) {
       payload.reply_markup = replyMarkup;
     }
-    return await this.callApi('editMessageMedia', payload);
+    return await this.callApi('sendDice', payload);
   }
 
-  public async answerCallback(callbackQueryId: string, text?: string, showAlert: boolean = false): Promise<any> {
-    const payload: any = {
-      callback_query_id: callbackQueryId,
-      show_alert: showAlert
+  public async sendLuckyMenu(chatId: number, user: User, messageId?: number) {
+    const text =
+      `🎰 <b><u>LUCKY EMOJI ARCADE & REWARDS</u></b> 🎲\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎮 <i>Play live animated Telegram emojis directly in chat to win free wallet balance and jackpot prizes!</i>\n\n` +
+      `✨ <b>Featured Live Animated Games:</b>\n` +
+      `• 🎰 <b>Slot Machine:</b> Spin the reels! Match <b>777</b> for <b>₹25.00 Jackpot</b>!\n` +
+      `• 🎲 <b>Lucky Dice:</b> Roll <b>6</b> for a <b>₹3.00 Mega Reward</b>!\n` +
+      `• 🎯 <b>Bullseye Dart:</b> Hit the center target for <b>₹4.00 Prize</b>!\n` +
+      `• 🏀 <b>Basketball Shoot:</b> Swish a basket for <b>₹2.50 Win</b>!\n` +
+      `• ⚽ <b>Penalty Goal:</b> Score past the keeper for <b>₹2.50 Win</b>!\n` +
+      `• 🎳 <b>Bowling Strike:</b> Knock down all pins for <b>₹4.00 Strike</b>!\n\n` +
+      `💰 <b>Your Current Balance:</b> <b>₹${(user.balance || 0).toFixed(2)}</b>\n\n` +
+      `👇 <b>Choose a live animated emoji game to play:</b>`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '🎰 Play Slot Machine (Live Emoji)', callback_data: 'play_emoji_🎰', style: 'primary' }
+        ],
+        [
+          { text: '🎲 Roll Lucky Dice', callback_data: 'play_emoji_🎲', style: 'success' },
+          { text: '🎯 Throw Dart', callback_data: 'play_emoji_🎯', style: 'success' }
+        ],
+        [
+          { text: '🏀 Shoot Basketball', callback_data: 'play_emoji_🏀', style: 'success' },
+          { text: '⚽ Kick Football Goal', callback_data: 'play_emoji_⚽', style: 'success' }
+        ],
+        [
+          { text: '🎳 Bowling Strike', callback_data: 'play_emoji_🎳', style: 'success' },
+          { text: '🎁 Claim Daily Gift', callback_data: 'daily_gift', style: 'primary' }
+        ],
+        [
+          { text: '🛒 Product Store', callback_data: 'shop_categories', style: 'danger' },
+          { text: '🏠 Back to Menu', callback_data: 'main_menu', style: 'danger' }
+        ]
+      ]
     };
-    if (text) {
-      payload.text = text;
+
+    if (messageId) {
+      await this.editMessageText(chatId, messageId, text, keyboard);
+    } else {
+      await this.sendMessage(chatId, text, keyboard);
     }
-    return await this.callApi('answerCallbackQuery', payload);
+  }
+
+  public async playEmojiGame(
+    chatId: number,
+    user: User,
+    emoji: '🎲' | '🎯' | '🏀' | '⚽' | '🎳' | '🎰' = '🎰'
+  ) {
+    // 1. Send live interactive animated Telegram dice/emoji
+    const diceMsg = await this.sendDice(chatId, emoji);
+    const value = diceMsg?.dice?.value || Math.floor(Math.random() * 6) + 1;
+
+    // 2. Allow the Telegram animation to play smoothly on the user's screen (~2.2s)
+    await new Promise(resolve => setTimeout(resolve, 2200));
+
+    // 3. Calculate reward and game summary
+    let reward = 0.20;
+    let title = '🎉 LUCKY REWARD!';
+    let detail = `You rolled value <b>${value}</b>!`;
+
+    if (emoji === '🎰') {
+      if (value === 64) {
+        reward = 25.00;
+        title = '🚨 <b>MEGA 777 JACKPOT HIT!</b> 🚨';
+        detail = '🎰 <b>TRIPLE SEVENS (777)!</b> Incredible luck! You hit the supreme jackpot!';
+      } else if (value === 1) {
+        reward = 5.00;
+        title = '🔥 <b>BAR BAR BAR HIT!</b> 🔥';
+        detail = '🎰 <b>Triple BAR</b> combination hit! Great spin!';
+      } else if (value === 22 || value === 43) {
+        reward = 3.50;
+        title = '🍇 <b>TRIPLE FRUIT MATCH!</b> 🍇';
+        detail = '🎰 <b>3 Matching symbols</b> in a row! Excellent win!';
+      } else if (value === 16 || value === 32 || value === 48) {
+        reward = 1.50;
+        title = '✨ <b>DOUBLE MATCH WIN!</b> ✨';
+        detail = '🎰 <b>Matching pair</b> landed on the reels!';
+      } else {
+        reward = Number((0.15 + (value % 5) * 0.08).toFixed(2));
+        title = '🎁 <b>SLOT PARTICIPATION BONUS</b> 🎁';
+        detail = '🎰 Spin completed! Participation reward added!';
+      }
+    } else if (emoji === '🎲') {
+      if (value === 6) {
+        reward = 3.00;
+        title = '👑 <b>LUCKY SIX ROLLED!</b> 👑';
+        detail = '🎲 Perfect <b>6</b> rolled! Maximum dice multiplier won!';
+      } else if (value === 5) {
+        reward = 1.50;
+        title = '⭐ <b>HIGH FIVE ROLL!</b> ⭐';
+        detail = '🎲 Great roll of <b>5</b>!';
+      } else if (value === 4) {
+        reward = 0.75;
+        title = '✨ <b>LUCKY FOUR ROLL!</b> ✨';
+        detail = '🎲 Nice roll of <b>4</b>!';
+      } else {
+        reward = Number((0.15 + value * 0.05).toFixed(2));
+        title = '🎲 <b>DICE ROLL BONUS</b> 🎲';
+        detail = `🎲 Rolled a <b>${value}</b>!`;
+      }
+    } else if (emoji === '🎯') {
+      if (value === 6) {
+        reward = 4.00;
+        title = '🎯 <b>DIRECT BULLSEYE HIT!</b> 🎯';
+        detail = '🎯 Perfect center hit right on the red bullseye!';
+      } else if (value === 5) {
+        reward = 1.50;
+        title = '🎯 <b>INNER RING TARGET HIT!</b> 🎯';
+        detail = '🎯 Excellent precision shot!';
+      } else {
+        reward = Number((0.15 + value * 0.05).toFixed(2));
+        title = '🎯 <b>DART THROW REWARD</b> 🎯';
+        detail = `🎯 Target scored ${value} points!`;
+      }
+    } else if (emoji === '🏀') {
+      if (value === 4 || value === 5) {
+        reward = 2.50;
+        title = '🏀 <b>SWISH! SLAM DUNK BASKET!</b> 🏀';
+        detail = '🏀 Clean basket scored right through the net!';
+      } else {
+        reward = 0.20;
+        title = '🏀 <b>NICE BASKETBALL ATTEMPT!</b> 🏀';
+        detail = '🏀 Rim bounce shot! Bonus reward added!';
+      }
+    } else if (emoji === '⚽') {
+      if (value >= 3) {
+        reward = 2.50;
+        title = '⚽ <b>GOOOOOAL! GOAL SCORED!</b> ⚽';
+        detail = '⚽ Top corner rocket shot straight into the net!';
+      } else {
+        reward = 0.20;
+        title = '⚽ <b>NICE PENALTY ATTEMPT!</b> ⚽';
+        detail = '⚽ Saved by the post! Participation bonus added!';
+      }
+    } else if (emoji === '🎳') {
+      if (value === 6) {
+        reward = 4.00;
+        title = '🎳 <b>PERFECT STRIKE! ALL PINS DOWN!</b> 🎳';
+        detail = '🎳 All 10 pins smashed down for a clean strike!';
+      } else {
+        reward = Number((0.15 + value * 0.10).toFixed(2));
+        title = '🎳 <b>BOWLING ROLL BONUS</b> 🎳';
+        detail = `🎳 Knocked down ${value} pins!`;
+      }
+    }
+
+    // 4. Update user balance in storage
+    const newBal = (user.balance || 0) + reward;
+    dbStore.updateUser(user.user_id, { balance: newBal });
+    dbStore.logActivity(user.user_id, 'EMOJI_GAME', `Played animated ${emoji} game and won ₹${reward.toFixed(2)} (Value: ${value})`);
+
+    // 5. Send Celebration Results
+    const resultText =
+      `${title}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `${detail}\n\n` +
+      `🎁 <b>Reward Won:</b> <b>+₹${reward.toFixed(2)}</b>\n` +
+      `💰 <b>New Balance:</b> <b>₹${newBal.toFixed(2)}</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🔥 <i>Play again or explore our premium key store!</i>`;
+
+    const resultKb = {
+      inline_keyboard: [
+        [
+          { text: `🔄 Play Again (${emoji})`, callback_data: `play_emoji_${emoji}`, style: 'primary' },
+          { text: '🎮 All Emoji Games', callback_data: 'lucky_menu', style: 'success' }
+        ],
+        [
+          { text: '🛒 Open Product Store', callback_data: 'shop_categories', style: 'danger' },
+          { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
+        ]
+      ]
+    };
+
+    await this.sendMessage(chatId, resultText, resultKb);
+  }
+
+  public async handleUserSentDice(
+    chatId: number,
+    user: User,
+    emoji: '🎲' | '🎯' | '🏀' | '⚽' | '🎳' | '🎰',
+    userValue: number
+  ) {
+    await this.sendMessage(
+      chatId,
+      `🎮 <b>MATCH INITIATED!</b>\n\n👤 You threw ${emoji} and scored <b>${userValue}</b>!\n🤖 <i>Now watch the Bot roll live in chat...</i>`
+    );
+
+    // Bot rolls the matching live animated dice
+    const botDiceMsg = await this.sendDice(chatId, emoji);
+    const botValue = botDiceMsg?.dice?.value || Math.floor(Math.random() * 6) + 1;
+
+    await new Promise(resolve => setTimeout(resolve, 2200));
+
+    let reward = 0.20;
+    let duelResult = '';
+
+    if (userValue > botValue) {
+      reward = 1.50;
+      duelResult = `🏆 <b>YOU WON THE MATCH!</b> 🏆\n\n👤 Your Score: <b>${userValue}</b>\n🤖 Bot Score: <b>${botValue}</b>\n\n🎉 <i>Victory prize credited to your wallet!</i>`;
+    } else if (userValue === botValue) {
+      reward = 0.50;
+      duelResult = `🤝 <b>MATCH DRAW / TIE!</b> 🤝\n\n👤 Your Score: <b>${userValue}</b>\n🤖 Bot Score: <b>${botValue}</b>\n\n✨ <i>Both rolled identical score! Tie bonus awarded!</i>`;
+    } else {
+      reward = 0.15;
+      duelResult = `🤖 <b>BOT WON THIS ROUND!</b>\n\n👤 Your Score: <b>${userValue}</b>\n🤖 Bot Score: <b>${botValue}</b>\n\n🎁 <i>Better luck next time! Participation bonus credited!</i>`;
+    }
+
+    const newBal = (user.balance || 0) + reward;
+    dbStore.updateUser(user.user_id, { balance: newBal });
+    dbStore.logActivity(user.user_id, 'EMOJI_DUEL', `Played ${emoji} duel against bot (User: ${userValue}, Bot: ${botValue}) - Won ₹${reward.toFixed(2)}`);
+
+    const resultText =
+      `${duelResult}\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎁 <b>Prize Won:</b> <b>+₹${reward.toFixed(2)}</b>\n` +
+      `💰 <b>New Balance:</b> <b>₹${newBal.toFixed(2)}</b>`;
+
+    const resultKb = {
+      inline_keyboard: [
+        [
+          { text: `🔄 Roll ${emoji} Again`, callback_data: `play_emoji_${emoji}`, style: 'primary' },
+          { text: '🎰 All Emoji Games', callback_data: 'lucky_menu', style: 'success' }
+        ],
+        [
+          { text: '🛒 Product Store', callback_data: 'shop_categories', style: 'danger' },
+          { text: '🏠 Main Menu', callback_data: 'main_menu', style: 'danger' }
+        ]
+      ]
+    };
+
+    await this.sendMessage(chatId, resultText, resultKb);
   }
 
   private getUserPrice(user: User, product: Product): number {
@@ -1197,6 +1522,14 @@ class TelegramEngine {
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, `🚫 <b>Account Suspended</b>\n\nYour account has been banned from using ${this.getBotDisplayName()}. Contact support if you believe this is an error.`);
+      return;
+    }
+
+    // Check if user sent an interactive animated dice / emoji directly in Telegram chat
+    if (msg.dice) {
+      const emoji = msg.dice.emoji as '🎲' | '🎯' | '🏀' | '⚽' | '🎳' | '🎰';
+      const userValue = msg.dice.value;
+      await this.handleUserSentDice(chatId, user, emoji, userValue);
       return;
     }
 
@@ -1955,6 +2288,29 @@ class TelegramEngine {
       return;
     }
 
+    if (
+      lowerText.startsWith('/lucky') ||
+      lowerText.startsWith('/dice') ||
+      lowerText.startsWith('/slot') ||
+      lowerText.startsWith('/spin') ||
+      lowerText.startsWith('/game') ||
+      lowerText.startsWith('/play') ||
+      lowerText.startsWith('/daily') ||
+      text === '🎲' ||
+      text === '🎯' ||
+      text === '🎰' ||
+      text === '🏀' ||
+      text === '⚽' ||
+      text === '🎳'
+    ) {
+      if (['🎲', '🎯', '🎰', '🏀', '⚽', '🎳'].includes(text)) {
+        await this.playEmojiGame(chatId, user, text as any);
+      } else {
+        await this.sendLuckyMenu(chatId, user);
+      }
+      return;
+    }
+
     if (lowerText.startsWith('/reseller') || lowerText.startsWith('/vip')) {
       await this.sendResellerMenu(chatId, user);
       return;
@@ -2581,6 +2937,23 @@ class TelegramEngine {
       return;
     }
 
+    if (data === 'lucky' || data === 'lucky_menu' || data === 'lucky_draw' || data === 'lucky_game' || data === 'emoji_games' || data === 'game_menu') {
+      await this.answerCallback(cb.id, '🎰 Opening Lucky Emoji Arcade...', false);
+      await this.sendLuckyMenu(chatId, user, messageId);
+      return;
+    }
+
+    if (data.startsWith('play_emoji_')) {
+      const rawEmoji = data.replace('play_emoji_', '');
+      const emoji = (['🎲', '🎯', '🏀', '⚽', '🎳', '🎰'].includes(rawEmoji) ? rawEmoji : '🎰') as any;
+      await this.answerCallback(cb.id, `🎮 Rolling live animated ${emoji}...`, false);
+      if (messageId) {
+        await this.deleteMessage(chatId, messageId).catch(() => {});
+      }
+      await this.playEmojiGame(chatId, user, emoji);
+      return;
+    }
+
     if (data === 'daily_gift') {
       const today = new Date().toISOString().slice(0, 10);
       const logs = dbStore.getData().logs;
@@ -2589,7 +2962,8 @@ class TelegramEngine {
       );
 
       if (alreadyClaimed) {
-        await this.answerCallback(cb.id, '⏳ You already claimed your daily gift today! Check back tomorrow.', true);
+        await this.answerCallback(cb.id, '⏳ You already claimed your daily gift today! Check back tomorrow or play Emoji Games.', true);
+        await this.sendLuckyMenu(chatId, user, messageId);
         return;
       }
 
@@ -2605,9 +2979,10 @@ class TelegramEngine {
         `🎁 <b>CONGRATULATIONS! DAILY GIFT CLAIMED</b> 🎁\n\n` +
         `🎉 You received <b>₹${reward.toFixed(2)}</b> free wallet balance!\n` +
         `💰 <b>New Balance:</b> <b>₹${((user.balance || 0) + reward).toFixed(2)}</b>\n\n` +
-        `<i>Come back every 24 hours to claim your daily bonus!</i>`;
+        `<i>Come back every 24 hours to claim your daily bonus, or play the animated Emoji games!</i>`;
       const keyboard = {
         inline_keyboard: [
+          [{ text: '🎰 Play Animated Emoji Games', callback_data: 'lucky_menu', style: 'primary' }],
           [{ text: '🛒 Buy Now', callback_data: 'shop_categories', style: 'danger' }],
           [{ text: '🔙 Back to Menu', callback_data: 'main_menu', style: 'danger' }]
         ]
@@ -4133,7 +4508,7 @@ class TelegramEngine {
       ],
       [
         { text: 'Support', callback_data: 'support_menu', style: 'danger' },
-        { text: '🎁 Daily Gift', callback_data: 'daily_gift', style: 'success' }
+        { text: '🎁 Lucky / Emoji Game', callback_data: 'lucky_menu', style: 'success' }
       ]
     ];
 

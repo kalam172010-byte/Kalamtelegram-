@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { InlineKeyboardRenderer } from './InlineKeyboardRenderer';
 import { formatTelegramHTML } from '../../utils/telegramFormatter';
 import { FamPayModal } from '../PaymentModal/FamPayModal';
+import { EmojiReactionPicker } from './EmojiReactionPicker';
 import {
   Send,
   Sparkles,
@@ -32,6 +33,7 @@ export const TelegramBotView: React.FC = () => {
     messages,
     sendUserMessage,
     handleCallbackQuery,
+    toggleMessageReaction,
     isBotTyping,
     currentUser,
     currentFsmState,
@@ -261,10 +263,11 @@ export const TelegramBotView: React.FC = () => {
               className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'}`}
             >
               <div
-                className={`max-w-[94%] sm:max-w-[85%] md:max-w-[80%] rounded-2xl p-4 md:p-5 shadow-lg transition-all ${
+                onDoubleClick={() => toggleMessageReaction(msg.id, '❤️')}
+                className={`group relative max-w-[94%] sm:max-w-[85%] md:max-w-[80%] rounded-2xl p-4 md:p-5 shadow-lg transition-all ${
                   isBot
-                    ? 'bg-[#182533] text-slate-100 rounded-tl-xs border border-slate-700/60'
-                    : 'bg-[#2b5278] text-white rounded-tr-xs'
+                    ? 'bg-[#182533] text-slate-100 rounded-tl-xs border border-slate-700/60 hover:border-cyan-500/40'
+                    : 'bg-[#2b5278] text-white rounded-tr-xs hover:border-cyan-400/40'
                 }`}
               >
                 {/* Sender Name in Bot Group Context */}
@@ -397,10 +400,21 @@ export const TelegramBotView: React.FC = () => {
                   />
                 )}
 
-                {/* Message Timestamp */}
-                <div className="flex items-center justify-end gap-1.5 mt-2 text-[11px] text-slate-400 select-none">
-                  <span>{msg.timestamp}</span>
-                  {!isBot && <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />}
+                {/* Interactive Telegram Reaction Badges & Hover Picker */}
+                <div className="flex items-center justify-between gap-2 mt-1.5 pt-1">
+                  <EmojiReactionPicker
+                    messageId={msg.id}
+                    isBot={isBot}
+                    reactions={msg.reactions}
+                    onSelectReaction={(emoji) => toggleMessageReaction(msg.id, emoji)}
+                    align={isBot ? 'left' : 'right'}
+                  />
+
+                  {/* Message Timestamp */}
+                  <div className="flex items-center justify-end gap-1 text-[11px] text-slate-400 select-none shrink-0 self-end">
+                    <span>{msg.timestamp}</span>
+                    {!isBot && <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />}
+                  </div>
                 </div>
               </div>
             </motion.div>

@@ -150,6 +150,7 @@ export interface BotContextType {
   sendUserMessage: (text: string) => Promise<void>;
   handleCallbackQuery: (callbackData: string, btnText?: string) => Promise<void>;
   resetChat: () => void;
+  toggleMessageReaction: (messageId: string, emoji: string) => void;
   simulatePaymentSuccess: (orderId: string) => Promise<void>;
 
   // Live Telegram Engine
@@ -1674,6 +1675,51 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentFsmState(null);
     setFsmData({});
   };
+
+  // Toggle reaction on a simulated chat message
+  const toggleMessageReaction = useCallback((messageId: string, emoji: string) => {
+    setMessages(prev =>
+      prev.map(msg => {
+        if (msg.id !== messageId) return msg;
+        const currentReactions = msg.reactions ? [...msg.reactions] : [];
+        const existingIdx = currentReactions.findIndex(r => r.emoji === emoji);
+
+        if (existingIdx >= 0) {
+          const current = currentReactions[existingIdx];
+          if (current.userReacted) {
+            // Remove user reaction
+            if (current.count <= 1) {
+              currentReactions.splice(existingIdx, 1);
+            } else {
+              currentReactions[existingIdx] = {
+                ...current,
+                count: current.count - 1,
+                userReacted: false,
+                users: (current.users || []).filter(u => u !== currentUser.user_id)
+              };
+            }
+          } else {
+            // Add user reaction
+            currentReactions[existingIdx] = {
+              ...current,
+              count: current.count + 1,
+              userReacted: true,
+              users: [...(current.users || []), currentUser.user_id]
+            };
+          }
+        } else {
+          // New reaction from user
+          currentReactions.push({
+            emoji,
+            count: 1,
+            userReacted: true,
+            users: [currentUser.user_id]
+          });
+        }
+        return { ...msg, reactions: currentReactions };
+      })
+    );
+  }, [currentUser.user_id]);
 
   // FamGateway API functions
   const testFamGatewayKey = async (apiKey?: string) => {
@@ -5425,6 +5471,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         sendUserMessage,
         handleCallbackQuery,
         resetChat,
+        toggleMessageReaction,
         simulatePaymentSuccess,
         addProduct,
         addProductsBatch,

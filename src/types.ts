@@ -314,6 +314,13 @@ export interface InlineKeyboardButton {
   style?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning';
 }
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  users?: number[];
+  userReacted?: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'bot' | 'system';
@@ -328,6 +335,7 @@ export interface ChatMessage {
   media_type?: 'sticker' | 'qr_image' | 'video' | 'document' | 'photo';
   media_url?: string;
   is_broadcast?: boolean;
+  reactions?: MessageReaction[];
   order_info?: {
     order_id: string;
     amount: number;

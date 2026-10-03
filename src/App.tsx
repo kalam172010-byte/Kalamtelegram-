@@ -5,11 +5,12 @@ import { AdminDashboard } from './components/AdminHub/AdminDashboard';
 import { AuthPortal } from './components/Auth/AuthPortal';
 import { UserProfileModal } from './components/Auth/UserProfileModal';
 import { UserDashboard } from './components/Dashboard/UserDashboard';
-import { MyBotsDashboard } from './components/BotManager/MyBotsDashboard';
+import { TelegramBotView } from './components/TelegramClient/TelegramBotView';
 import { PaymentGatewayManager } from './components/Gateways/PaymentGatewayManager';
 import { ResellerApiManager } from './components/ResellerAPI/ResellerApiManager';
 import { WebsiteLogo } from './components/Common/WebsiteLogo';
 import { OfflineIndicator } from './components/Common/OfflineIndicator';
+import { SubdomainStorefront } from './components/Catalog/SubdomainStorefront';
 import { useKeyboardAwareness } from './hooks/useKeyboardAwareness';
 import { usePageRouter } from './hooks/usePageRouter';
 import {
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
     activeTab,
     setActiveTab,
     currentUser,
+    isAdmin,
     setCurrentUserId,
     allUsers,
     isAuthenticated,
@@ -71,7 +73,9 @@ const AppContent: React.FC = () => {
     openAddProductModal,
     products,
     settings,
-    toggleMaintenanceMode
+    toggleMaintenanceMode,
+    activeSubdomainStore,
+    setActiveSubdomainSlug
   } = useBot();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -97,8 +101,16 @@ const AppContent: React.FC = () => {
     currentUser.user_id === 12846461 ||
     currentUser.email?.toLowerCase() === 'kalam172010@gmail.com' ||
     currentUser.email?.toLowerCase() === 'kk7953926@gmail.com' ||
-    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com' ||
-    true;
+    currentUser.email?.toLowerCase() === 'kalamkalam1234kd@gmail.com';
+
+  // Subdomain Storefront Guard: If user is visiting a standalone subdomain store URL, render the subdomain storefront FIRST (for public visitors & users)
+  if (activeSubdomainStore) {
+    return (
+      <SubdomainStorefront
+        store={activeSubdomainStore}
+      />
+    );
+  }
 
   // Strict Auth Guard: If user is not authenticated, show ONLY the secure login/registration portal
   if (!isAuthenticated) {
@@ -148,6 +160,20 @@ const AppContent: React.FC = () => {
       {/* Top Glowing Ambient Border Line */}
       <div className="h-[2px] w-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-emerald-400 z-50 shrink-0 shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
 
+      {/* Top Custom Announcement Bar */}
+      {Boolean(settings.web_show_announcement ?? true) && settings.web_announcement_bar && (
+        <div className={`px-4 py-1.5 text-xs text-center font-bold z-40 shrink-0 flex items-center justify-center gap-2 border-b shadow-sm ${
+          settings.web_announcement_bg === 'cyan' ? 'bg-cyan-950/90 text-cyan-200 border-cyan-800' :
+          settings.web_announcement_bg === 'purple' ? 'bg-purple-950/90 text-purple-200 border-purple-800' :
+          settings.web_announcement_bg === 'amber' ? 'bg-amber-950/90 text-amber-200 border-amber-800' :
+          settings.web_announcement_bg === 'rose' ? 'bg-rose-950/90 text-rose-200 border-rose-800' :
+          'bg-emerald-950/90 text-emerald-200 border-emerald-800'
+        }`}>
+          <Megaphone className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate max-w-4xl">{settings.web_announcement_bar}</span>
+        </div>
+      )}
+
       {/* Top Application Navigation Bar with Liquid Glass */}
       <header className="bg-slate-950/90 backdrop-blur-2xl border-b border-indigo-500/20 px-2 sm:px-4 md:px-5 py-2 md:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 z-40 shadow-2xl shadow-black/60 sticky top-0">
         {/* Brand & Left Hamburger Drawer Toggle */}
@@ -188,26 +214,7 @@ const AppContent: React.FC = () => {
           ) : (
             <div className="hidden min-[520px]:flex items-center gap-1.5 bg-emerald-950/50 border border-emerald-500/30 px-2.5 py-1 rounded-full text-emerald-300 text-[10px] font-bold shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>LIVE SERVER</span>
-            </div>
-          )}
-
-          {/* Active Bot Quick Switcher on Desktop */}
-          {myBots.length > 0 && !settings.maintenance_mode && (
-            <div className="hidden xl:flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 px-2.5 py-1 rounded-xl text-xs shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-              <span className="text-slate-300 font-medium text-[11px]">Bot:</span>
-              <select
-                value={activeBot?.id || ''}
-                onChange={(e) => switchActiveBot(e.target.value)}
-                className="bg-transparent font-bold text-cyan-300 focus:outline-none cursor-pointer text-xs"
-              >
-                {myBots.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-slate-900 text-white">
-                    @{b.username} ({b.name})
-                  </option>
-                ))}
-              </select>
+              <span>LIVE SELLING BOT</span>
             </div>
           )}
         </div>
@@ -224,7 +231,20 @@ const AppContent: React.FC = () => {
             }`}
           >
             <LayoutDashboard className="w-4 h-4 text-cyan-300" />
-            <span>Dashboard</span>
+            <span>Store Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('bot')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
+              activeTab === 'bot' || activeTab === 'telegram'
+                ? 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-cyan-500/30 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Bot className="w-4 h-4 text-cyan-300 animate-pulse" />
+            <span>🤖 Telegram Bot</span>
           </button>
 
           <button
@@ -240,7 +260,7 @@ const AppContent: React.FC = () => {
             }`}
           >
             <Package className="w-4 h-4 text-amber-300" />
-            <span>Products</span>
+            <span>Products &amp; Keys</span>
           </button>
 
           <button
@@ -257,19 +277,6 @@ const AppContent: React.FC = () => {
           >
             <UserIcon className="w-4 h-4 text-emerald-300" />
             <span>Users</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('my_bots')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 ${
-              activeTab === 'my_bots'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 font-bold'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Bot className="w-4 h-4 text-cyan-300" />
-            <span>My Bots</span>
           </button>
 
           <button
@@ -363,15 +370,19 @@ const AppContent: React.FC = () => {
             </span>
           </button>
 
-          {/* Prominent + Add Product Button (Desktop only) */}
-          <button
-            type="button"
-            onClick={openAddProductModal}
-            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 border border-amber-300/60 min-h-[36px] shrink-0"
-          >
-            <Plus className="w-4 h-4 font-black" />
-            <span>+ Add Product</span>
-          </button>
+          {/* Prominent + Add Product Button */}
+          {(isAdmin || isMasterAdmin) && (
+            <button
+              type="button"
+              onClick={openAddProductModal}
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95 border border-amber-300/60 min-h-[32px] sm:min-h-[36px] shrink-0"
+              title="Add New Product & Duration Plans"
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 font-black" />
+              <span className="hidden min-[420px]:inline">+ Add Product</span>
+              <span className="min-[420px]:hidden">+ Add</span>
+            </button>
+          )}
 
           {/* Prominent Admin Hub button in top header if master admin */}
           {isMasterAdmin && (
@@ -511,18 +522,15 @@ const AppContent: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => navigateTo('my_bots')}
+                  onClick={() => navigateTo('bot')}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    activeTab === 'my_bots'
+                    activeTab === 'bot' || activeTab === 'telegram'
                       ? 'bg-gradient-to-r from-cyan-500/25 to-blue-600/25 text-cyan-300 border border-cyan-500/40 shadow-lg'
                       : 'text-slate-300 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <span className="flex-1 text-left">My Telegram Bots</span>
-                  <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full text-[10px]">
-                    {myBots.length}
-                  </span>
+                  <Bot className="w-4 h-4 text-cyan-400 shrink-0 animate-pulse" />
+                  <span className="flex-1 text-left">🤖 Telegram Bot Live View</span>
                 </button>
 
                 <button
@@ -535,7 +543,7 @@ const AppContent: React.FC = () => {
                   }`}
                 >
                   <Package className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="flex-1 text-left">Products Catalog & Vault</span>
+                  <span className="flex-1 text-left">Products Catalog &amp; Key Vault</span>
                   <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px]">
                     {products.length}
                   </span>
@@ -551,7 +559,7 @@ const AppContent: React.FC = () => {
                   }`}
                 >
                   <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="flex-1 text-left">Payment Gateways & UPI QR</span>
+                  <span className="flex-1 text-left">Payment Gateways &amp; UPI QR</span>
                 </button>
 
                 <button
@@ -564,11 +572,11 @@ const AppContent: React.FC = () => {
                   }`}
                 >
                   <Zap className="w-4 h-4 text-purple-400 shrink-0" />
-                  <span className="flex-1 text-left">Reseller API & Webhooks</span>
+                  <span className="flex-1 text-left">Reseller API &amp; Webhooks</span>
                 </button>
 
                 <div className="pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-1">
-                  Administration & Users
+                  Administration &amp; Users
                 </div>
 
                 <button
@@ -581,7 +589,7 @@ const AppContent: React.FC = () => {
                   }`}
                 >
                   <UserIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="flex-1 text-left">Telegram Users & Customers</span>
+                  <span className="flex-1 text-left">Telegram Users &amp; Customers</span>
                   <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px]">
                     {allUsers.length}
                   </span>
@@ -597,7 +605,7 @@ const AppContent: React.FC = () => {
                   }`}
                 >
                   <Gift className="w-4 h-4 text-pink-400 shrink-0" />
-                  <span className="flex-1 text-left">Referral Program & Rewards</span>
+                  <span className="flex-1 text-left">Referral Program &amp; Rewards</span>
                 </button>
 
                 <button
@@ -723,20 +731,20 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-10"
             >
               <UserDashboard />
             </motion.div>
-          ) : activeTab === 'my_bots' ? (
+          ) : activeTab === 'bot' || activeTab === 'telegram' ? (
             <motion.div
-              key="my_bots"
+              key="telegram_bot"
               initial={{ opacity: 0, y: 10, scale: 0.995 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-hidden flex flex-col"
             >
-              <MyBotsDashboard />
+              <TelegramBotView />
             </motion.div>
           ) : activeTab === 'gateways' ? (
             <motion.div
@@ -745,7 +753,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-10"
             >
               <PaymentGatewayManager />
             </motion.div>
@@ -756,7 +764,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-10"
             >
               <ResellerApiManager />
             </motion.div>
@@ -767,7 +775,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-10"
             >
               <AdminDashboard />
             </motion.div>
@@ -778,7 +786,7 @@ const AppContent: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.995 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-8 sm:pb-10"
+              className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pb-10"
             >
               <UserDashboard />
             </motion.div>

@@ -23,10 +23,10 @@ export const TelegramHeader: React.FC<Props> = ({ isMobileFrame, setIsMobileFram
         </div>
         <button
           type="button"
-          onClick={() => setActiveTab('my_bots')}
+          onClick={() => setActiveTab('gateways')}
           className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition cursor-pointer"
         >
-          + Create Store Bot
+          Configure Bot
         </button>
       </div>
     );
@@ -116,15 +116,15 @@ export const TelegramHeader: React.FC<Props> = ({ isMobileFrame, setIsMobileFram
           )}
         </button>
 
-        {/* My Bots Hub */}
+        {/* Dashboard Link */}
         <button
           type="button"
-          onClick={() => setActiveTab('my_bots')}
-          title="Go to My Bots Dashboard"
+          onClick={() => setActiveTab('dashboard')}
+          title="Go to Store Dashboard"
           className="hidden md:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600/30 text-cyan-200 hover:bg-cyan-600/50 border border-cyan-500/30 text-xs md:text-sm font-bold transition cursor-pointer"
         >
           <BotIcon className="w-4 h-4" />
-          <span>My Bots</span>
+          <span>Dashboard</span>
         </button>
 
         {/* Restart / Reset Chat */}
