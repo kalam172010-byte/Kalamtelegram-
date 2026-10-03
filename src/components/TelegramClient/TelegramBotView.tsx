@@ -102,11 +102,11 @@ export const TelegramBotView: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setActiveTab('gateways')}
+          onClick={() => setActiveTab('my_bots')}
           className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 flex items-center gap-2 transition cursor-pointer"
         >
           <Bot className="w-5 h-5" />
-          <span>Configure Bot & Gateways</span>
+          <span>Go to My Bots & Create</span>
         </button>
       </div>
     );
@@ -442,13 +442,10 @@ export const TelegramBotView: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
             {quickCommands.map((q, idx) => {
               const IconComp = q.icon;
-              let btnStyle = "bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 border-cyan-300 ring-1 ring-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.5)] hover:shadow-[0_0_22px_rgba(6,182,212,0.85)]";
-              if (q.cmd === '/start') btnStyle = "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 border-amber-300 ring-1 ring-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.5)] hover:shadow-[0_0_22px_rgba(245,158,11,0.85)]";
-              else if (q.cmd === '/balance') btnStyle = "bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 border-emerald-300 ring-1 ring-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.5)] hover:shadow-[0_0_22px_rgba(16,185,129,0.85)]";
-              else if (q.cmd === '/profile') btnStyle = "bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 border-purple-300 ring-1 ring-purple-400/60 shadow-[0_0_15px_rgba(168,85,247,0.5)] hover:shadow-[0_0_22px_rgba(168,85,247,0.85)]";
-              else if (q.cmd === '/reseller') btnStyle = "bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-600 border-fuchsia-300 ring-1 ring-fuchsia-400/60 shadow-[0_0_15px_rgba(217,70,239,0.5)] hover:shadow-[0_0_22px_rgba(217,70,239,0.85)]";
-              else if (q.cmd === '/vip') btnStyle = "bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-500 !text-slate-950 border-yellow-200 ring-1 ring-yellow-400/70 shadow-[0_0_15px_rgba(234,179,8,0.6)] hover:shadow-[0_0_22px_rgba(234,179,8,0.9)]";
-              else if (q.cmd === '/admin') btnStyle = "bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 border-rose-300 ring-1 ring-rose-400/60 shadow-[0_0_15px_rgba(239,68,68,0.5)] hover:shadow-[0_0_22px_rgba(239,68,68,0.85)]";
+              let btnStyle = "bg-[#1d6fa5] hover:bg-[#2282c2] border-[#3498db]/40";
+              if (q.cmd === '/balance') btnStyle = "bg-[#157934] hover:bg-[#198f3d] border-[#2ecc71]/40";
+              else if (q.cmd === '/profile' || q.cmd === '/reseller' || q.cmd === '/vip') btnStyle = "bg-[#6b21a8] hover:bg-[#7e22ce] border-[#a855f7]/40";
+              else if (q.cmd === '/admin') btnStyle = "bg-[#9b2828] hover:bg-[#b32e2e] border-[#e74c3c]/40";
 
               return (
                 <button
@@ -458,12 +455,12 @@ export const TelegramBotView: React.FC = () => {
                     sendUserMessage(q.cmd);
                     setShowCommandsMenu(false);
                   }}
-                  className={`relative overflow-hidden flex items-center gap-2.5 p-2.5 rounded-xl text-left text-xs font-black text-white transition-all transform hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] border cursor-pointer ${btnStyle} before:absolute before:inset-x-0 before:top-0 before:h-[1px] before:bg-white/40`}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl text-left text-xs font-medium text-white transition active:scale-[0.98] border cursor-pointer shadow-md ${btnStyle}`}
                 >
-                  <IconComp className="w-4 h-4 text-white shrink-0 drop-shadow" />
+                  <IconComp className="w-4 h-4 text-white shrink-0" />
                   <div className="truncate">
-                    <span className="block font-black text-xs drop-shadow-sm">{q.label}</span>
-                    <span className="text-[11px] opacity-90 font-mono">{q.cmd}</span>
+                    <span className="block text-white font-bold text-xs">{q.label}</span>
+                    <span className="text-[11px] text-white/90 font-mono">{q.cmd}</span>
                   </div>
                 </button>
               );

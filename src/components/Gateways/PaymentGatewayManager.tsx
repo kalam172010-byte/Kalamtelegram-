@@ -87,10 +87,10 @@ export const PaymentGatewayManager: React.FC = () => {
           </p>
           <button
             type="button"
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => setActiveTab('my_bots')}
             className="px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg transition cursor-pointer"
           >
-            Go to Dashboard →
+            Go to My Bots →
           </button>
         </div>
       </div>

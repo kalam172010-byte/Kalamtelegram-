@@ -6,7 +6,6 @@ import {
   syncProductToFirestore,
   deleteProductFromFirestore,
   deleteProductsFromFirestore,
-  loadProductsFromFirestoreCollection,
   isFirestoreAvailable
 } from './firebaseSync';
 import {
@@ -144,12 +143,12 @@ export class DatabaseStore {
           productKeys = INITIAL_PRODUCT_KEYS;
         }
 
-        // Preserve bot-specific products, keys, and settings per bot instance
+        // Clean up legacy demo products from bot instances to prevent deleted or nonexistent products from reappearing
         let bots: BotInstance[] = Array.isArray(parsed.bots) ? parsed.bots : [];
         bots = bots.map(b => ({
           ...b,
-          products: Array.isArray(b.products) ? b.products : products.filter(p => !p.bot_id || p.bot_id === b.id),
-          productKeys: Array.isArray(b.productKeys) ? b.productKeys : productKeys
+          products: products,
+          productKeys: productKeys
         }));
 
         const data: DatabaseSchema = {
@@ -209,15 +208,11 @@ export class DatabaseStore {
       this.ensureDataDir();
       const target = dataToSave || this.data;
 
-      // Ensure each bot preserves its own products, keys, and settings
+      // Always keep bot instances' products and productKeys in sync with master lists to prevent ghost/demo products
       if (Array.isArray(target.bots)) {
         target.bots.forEach(b => {
-          if (!Array.isArray(b.products)) {
-            b.products = (target.products || []).filter(p => !p.bot_id || p.bot_id === b.id);
-          }
-          if (!Array.isArray(b.productKeys)) {
-            b.productKeys = target.productKeys || [];
-          }
+          b.products = target.products || [];
+          b.productKeys = target.productKeys || [];
         });
       }
 
@@ -251,17 +246,13 @@ export class DatabaseStore {
 
       console.log('⚡ Firestore: Restoring cloud backup and merging state...');
 
-      // 1. Restore & Merge Settings (Preserves bot_token, admin_id, bot_username, creator_bot_token)
+      // 1. Restore & Merge Settings (Preserves bot_token, admin_id, bot_username)
       if (remote.settings && typeof remote.settings === 'object') {
         this.data.settings = {
           ...this.data.settings,
           ...remote.settings,
           bot_token: remote.settings.bot_token || this.data.settings.bot_token,
           bot_username: remote.settings.bot_username || this.data.settings.bot_username,
-          creator_bot_token: remote.settings.creator_bot_token || this.data.settings.creator_bot_token,
-          creator_bot_username: remote.settings.creator_bot_username || this.data.settings.creator_bot_username,
-          creator_bot_name: remote.settings.creator_bot_name || this.data.settings.creator_bot_name,
-          creator_bot_status: remote.settings.creator_bot_status || this.data.settings.creator_bot_status || 'ON',
           admin_id: remote.settings.admin_id || this.data.settings.admin_id
         };
       }
@@ -286,44 +277,23 @@ export class DatabaseStore {
         }
       }
 
-      // 3. Sync Products & Keys (Merge remote cloud products and individual collection documents)
-      const remoteProducts = Array.isArray(remote.products) ? remote.products : [];
-      const collectionProducts = await loadProductsFromFirestoreCollection().catch(() => []);
-      const allRemoteProducts = [...remoteProducts, ...collectionProducts];
-
-      if (allRemoteProducts.length > 0) {
-        if (!Array.isArray(this.data.products) || this.data.products.length === 0) {
-          this.data.products = [];
-        }
-        for (const rProd of allRemoteProducts) {
-          if (!rProd || rProd.id === undefined || rProd.id === null) continue;
-          const cleanActive = (rProd.is_active === 0 || (rProd.is_active as any) === false || (rProd.is_active as any) === '0') ? 0 : 1;
-          const localIdx = this.data.products.findIndex(p => String(p.id) === String(rProd.id) || Number(p.id) === Number(rProd.id));
-          if (localIdx === -1) {
-            this.data.products.push({
-              ...rProd,
-              is_active: cleanActive,
-              reseller_price: rProd.reseller_price ?? rProd.price_inr,
-              reseller_price_inr: rProd.reseller_price_inr ?? rProd.price_inr
-            });
-          } else {
-            this.data.products[localIdx] = {
-              ...this.data.products[localIdx],
-              ...rProd,
-              is_active: cleanActive
-            };
-          }
+      // 3. Sync Products & Keys (Do NOT resurrect deleted products if local store explicitly initialized)
+      if (Array.isArray(remote.products) && remote.products.length > 0) {
+        if (this.data.products === undefined || this.data.products === null) {
+          console.log(`⚡ Firestore: Restoring ${remote.products.length} products to fresh disk store...`);
+          this.data.products = remote.products.map((p: any, idx: number) => ({
+            ...p,
+            id: p.id !== undefined && p.id !== null ? p.id : (1000 + idx),
+            reseller_price: p.reseller_price ?? p.price_inr,
+            reseller_price_inr: p.reseller_price_inr ?? p.price_inr
+          }));
         }
       }
 
-      if (Array.isArray(remote.productKeys) && remote.productKeys.length > 0) {
-        if (!Array.isArray(this.data.productKeys)) this.data.productKeys = [];
-        for (const rKey of remote.productKeys) {
-          if (!rKey || rKey.id === undefined) continue;
-          const kIdx = this.data.productKeys.findIndex(k => String(k.id) === String(rKey.id));
-          if (kIdx === -1) {
-            this.data.productKeys.push(rKey);
-          }
+      if (Array.isArray(remote.productKeys)) {
+        if (!this.data.productKeys || this.data.productKeys.length === 0) {
+          const validProductIds = new Set(this.data.products.map(p => String(p.id)));
+          this.data.productKeys = remote.productKeys.filter((k: any) => validProductIds.has(String(k.product_id)));
         }
       }
 
@@ -478,13 +448,7 @@ export class DatabaseStore {
   public updateUser(userId: number, updates: Partial<User>): User | null {
     const idx = this.data.users.findIndex(u => u.user_id === userId);
     if (idx === -1) return null;
-    const current = this.data.users[idx];
-    this.data.users[idx] = {
-      ...current,
-      ...updates,
-      balance: updates.balance !== undefined ? updates.balance : (current.balance || 0),
-      spent: updates.spent !== undefined ? updates.spent : (current.spent || 0)
-    };
+    this.data.users[idx] = { ...this.data.users[idx], ...updates };
     this.saveData();
     return this.data.users[idx];
   }
@@ -557,7 +521,7 @@ export class DatabaseStore {
     if (id === undefined || id === null) return undefined;
     let cleanStr = String(id).trim();
     // Strip common callback prefixes if accidentally forwarded
-    cleanStr = cleanStr.replace(/^(?:prod_|buy_|pnl_|maint_pnl_|maint_|upipay_|verify_upiprod_)/, '').trim();
+    cleanStr = cleanStr.replace(/^(?:prod_|buy_|pnl_|maint_pnl_|maint_)/, '').trim();
     try {
       cleanStr = decodeURIComponent(cleanStr).trim();
     } catch {
@@ -565,40 +529,29 @@ export class DatabaseStore {
     }
 
     const numId = Number(cleanStr);
-    // 1. Direct ID match (string and numeric)
+    // 1. Direct ID match
     const byId = this.data.products.find(p => {
-      if (p.id !== undefined && p.id !== null && String(p.id).trim() === cleanStr) return true;
-      if (!isNaN(numId) && p.id !== undefined && p.id !== null && Number(p.id) === numId) return true;
+      if (String(p.id).trim() === cleanStr) return true;
+      if (!isNaN(numId) && Number(p.id) === numId) return true;
       return false;
     });
     if (byId) return byId;
 
-    // 2. Direct name, panel name, or combined panel+name matching
+    // 2. Direct name, panel name, or validity matching
     const lower = cleanStr.toLowerCase();
     const byName = this.data.products.find(p => {
       const pName = (p.name || '').trim().toLowerCase();
       const panelName = (p.panel_name || '').trim().toLowerCase();
       const combined = `${panelName} ${pName}`.trim().toLowerCase();
-      const combinedReverse = `${pName} ${panelName}`.trim().toLowerCase();
-      return pName === lower || panelName === lower || combined === lower || combinedReverse === lower;
+      return pName === lower || panelName === lower || combined === lower;
     });
     if (byName) return byName;
-
-    // 3. Normalized / fuzzy search across all products (including panel_name + validity)
-    const norm = cleanStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (norm) {
-      const byNorm = this.data.products.find(p => {
-        const pNorm = `${p.panel_name || ''} ${p.name || ''} ${p.validity || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return pNorm.includes(norm) || norm.includes(pNorm);
-      });
-      if (byNorm) return byNorm;
-    }
 
     return undefined;
   }
 
   public addProduct(product: Product, keys?: string[]): Product {
-    const finalId = (product.id !== undefined && product.id !== null && String(product.id).trim() !== '')
+    const finalId = (product.id !== undefined && product.id !== null)
       ? product.id
       : (Date.now() + Math.floor(Math.random() * 10000));
 
@@ -612,19 +565,16 @@ export class DatabaseStore {
       name: (product.name || 'Plan').trim(),
       category: (product.category || 'ANDROID NON ROOT PANEL').trim(),
       stock: stockCount,
-      is_active: (product.is_active === 0 || (product.is_active as any) === false || (product.is_active as any) === '0') ? 0 : 1,
-      is_maintenance: product.is_maintenance ? 1 : 0,
-      maintenance_note: product.maintenance_note || '',
-      price_inr: Number(product.price_inr) || 50,
-      reseller_price: Number(product.reseller_price ?? product.price_inr) || 35,
-      reseller_price_inr: Number(product.reseller_price_inr ?? product.price_inr) || 35
+      is_active: product.is_active !== undefined ? (product.is_active === 0 ? 0 : 1) : 1,
+      reseller_price: product.reseller_price ?? product.price_inr,
+      reseller_price_inr: product.reseller_price_inr ?? product.price_inr
     };
 
-    const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId) || Number(p.id) === Number(finalId));
+    const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId));
     if (existingIdx !== -1) {
       this.data.products[existingIdx] = finalProduct;
     } else {
-      this.data.products.unshift(finalProduct);
+      this.data.products.push(finalProduct);
     }
 
     if (cleanKeys.length > 0) {
@@ -639,29 +589,8 @@ export class DatabaseStore {
     }
 
     syncProductToFirestore(finalProduct).catch(() => {});
-    
-    // Also sync into target bot's products array if bot_id is present
-    if (finalProduct.bot_id && Array.isArray(this.data.bots)) {
-      const targetBot = this.data.bots.find(b => b.id === finalProduct.bot_id);
-      if (targetBot) {
-        if (!Array.isArray(targetBot.products)) targetBot.products = [];
-        const bIdx = targetBot.products.findIndex(p => String(p.id) === String(finalId) || Number(p.id) === Number(finalId));
-        if (bIdx >= 0) targetBot.products[bIdx] = finalProduct;
-        else targetBot.products.unshift(finalProduct);
-      }
-    }
-
     this.saveData(undefined, true);
     return finalProduct;
-  }
-
-  public getBotProducts(botId?: string): Product[] {
-    if (!botId) return this.data.products;
-    const bot = this.data.bots?.find(b => b.id === botId);
-    if (bot && Array.isArray(bot.products) && bot.products.length > 0) {
-      return bot.products;
-    }
-    return this.data.products.filter(p => !p.bot_id || p.bot_id === botId);
   }
 
   public addProductsBatch(products: Product[], keysMap?: Record<string, string[]>): Product[] {
@@ -670,7 +599,7 @@ export class DatabaseStore {
 
     for (let i = 0; i < products.length; i++) {
       const prod = products[i];
-      const finalId = (prod.id !== undefined && prod.id !== null && String(prod.id).trim() !== '')
+      const finalId = (prod.id !== undefined && prod.id !== null)
         ? prod.id
         : (Date.now() + i + Math.floor(Math.random() * 10000));
 
@@ -685,19 +614,16 @@ export class DatabaseStore {
         name: (prod.name || 'Plan').trim(),
         category: (prod.category || 'ANDROID NON ROOT PANEL').trim(),
         stock: stockCount,
-        is_active: (prod.is_active === 0 || (prod.is_active as any) === false || (prod.is_active as any) === '0') ? 0 : 1,
-        is_maintenance: prod.is_maintenance ? 1 : 0,
-        maintenance_note: prod.maintenance_note || '',
-        price_inr: Number(prod.price_inr) || 50,
-        reseller_price: Number(prod.reseller_price ?? prod.price_inr) || 35,
-        reseller_price_inr: Number(prod.reseller_price_inr ?? prod.price_inr) || 35
+        is_active: prod.is_active !== undefined ? (prod.is_active === 0 ? 0 : 1) : 1,
+        reseller_price: prod.reseller_price ?? prod.price_inr,
+        reseller_price_inr: prod.reseller_price_inr ?? prod.price_inr
       };
 
-      const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId) || Number(p.id) === Number(finalId));
+      const existingIdx = this.data.products.findIndex(p => String(p.id) === String(finalId));
       if (existingIdx !== -1) {
         this.data.products[existingIdx] = finalProduct;
       } else {
-        this.data.products.unshift(finalProduct);
+        this.data.products.push(finalProduct);
       }
 
       if (cleanKeys.length > 0) {
@@ -720,7 +646,7 @@ export class DatabaseStore {
   }
 
   public updateProduct(id: number | string, updates: Partial<Product>): Product | null {
-    const idx = this.data.products.findIndex(p => String(p.id) === String(id) || Number(p.id) === Number(id));
+    const idx = this.data.products.findIndex(p => String(p.id) === String(id));
     if (idx === -1) return null;
     this.data.products[idx] = { ...this.data.products[idx], ...updates };
     syncProductToFirestore(this.data.products[idx]).catch(() => {});
@@ -754,150 +680,48 @@ export class DatabaseStore {
   }
 
   public deleteProduct(id: number | string): boolean {
-    const strId = String(id).trim();
-    const numId = Number(strId);
     const initialLen = this.data.products.length;
-
-    this.data.products = this.data.products.filter(p => {
-      const pStr = String(p.id).trim();
-      const pNum = Number(pStr);
-      if (pStr === strId) return false;
-      if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
-      return true;
-    });
-
-    this.data.productKeys = this.data.productKeys.filter(k => {
-      const kStr = String(k.product_id).trim();
-      const kNum = Number(kStr);
-      if (kStr === strId) return false;
-      if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
-      return true;
-    });
-
-    // CRITICAL: Also purge from all bot instances
-    if (Array.isArray(this.data.bots)) {
-      this.data.bots.forEach(b => {
-        if (Array.isArray(b.products)) {
-          b.products = b.products.filter(p => {
-            const pStr = String(p.id).trim();
-            const pNum = Number(pStr);
-            if (pStr === strId) return false;
-            if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
-            return true;
-          });
-        }
-        if (Array.isArray(b.productKeys)) {
-          b.productKeys = b.productKeys.filter(k => {
-            const kStr = String(k.product_id).trim();
-            const kNum = Number(kStr);
-            if (kStr === strId) return false;
-            if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
-            return true;
-          });
-        }
-      });
-    }
-
+    this.data.products = this.data.products.filter(p => String(p.id) !== String(id));
+    this.data.productKeys = this.data.productKeys.filter(k => String(k.product_id) !== String(id));
     deleteProductFromFirestore(id).catch(() => {});
     this.saveData(undefined, true);
     return this.data.products.length < initialLen;
   }
 
   public deleteProducts(ids: (number | string)[]): number {
-    const strIds = new Set(ids.map(id => String(id).trim()));
-    const numIds = new Set(ids.map(id => Number(id)).filter(n => !isNaN(n)));
+    const strIds = new Set(ids.map(id => String(id)));
     const initialLen = this.data.products.length;
-
-    this.data.products = this.data.products.filter(p => {
-      const pStr = String(p.id).trim();
-      const pNum = Number(pStr);
-      if (strIds.has(pStr)) return false;
-      if (!isNaN(pNum) && numIds.has(pNum)) return false;
-      return true;
-    });
-
-    this.data.productKeys = this.data.productKeys.filter(k => {
-      const kStr = String(k.product_id).trim();
-      const kNum = Number(kStr);
-      if (strIds.has(kStr)) return false;
-      if (!isNaN(kNum) && numIds.has(kNum)) return false;
-      return true;
-    });
-
-    if (Array.isArray(this.data.bots)) {
-      this.data.bots.forEach(b => {
-        if (Array.isArray(b.products)) {
-          b.products = b.products.filter(p => {
-            const pStr = String(p.id).trim();
-            const pNum = Number(pStr);
-            if (strIds.has(pStr)) return false;
-            if (!isNaN(pNum) && numIds.has(pNum)) return false;
-            return true;
-          });
-        }
-        if (Array.isArray(b.productKeys)) {
-          b.productKeys = b.productKeys.filter(k => {
-            const kStr = String(k.product_id).trim();
-            const kNum = Number(kStr);
-            if (strIds.has(kStr)) return false;
-            if (!isNaN(kNum) && numIds.has(kNum)) return false;
-            return true;
-          });
-        }
-      });
-    }
-
+    this.data.products = this.data.products.filter(p => !strIds.has(String(p.id)));
+    this.data.productKeys = this.data.productKeys.filter(k => !strIds.has(String(k.product_id)));
     deleteProductsFromFirestore(ids).catch(() => {});
     this.saveData(undefined, true);
     return initialLen - this.data.products.length;
   }
 
-  public deletePanel(category: string, panelName: string, productIds?: (string | number)[]): number {
+  public deletePanel(category: string, panelName: string): number {
     const initialLen = this.data.products.length;
     const deletedProductIds = new Set<string>();
-
-    if (Array.isArray(productIds) && productIds.length > 0) {
-      productIds.forEach(id => deletedProductIds.add(String(id).trim()));
-    }
-
+    
     const targetCat = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const targetName = (panelName || '').trim().toLowerCase();
     const targetNameNorm = targetName.replace(/[^a-z0-9]/g, '');
 
     this.data.products = this.data.products.filter(p => {
-      const pIdStr = String(p.id).trim();
-      if (deletedProductIds.has(pIdStr)) {
-        return false;
-      }
-
       const pCat = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const pName = (p.panel_name || p.name || '').trim().toLowerCase();
       const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
 
       const matchCat = !targetCat || pCat === targetCat || matchCategoryFlexible(p.category, category);
-      const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === targetNameNorm) ||
-        (Boolean(p.panel_name) && matchNameFlexible(p.panel_name, panelName));
+      const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === targetNameNorm);
 
       if (matchCat && matchName) {
-        deletedProductIds.add(pIdStr);
+        deletedProductIds.add(String(p.id));
         return false;
       }
       return true;
     });
 
-    this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id).trim()));
-
-    if (Array.isArray(this.data.bots)) {
-      this.data.bots.forEach(b => {
-        if (Array.isArray(b.products)) {
-          b.products = b.products.filter(p => !deletedProductIds.has(String(p.id).trim()));
-        }
-        if (Array.isArray(b.productKeys)) {
-          b.productKeys = b.productKeys.filter(k => !deletedProductIds.has(String(k.product_id).trim()));
-        }
-      });
-    }
-
+    this.data.productKeys = this.data.productKeys.filter(k => !deletedProductIds.has(String(k.product_id)));
     deleteProductsFromFirestore(Array.from(deletedProductIds)).catch(() => {});
     this.saveData(undefined, true);
     return initialLen - this.data.products.length;

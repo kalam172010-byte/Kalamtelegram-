@@ -36,7 +36,6 @@ import {
   InlineKeyboardButton,
   ViewTab,
   AdminTab,
-  SubdomainStore,
   BotInstance,
   PaymentGatewayConfig,
   ResellerApiConfig,
@@ -108,8 +107,6 @@ export interface BotContextType {
     description?: string;
     theme_color?: string;
     clone_products?: boolean;
-    products?: Product[];
-    productKeys?: ProductKey[];
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => BotInstance;
@@ -123,7 +120,6 @@ export interface BotContextType {
 
   // Database Tables
   products: Product[];
-  rawProducts?: Product[];
   productKeys: ProductKey[];
   orders: Order[];
   tickets: Ticket[];
@@ -140,26 +136,6 @@ export interface BotContextType {
   currentFsmState: string | null;
   fsmData: Record<string, any>;
   isBotTyping: boolean;
-
-  // Subdomain Store Builder & Multi-Tenant Engine
-  subdomainStores: SubdomainStore[];
-  activeSubdomainStore: SubdomainStore | null;
-  activeSubdomainSlug: string | null;
-  createSubdomainStore: (params: {
-    subdomain: string;
-    custom_domain?: string;
-    store_name: string;
-    assigned_product_ids?: (number | string)[];
-    theme_color?: string;
-    upi_id?: string;
-    logo_url?: string;
-    banner_announcement?: string;
-    support_telegram?: string;
-    support_whatsapp?: string;
-  }) => SubdomainStore;
-  updateSubdomainStore: (id: string, updates: Partial<SubdomainStore>) => void;
-  deleteSubdomainStore: (id: string) => void;
-  setActiveSubdomainSlug: (slug: string | null) => void;
 
   // View state
   activeTab: ViewTab;
@@ -191,7 +167,7 @@ export interface BotContextType {
   providerBalance: ProviderBalanceState;
   isProviderBalanceLoading: boolean;
   fetchProviderBalance: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<ProviderBalanceState>;
-  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; balance?: number; formatted?: string; raw?: any; latencyMs?: number; error?: string }>;
+  testProviderConnection: (apiKey?: string, masterKey?: string, apiUrl?: string) => Promise<{ success: boolean; message: string; balance?: number; formatted?: string; raw?: any }>;
   buyProviderKeyDirect: (params: { productId: string; duration: string; androidId?: string; apiKey?: string; masterKey?: string; apiUrl?: string }) => Promise<{ success: boolean; key?: string; orderId?: string | number; error?: string; raw?: any; message?: string }>;
 
   // Admin Broadcast
@@ -218,7 +194,7 @@ export interface BotContextType {
   updateProduct: (id: number, fields: Partial<Product>) => void;
   deleteProduct: (id: number | string) => void;
   deleteProducts: (ids: (number | string)[]) => void;
-  deletePanel: (category: string, panelName: string, planIds?: (string | number)[]) => void;
+  deletePanel: (category: string, panelName: string) => void;
   togglePanelMaintenance: (category: string, panelName: string, isMaintenance: boolean, note?: string) => void;
   removeProduct: (id: number | string) => void;
   injectProductKeys: (productId: number, keys: string[]) => void;
@@ -228,8 +204,6 @@ export interface BotContextType {
   warnUser: (userId: number, message: string) => void;
   toggleUserVip: (userId: number) => void;
   toggleUserReseller: (userId: number) => void;
-  toggleUserAdmin: (userId: number) => void;
-  promoteUserRole: (userId: number, role: 'admin' | 'reseller' | 'vip' | 'regular', notifyTelegram?: boolean) => Promise<void>;
   createNewCoupon: (code: string, amount: number, uses: number) => void;
   deleteCoupon: (code: string) => void;
   replyToTicket: (ticketId: number, replyText: string) => void;
@@ -253,13 +227,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Filter out legacy demo accounts (58941209, 77489012, 88192031) if present
         const demoUids = [58941209, 77489012, 88192031];
         const filtered = parsed.filter(u => !demoUids.includes(u.user_id));
-        const merged = filtered.map(u => {
-          const offBal = offlineStorage.getUserBalance(u.user_id);
-          return {
-            ...u,
-            balance: offBal !== null ? Math.max(u.balance || 0, offBal) : (u.balance || 0)
-          };
-        });
+        const merged = [...filtered];
         for (const initU of INITIAL_USERS) {
           if (!merged.some(u => u.user_id === initU.user_id || (u.email && u.email.toLowerCase() === initU.email?.toLowerCase()))) {
             merged.push(initU);
@@ -413,154 +381,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProviderBalanceLoading, setIsProviderBalanceLoading] = useState<boolean>(false);
 
   // Multi-Bot Management State
-  const [subdomainStores, setSubdomainStores] = useState<SubdomainStore[]>(() => {
-    const saved = localStorage.getItem('kalam_subdomain_stores');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.error('Error parsing subdomain stores', e);
-      }
-    }
-    return [
-      {
-        id: 'store_kalamvip',
-        subdomain: 'kalamvip',
-        store_name: 'KALAM VIP STORE',
-        owner_id: 12846461,
-        owner_email: 'kalam172010@gmail.com',
-        logo_url: '',
-        banner_announcement: '🔥 Official Subdomain Store: Buy Anti-Ban Panels with Instant Delivery!',
-        theme_color: 'cyan',
-        assigned_product_ids: [],
-        upi_id: 'kalam@upi',
-        support_telegram: 'https://t.me/KalamPanelSupport',
-        status: 'LIVE',
-        created_at: new Date().toISOString().substring(0, 10),
-        total_orders: 12,
-        total_revenue: 1450
-      }
-    ];
-  });
-
-  const [activeSubdomainSlug, setActiveSubdomainSlugState] = useState<string | null>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const storeFromQuery = urlParams.get('store') || urlParams.get('subdomain');
-    if (storeFromQuery) return storeFromQuery.toLowerCase().trim();
-
-    const hash = window.location.hash;
-    if (hash.includes('store/')) {
-      const parts = hash.split('store/');
-      if (parts[1]) return parts[1].split('?')[0].split('/')[0].toLowerCase().trim();
-    }
-
-    const host = window.location.hostname.toLowerCase().trim();
-    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-      const parts = host.split('.');
-      const sub = parts[0];
-      if (sub && sub !== 'www' && sub !== 'app' && sub !== 'store' && sub !== 'ais-dev-3udqoacmhh72nf7nq5cjz2-128464619421' && sub !== 'ais-pre-3udqoacmhh72nf7nq5cjz2-128464619421') {
-        return sub;
-      }
-    }
-    return null;
-  });
-
-  // Re-evaluate automatic subdomain detection whenever subdomainStores update
-  useEffect(() => {
-    if (subdomainStores.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const storeFromQuery = urlParams.get('store') || urlParams.get('subdomain');
-      if (storeFromQuery) {
-        const found = subdomainStores.find(s => s.subdomain.toLowerCase() === storeFromQuery.toLowerCase().trim());
-        if (found) setActiveSubdomainSlugState(found.subdomain);
-        return;
-      }
-
-      const host = window.location.hostname.toLowerCase().trim();
-      if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-        const sub = host.split('.')[0];
-        const matchedBySub = subdomainStores.find(s => s.subdomain.toLowerCase() === sub);
-        if (matchedBySub) {
-          setActiveSubdomainSlugState(matchedBySub.subdomain);
-          return;
-        }
-      }
-    }
-  }, [subdomainStores]);
-
-  const activeSubdomainStore = useMemo(() => {
-    if (!activeSubdomainSlug) return null;
-    return subdomainStores.find(s => s.subdomain.toLowerCase() === activeSubdomainSlug.toLowerCase()) || null;
-  }, [subdomainStores, activeSubdomainSlug]);
-
-  const createSubdomainStore = useCallback((params: {
-    subdomain: string;
-    custom_domain?: string;
-    store_name: string;
-    assigned_product_ids?: (number | string)[];
-    theme_color?: string;
-    upi_id?: string;
-    logo_url?: string;
-    banner_announcement?: string;
-    support_telegram?: string;
-    support_whatsapp?: string;
-  }) => {
-    const cleanSlug = params.subdomain.toLowerCase().replace(/[^a-z0-9_-]/g, '').trim();
-    const ownerObj = users.find(u => u.user_id === currentUserId);
-    const newStore: SubdomainStore = {
-      id: `store_${cleanSlug}_${Date.now().toString(36)}`,
-      subdomain: cleanSlug || `store${Date.now().toString().slice(-4)}`,
-      custom_domain: params.custom_domain?.trim().toLowerCase() || undefined,
-      store_name: params.store_name.trim() || 'VIP PANEL STORE',
-      owner_id: currentUserId,
-      owner_email: ownerObj?.email || '',
-      logo_url: params.logo_url || '',
-      banner_announcement: params.banner_announcement || `🔥 ${params.store_name}: Instant Key Delivery Active!`,
-      theme_color: params.theme_color || 'cyan',
-      assigned_product_ids: params.assigned_product_ids || [],
-      custom_price_margin_percent: 0,
-      upi_id: params.upi_id || settings.fampay_upi_id || '',
-      support_telegram: params.support_telegram || settings.support_telegram || '',
-      support_whatsapp: params.support_whatsapp || settings.support_whatsapp || '',
-      status: 'LIVE',
-      created_at: new Date().toISOString().substring(0, 10),
-      total_orders: 0,
-      total_revenue: 0
-    };
-
-    setSubdomainStores(prev => {
-      const updated = [newStore, ...prev.filter(s => s.subdomain !== newStore.subdomain)];
-      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
-      return updated;
-    });
-
-    setDoc(doc(db, 'subdomain_stores', newStore.id), newStore, { merge: true }).catch(() => {});
-    return newStore;
-  }, [currentUserId, users, settings]);
-
-  const updateSubdomainStore = useCallback((id: string, updates: Partial<SubdomainStore>) => {
-    setSubdomainStores(prev => {
-      const updated = prev.map(s => s.id === id ? { ...s, ...updates } : s);
-      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
-      return updated;
-    });
-    setDoc(doc(db, 'subdomain_stores', id), updates, { merge: true }).catch(() => {});
-  }, []);
-
-  const deleteSubdomainStore = useCallback((id: string) => {
-    setSubdomainStores(prev => {
-      const updated = prev.filter(s => s.id !== id);
-      localStorage.setItem('kalam_subdomain_stores', JSON.stringify(updated));
-      return updated;
-    });
-    deleteDoc(doc(db, 'subdomain_stores', id)).catch(() => {});
-  }, []);
-
-  const setActiveSubdomainSlug = useCallback((slug: string | null) => {
-    setActiveSubdomainSlugState(slug);
-  }, []);
-
   const [bots, setBots] = useState<BotInstance[]>(() => {
     const saved = localStorage.getItem('kalam_bot_instances');
     if (saved) {
@@ -629,52 +449,31 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Strictly filter bots to the logged in user (Multi-Tenant Isolation)
-  const myBots = useMemo(() => {
-    const isGlobalAdmin = currentUser.user_id === 12846461 || (currentUser.email && ['kalam172010@gmail.com', 'kk7953926@gmail.com', 'kalamkalam1234kd@gmail.com'].includes(currentUser.email.toLowerCase()));
-    if (isGlobalAdmin) {
-      return bots;
-    }
-    return bots.filter(b => {
-      const isOwnerId = b.owner_id === currentUserId;
-      const isOwnerEmail = Boolean(currentUser.email && b.owner_email && b.owner_email.toLowerCase() === currentUser.email.toLowerCase());
-      return isOwnerId || isOwnerEmail;
-    });
-  }, [bots, currentUserId, currentUser.email, currentUser.user_id]);
+  const myBots = bots.filter(b => {
+    const isOwnerId = b.owner_id === currentUserId;
+    const isOwnerEmail = Boolean(currentUser.email && b.owner_email && b.owner_email.toLowerCase() === currentUser.email.toLowerCase());
+    return isOwnerId || isOwnerEmail;
+  });
 
-  // Active bot is selected ONLY from user's own bots (myBots)
-  const activeBot: BotInstance = useMemo(() => {
-    if (myBots.length === 0) {
-      return null as any;
-    }
-    const found = myBots.find(b => b.id === activeBotId);
-    return found || myBots[0];
-  }, [myBots, activeBotId]);
+  // Active bot is selected from user's own bots or fallback to system store bots
+  const activeBot = myBots.find(b => b.id === activeBotId) || myBots[0] || bots.find(b => b.id === activeBotId) || bots[0] || INITIAL_BOTS[0];
 
-  // Scoped products filtered strictly for the active bot
-  const scopedProducts = useMemo(() => {
-    if (!activeBot) {
-      return products;
-    }
-    const currentBotId = activeBot.id;
-    // Directly filter master products state by bot_id to ensure instantaneous updates upon product creation & deletion
-    const filtered = products.filter(p => !p.bot_id || p.bot_id === currentBotId);
-    return filtered;
-  }, [products, activeBot]);
-
-  // Scoped users filtered strictly by the active bot (multi-tenant & bot-level user isolation)
+  // Scoped users filtered strictly by the active bot and owner bots (Multi-Tenant Isolation)
   const scopedUsers = useMemo(() => {
-    if (!activeBot) {
-      return users.filter(u => u.user_id === currentUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase()));
-    }
+    if (!activeBot) return users;
     const currentBotId = activeBot.id;
     const currentBotUser = (activeBot.username || '').replace(/^@/, '').toLowerCase().trim();
+    
+    // Check if user has specific bots
+    const myBotIds = myBots.map(b => b.id);
+    const myBotUsernames = myBots.map(b => (b.username || '').replace(/^@/, '').toLowerCase().trim()).filter(Boolean);
 
     return users.filter(u => {
       // 1. If user is the currently logged in account
       if (u.user_id === currentUserId || (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())) {
         return true;
       }
-      // 2. If user registered or interacted under this active bot
+      // 2. If user was created under this active bot
       if (u.bot_id && (u.bot_id === currentBotId || u.bot_id.replace(/^@/, '').toLowerCase().trim() === currentBotUser)) {
         return true;
       }
@@ -686,9 +485,20 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (u.bot_username && currentBotUser && u.bot_username.replace(/^@/, '').toLowerCase().trim() === currentBotUser) {
         return true;
       }
+      // 5. If user was created under one of the owner's bots
+      if (u.owner_id && u.owner_id === currentUserId) {
+        return true;
+      }
+      if (u.owner_email && currentUser.email && u.owner_email.toLowerCase() === currentUser.email.toLowerCase()) {
+        return true;
+      }
+      // 6. If user's bot_id matches any of owner's bots
+      if (u.bot_id && (myBotIds.includes(u.bot_id) || myBotUsernames.includes(u.bot_id.replace(/^@/, '').toLowerCase().trim()))) {
+        return true;
+      }
       return false;
     });
-  }, [users, activeBot, currentUserId, currentUser.email]);
+  }, [users, activeBot, myBots, currentUserId, currentUser.email]);
 
   // Sync state to local storage & offline storage cache
   useEffect(() => {
@@ -732,51 +542,23 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 prevUsers.forEach(u => userMap.set(u.user_id, u));
                 serverData.users.forEach((su: User) => {
                   const existing = userMap.get(su.user_id);
-                  const offBal = offlineStorage.getUserBalance(su.user_id);
                   if (existing) {
-                    const safeBalance = su.balance !== undefined && su.balance !== null ? Number(su.balance) : (existing.balance ?? 0);
-                    const safeSpent = Math.max(existing.spent ?? 0, su.spent ?? 0);
-                    const safeSaved = Math.max(existing.total_saved ?? 0, su.total_saved ?? 0);
-                    const safeOrders = Math.max(existing.orders_count ?? 0, su.orders_count ?? 0);
-
                     userMap.set(su.user_id, {
-                      ...su,
                       ...existing,
-                      balance: safeBalance,
-                      spent: safeSpent,
-                      total_saved: safeSaved,
-                      orders_count: safeOrders,
-                      is_admin: su.is_admin !== undefined ? su.is_admin : existing.is_admin,
-                      is_reseller: su.is_reseller !== undefined ? su.is_reseller : existing.is_reseller,
-                      is_vip: su.is_vip !== undefined ? su.is_vip : existing.is_vip,
-                      role: su.role || existing.role,
-                      account_type: su.account_type || existing.account_type,
+                      ...su,
                       email: existing.email || su.email,
                       password: existing.password || su.password,
-                      avatar_url: existing.avatar_url || su.avatar_url,
-                      first_name: existing.first_name || su.first_name,
-                      username: existing.username || su.username,
-                      bot_id: existing.bot_id || su.bot_id,
-                      bot_ids: Array.from(new Set([...(existing.bot_ids || []), ...(su.bot_ids || [])])),
-                      bot_username: existing.bot_username || su.bot_username,
-                      owner_id: existing.owner_id || su.owner_id,
-                      owner_email: existing.owner_email || su.owner_email
+                      avatar_url: su.avatar_url || existing.avatar_url
                     });
                   } else {
-                    userMap.set(su.user_id, {
-                      ...su,
-                      balance: Number(su.balance ?? 0)
-                    });
+                    userMap.set(su.user_id, su);
                   }
                 });
-                const finalUsers = Array.from(userMap.values());
-                localStorage.setItem('kalam_bot_users', JSON.stringify(finalUsers));
-                offlineStorage.saveUserBalances(finalUsers);
-                return finalUsers;
+                return Array.from(userMap.values());
               });
             }
 
-            if (Array.isArray(serverData.products)) {
+            if (Array.isArray(serverData.products) && serverData.products.length > 0) {
               const cleanProds = serverData.products.map((p: Product, idx: number) => ({
                 ...p,
                 id: p.id !== undefined && p.id !== null ? p.id : (idx + 1),
@@ -785,15 +567,33 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 reseller_price_inr: p.reseller_price_inr ?? p.price_inr
               }));
 
-              setProducts(cleanProds);
-              localStorage.setItem('kalam_bot_products', JSON.stringify(cleanProds));
-              offlineStorage.saveProducts(cleanProds);
+              setProducts(prev => {
+                const map = new Map<string, Product>();
+                // Preserve all current products in state
+                prev.forEach(p => {
+                  if (p && p.id !== undefined && p.is_active !== 0) {
+                    map.set(String(p.id).trim(), p);
+                  }
+                });
+                // Merge server products
+                cleanProds.forEach((sp: Product) => {
+                  if (sp && sp.id !== undefined) {
+                    const strId = String(sp.id).trim();
+                    const existing = map.get(strId);
+                    map.set(strId, { ...(existing || {}), ...sp });
+                  }
+                });
+                const merged = Array.from(map.values());
+                localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
+                offlineStorage.saveProducts(merged);
+                return merged;
+              });
 
-              // Safely preserve bot instances' internal products list
+              // Continuously sync bot instances' internal products list to match merged products
               setBots(prev => prev.map(b => ({
                 ...b,
-                products: cleanProds.filter((p: Product) => !p.bot_id || p.bot_id === b.id),
-                productKeys: Array.isArray(b.productKeys) ? b.productKeys : (Array.isArray(serverData.productKeys) ? serverData.productKeys : [])
+                products: cleanProds,
+                productKeys: Array.isArray(serverData.productKeys) ? serverData.productKeys : b.productKeys
               })));
             }
             if (Array.isArray(serverData.productKeys)) {
@@ -903,9 +703,13 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot: any) => {
       if (snapshot && !snapshot.empty) {
         const cloudProducts: Product[] = [];
+        const inactiveOrDeletedIds = new Set<string>();
         snapshot.forEach((docSnap: any) => {
           const p = docSnap.data() as Product;
-          if (p && p.id !== undefined && p.id !== null && p.is_active !== 0 && !(p as any).is_deleted) {
+          const id = p?.id !== undefined && p?.id !== null ? String(p.id) : docSnap.id;
+          if (p && (p.is_active === 0 || (p as any).is_deleted)) {
+            inactiveOrDeletedIds.add(id);
+          } else if (p && p.id !== undefined && p.id !== null) {
             cloudProducts.push({
               ...p,
               id: p.id,
@@ -915,14 +719,20 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         });
-        if (cloudProducts.length > 0) {
-          setProducts(cloudProducts);
-          localStorage.setItem('kalam_bot_products', JSON.stringify(cloudProducts));
-          offlineStorage.saveProducts(cloudProducts);
-          setBots(prevBots => prevBots.map(b => ({
-            ...b,
-            products: cloudProducts.filter((p: any) => !p.bot_id || p.bot_id === b.id)
-          })));
+        if (cloudProducts.length > 0 || inactiveOrDeletedIds.size > 0) {
+          setProducts(prev => {
+            const map = new Map<string, Product>();
+            prev.forEach(p => map.set(String(p.id), p));
+            inactiveOrDeletedIds.forEach(id => map.delete(id));
+            cloudProducts.forEach(cp => {
+              map.set(String(cp.id), { ...(map.get(String(cp.id)) || {}), ...cp });
+            });
+            const merged = Array.from(map.values());
+            localStorage.setItem('kalam_bot_products', JSON.stringify(merged));
+            offlineStorage.saveProducts(merged);
+            setBots(prevBots => prevBots.map(b => ({ ...b, products: merged })));
+            return merged;
+          });
         }
       }
     }, (err: any) => {
@@ -960,10 +770,7 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setProducts(parsed.products);
               localStorage.setItem('kalam_bot_products', JSON.stringify(parsed.products));
               offlineStorage.saveProducts(parsed.products);
-              setBots(prev => prev.map(b => ({
-                ...b,
-                products: Array.isArray(b.products) && b.products.length > 0 ? b.products : parsed.products.filter((p: any) => !p.bot_id || p.bot_id === b.id)
-              })));
+              setBots(prev => prev.map(b => ({ ...b, products: parsed.products })));
             }
             if (Array.isArray(parsed.productKeys)) {
               setProductKeys(parsed.productKeys);
@@ -1006,28 +813,9 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUsers(prev => {
             const map = new Map<number, User>();
             prev.forEach(u => map.set(u.user_id, u));
-            cloudUsers.forEach(cu => {
-              const existing = map.get(cu.user_id);
-              const offBal = offlineStorage.getUserBalance(cu.user_id);
-              const safeBal = (cu.balance !== undefined && cu.balance !== null)
-                ? Number(cu.balance)
-                : (existing?.balance ?? 0);
-              const safeSpent = Math.max(existing?.spent ?? 0, (cu.spent !== undefined && cu.spent !== null) ? Number(cu.spent) : 0);
-              const safeOrders = Math.max(existing?.orders_count ?? 0, (cu.orders_count !== undefined && cu.orders_count !== null) ? Number(cu.orders_count) : 0);
-              const safeSaved = Math.max(existing?.total_saved ?? 0, (cu.total_saved !== undefined && cu.total_saved !== null) ? Number(cu.total_saved) : 0);
-
-              map.set(cu.user_id, {
-                ...existing,
-                ...cu,
-                balance: safeBal,
-                spent: safeSpent,
-                orders_count: safeOrders,
-                total_saved: safeSaved
-              });
-            });
+            cloudUsers.forEach(cu => map.set(cu.user_id, { ...(map.get(cu.user_id) || {}), ...cu }));
             const merged = Array.from(map.values());
             localStorage.setItem('kalam_bot_users', JSON.stringify(merged));
-            offlineStorage.saveUserBalances(merged);
             return merged;
           });
         }
@@ -1093,29 +881,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore coupons sync notice:', err?.message || err);
     });
 
-    // 8. Firestore Real-Time Sync for Subdomain Stores
-    const unsubSubdomainStores = onSnapshot(collection(db, 'subdomain_stores'), (snapshot: any) => {
-      if (snapshot && !snapshot.empty) {
-        const cloudSubdomainStores: SubdomainStore[] = [];
-        snapshot.forEach((docSnap: any) => {
-          const s = docSnap.data() as SubdomainStore;
-          if (s && s.subdomain) cloudSubdomainStores.push(s);
-        });
-        if (cloudSubdomainStores.length > 0) {
-          setSubdomainStores(prev => {
-            const storeMap = new Map<string, SubdomainStore>();
-            prev.forEach(p => storeMap.set(p.subdomain.toLowerCase(), p));
-            cloudSubdomainStores.forEach(cs => storeMap.set(cs.subdomain.toLowerCase(), { ...storeMap.get(cs.subdomain.toLowerCase()), ...cs }));
-            const merged = Array.from(storeMap.values());
-            localStorage.setItem('kalam_subdomain_stores', JSON.stringify(merged));
-            return merged;
-          });
-        }
-      }
-    }, (err: any) => {
-      console.warn('Firestore subdomain_stores sync notice:', err?.message || err);
-    });
-
     return () => {
       clearInterval(syncInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -1124,12 +889,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBots();
       unsubProducts();
       unsubKeys();
-      unsubSettings();
-      unsubUsers();
-      unsubOrders();
-      unsubTickets();
-      unsubCoupons();
-      unsubSubdomainStores();
       unsubSettings();
       unsubUsers();
       unsubOrders();
@@ -1163,8 +922,6 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     description?: string;
     theme_color?: string;
     clone_products?: boolean;
-    products?: Product[];
-    productKeys?: ProductKey[];
     payment_gateway?: Partial<PaymentGatewayConfig>;
     reseller_api?: Partial<ResellerApiConfig>;
   }) => {
@@ -1206,8 +963,8 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auto_fallback: params.reseller_api?.auto_fallback ?? true,
         sync_balance: params.reseller_api?.sync_balance || 0
       },
-      products: Array.isArray(params.products) ? params.products : (shouldClone ? [...products] : []),
-      productKeys: Array.isArray(params.productKeys) ? params.productKeys : (shouldClone ? [...productKeys] : []),
+      products: shouldClone ? [...products] : [],
+      productKeys: shouldClone ? [...productKeys] : [],
       settings: {
         ...settings,
         bot_name: params.name.trim(),
@@ -1231,38 +988,33 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBots(prev => [newBot, ...prev]);
     setActiveBotId(newBot.id);
+    setSettings(prev => ({
+      ...prev,
+      bot_name: newBot.name,
+      admin_id: adminIdToUse,
+      bot_token: newBot.bot_token,
+      bot_username: newBot.username,
+      famgateway_api_key: newBot.payment_gateway?.api_key || prev.famgateway_api_key,
+      fampay_upi_id: newBot.payment_gateway?.upi_id || prev.fampay_upi_id,
+      bantibhaiya_api_key: newBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
+      bantibhaiya_master_key: newBot.reseller_api?.master_key || prev.bantibhaiya_master_key,
+      bantibhaiya_api_url: newBot.reseller_api?.api_url || prev.bantibhaiya_api_url
+    }));
 
-    // ONLY change primary bot settings if there is NO primary bot configured yet, or if this is the first bot
-    const hasExistingPrimaryBot = Boolean(settings.bot_token && settings.bot_token.trim().length > 10);
-    if (!hasExistingPrimaryBot) {
-      setSettings(prev => ({
-        ...prev,
-        bot_name: newBot.name,
-        admin_id: adminIdToUse,
+    // Immediately push new bot settings to server and restart polling engine
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         bot_token: newBot.bot_token,
         bot_username: newBot.username,
-        famgateway_api_key: newBot.payment_gateway?.api_key || prev.famgateway_api_key,
-        fampay_upi_id: newBot.payment_gateway?.upi_id || prev.fampay_upi_id,
-        bantibhaiya_api_key: newBot.reseller_api?.api_key || prev.bantibhaiya_api_key,
-        bantibhaiya_master_key: newBot.reseller_api?.master_key || prev.bantibhaiya_master_key,
-        bantibhaiya_api_url: newBot.reseller_api?.api_url || prev.bantibhaiya_api_url
-      }));
-
-      // Push new bot settings to server only if there was no primary bot
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bot_token: newBot.bot_token,
-          bot_username: newBot.username,
-          admin_id: adminIdToUse,
-          famgateway_api_key: newBot.payment_gateway?.api_key,
-          bantibhaiya_api_key: newBot.reseller_api?.api_key,
-          bantibhaiya_master_key: newBot.reseller_api?.master_key,
-          bantibhaiya_api_url: newBot.reseller_api?.api_url
-        })
-      }).catch(() => {});
-    }
+        admin_id: adminIdToUse,
+        famgateway_api_key: newBot.payment_gateway?.api_key,
+        bantibhaiya_api_key: newBot.reseller_api?.api_key,
+        bantibhaiya_master_key: newBot.reseller_api?.master_key,
+        bantibhaiya_api_url: newBot.reseller_api?.api_url
+      })
+    }).catch(() => {});
 
     // Sync to Firestore Cloud Database
     setDoc(doc(db, 'bots', newBot.id), newBot, { merge: true }).catch(() => {});
@@ -1554,6 +1306,54 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return b;
     }));
   }, []);
+
+  const updateUserProfile = useCallback((updates: Partial<User>) => {
+    const targetUid = currentUserId || (currentUser ? currentUser.user_id : 12846461);
+
+    setUsers(prev => {
+      let matched = false;
+      const nextUsers = prev.map(u => {
+        if (u.user_id === targetUid || (currentUser && u.user_id === currentUser.user_id)) {
+          matched = true;
+          return { ...u, ...updates };
+        }
+        return u;
+      });
+
+      if (!matched && prev.length > 0) {
+        nextUsers[0] = { ...nextUsers[0], ...updates };
+      }
+
+      try {
+        localStorage.setItem('kalam_bot_users', JSON.stringify(nextUsers));
+      } catch (e) {
+        console.warn('Could not persist users to localStorage:', e);
+      }
+      return nextUsers;
+    });
+
+    // Also persist avatar to dedicated key for fallback
+    if (updates.avatar_url) {
+      try {
+        localStorage.setItem(`kalam_avatar_${targetUid}`, updates.avatar_url);
+      } catch (e) {}
+    }
+
+    // Sync to Firestore Cloud DB
+    try {
+      setDoc(doc(db, 'users', String(targetUid)), updates, { merge: true }).catch(() => {});
+    } catch (e) {}
+
+    // Sync to backend server
+    fetch('/api/users/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: targetUid,
+        ...updates
+      })
+    }).catch(() => {});
+  }, [currentUserId, currentUser]);
 
   // Format currency
   const fmtCurr = (amount: number) => `₹${amount.toFixed(2)}`;
@@ -2001,15 +1801,13 @@ export const BotProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           formatted: data.formatted || `₹${Number(data.balance).toFixed(2)}`,
           status: data.success ? 'CONNECTED' : 'ERROR',
           lastChecked: new Date().toISOString(),
-          message: data.message || (data.success ? 'Connected' : 'Connection error'),
-          latencyMs: data.latencyMs || 0,
-          raw: data.raw,
-          error: data.error
+          message: data.message || 'Connected',
+          raw: data.raw
         }));
       }
       return data;
     } catch (err: any) {
-      return { success: false, message: err.message, error: err.message };
+      return { success: false, message: err.message };
     }
   };
 
@@ -3869,7 +3667,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           if (targetUid && !isNaN(targetUid) && amt && !isNaN(amt) && amt > 0) {
             const targetUser = users.find(u => u.user_id === targetUid);
             if (targetUser) {
-              updateUserBalance(targetUid, amt, reason, false);
+              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: u.balance + amt } : u));
               pushBotMessage(
                 `✅ <b>SUCCESS: +₹${amt} CREDITED!</b>\n\n` +
                 `👤 User: <b>${targetUser.first_name}</b>\n` +
@@ -3899,7 +3697,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
             const targetUser = users.find(u => u.user_id === targetUid);
             if (targetUser) {
               const newBal = Math.max(0, targetUser.balance - amt);
-              updateUserBalance(targetUid, -amt, reason, false);
+              setUsers(prev => prev.map(u => u.user_id === targetUid ? { ...u, balance: newBal } : u));
               pushBotMessage(
                 `✅ <b>SUCCESS: -₹${amt} DEDUCTED!</b>\n\n` +
                 `👤 User: <b>${targetUser.first_name}</b>\n` +
@@ -4122,13 +3920,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   const addProduct = async (prodData: Omit<Product, 'id' | 'stock'> & { id?: number }, keys: string[]): Promise<void> => {
     const newId = prodData.id || (Date.now() + Math.floor(Math.random() * 100000));
     const cleanKeys = keys.map(k => k.trim()).filter(Boolean);
-    const botIdToUse = activeBot?.id;
     const newProduct: Product = {
       ...prodData,
       id: newId,
-      bot_id: botIdToUse,
-      owner_id: activeBot?.owner_id || currentUserId,
-      owner_email: activeBot?.owner_email || currentUser.email,
       is_active: prodData.is_active !== undefined ? (prodData.is_active === 0 ? 0 : 1) : 1,
       stock: cleanKeys.length
     };
@@ -4151,16 +3945,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       return updated;
     });
     setBots(prev => {
-      const updated = prev.map(b => {
-        if (!botIdToUse || b.id === botIdToUse) {
-          return {
-            ...b,
-            products: [newProduct, ...(b.products || []).filter(p => p.id !== newId)],
-            productKeys: [...newKeyEntities, ...(b.productKeys || [])]
-          };
-        }
-        return b;
-      });
+      const updated = prev.map(b => ({
+        ...b,
+        products: [newProduct, ...(b.products || []).filter(p => p.id !== newId)],
+        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+      }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
@@ -4186,6 +3975,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       if (data) {
         if (Array.isArray(data.products)) {
           setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
         }
         if (Array.isArray(data.productKeys)) {
           setProductKeys(data.productKeys);
@@ -4199,7 +3989,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   const addProductsBatch = async (newProducts: Product[], keysMap?: Record<string, string[]>): Promise<void> => {
     const cleanProducts: Product[] = [];
     const newKeyEntities: ProductKey[] = [];
-    const botIdToUse = activeBot?.id;
 
     for (let i = 0; i < newProducts.length; i++) {
       const p = newProducts[i];
@@ -4210,9 +3999,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       const cleanP: Product = {
         ...p,
         id: pId,
-        bot_id: botIdToUse,
-        owner_id: activeBot?.owner_id || currentUserId,
-        owner_email: activeBot?.owner_email || currentUser.email,
         is_active: p.is_active !== undefined ? (p.is_active === 0 ? 0 : 1) : 1,
         stock: cleanKeys.length > 0 ? cleanKeys.length : (p.stock || 0)
       };
@@ -4243,16 +4029,11 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     });
 
     setBots(prev => {
-      const updated = prev.map(b => {
-        if (!botIdToUse || b.id === botIdToUse) {
-          return {
-            ...b,
-            products: [...cleanProducts, ...(b.products || []).filter(p => !newIdSet.has(String(p.id)))],
-            productKeys: [...newKeyEntities, ...(b.productKeys || [])]
-          };
-        }
-        return b;
-      });
+      const updated = prev.map(b => ({
+        ...b,
+        products: [...cleanProducts, ...(b.products || []).filter(p => !newIdSet.has(String(p.id)))],
+        productKeys: [...newKeyEntities, ...(b.productKeys || [])]
+      }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
@@ -4278,6 +4059,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       if (data) {
         if (Array.isArray(data.products)) {
           setProducts(data.products);
+          setBots(prev => prev.map(b => ({ ...b, products: data.products })));
         }
         if (Array.isArray(data.productKeys)) {
           setProductKeys(data.productKeys);
@@ -4345,48 +4127,22 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const deleteProduct = (id: number | string) => {
-    const strId = String(id).trim();
-    const numId = Number(strId);
+    const strId = String(id);
     setProducts(prev => {
-      const updated = prev.filter(p => {
-        const pStr = String(p.id).trim();
-        const pNum = Number(pStr);
-        if (pStr === strId) return false;
-        if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
-        return true;
-      });
+      const updated = prev.filter(p => String(p.id) !== strId);
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
-      offlineStorage.saveProducts(updated);
       return updated;
     });
     setProductKeys(prev => {
-      const updated = prev.filter(k => {
-        const kStr = String(k.product_id).trim();
-        const kNum = Number(kStr);
-        if (kStr === strId) return false;
-        if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
-        return true;
-      });
+      const updated = prev.filter(k => String(k.product_id) !== strId);
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => {
-          const pStr = String(p.id).trim();
-          const pNum = Number(pStr);
-          if (pStr === strId) return false;
-          if (!isNaN(numId) && !isNaN(pNum) && pNum === numId) return false;
-          return true;
-        }),
-        productKeys: (b.productKeys || []).filter(k => {
-          const kStr = String(k.product_id).trim();
-          const kNum = Number(kStr);
-          if (kStr === strId) return false;
-          if (!isNaN(numId) && !isNaN(kNum) && kNum === numId) return false;
-          return true;
-        })
+        products: (b.products || []).filter(p => String(p.id) !== strId),
+        productKeys: (b.productKeys || []).filter(k => String(k.product_id) !== strId)
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -4394,7 +4150,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // Invalidate active Telegram FSM state if it was referencing the deleted product
     setFsmData(prev => {
-      if (prev && String(prev.productId).trim() === strId) {
+      if (prev && String(prev.productId) === strId) {
         setCurrentFsmState(null);
         return {};
       }
@@ -4421,8 +4177,9 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     logActivity(12846461, 'ADMIN_DELETE_PRODUCT', `Product #${strId} deleted`);
 
-    // CRITICAL: Delete from Firestore directly
+    // CRITICAL: Delete from Firestore directly and update offline storage
     deleteDoc(doc(db, 'products', strId)).catch(() => {});
+    offlineStorage.saveProducts(products.filter(p => String(p.id) !== strId));
 
     // Sync deletion in Real-Time to Backend Server (Live Telegram Engine Storage)
     fetch('/api/products', {
@@ -4449,51 +4206,23 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
   };
 
   const deleteProducts = (ids: (number | string)[]) => {
-    const strIds = new Set(ids.map(id => String(id).trim()));
-    const numIds = new Set(ids.map(id => Number(id)).filter(n => !isNaN(n)));
-
+    const strIds = new Set(ids.map(id => String(id)));
     setProducts(prev => {
-      const updated = prev.filter(p => {
-        const pStr = String(p.id).trim();
-        const pNum = Number(pStr);
-        if (strIds.has(pStr)) return false;
-        if (!isNaN(pNum) && numIds.has(pNum)) return false;
-        return true;
-      });
+      const updated = prev.filter(p => !strIds.has(String(p.id)));
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
       offlineStorage.saveProducts(updated);
       return updated;
     });
-
     setProductKeys(prev => {
-      const updated = prev.filter(k => {
-        const kStr = String(k.product_id).trim();
-        const kNum = Number(kStr);
-        if (strIds.has(kStr)) return false;
-        if (!isNaN(kNum) && numIds.has(kNum)) return false;
-        return true;
-      });
+      const updated = prev.filter(k => !strIds.has(String(k.product_id)));
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
-
     setBots(prev => {
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => {
-          const pStr = String(p.id).trim();
-          const pNum = Number(pStr);
-          if (strIds.has(pStr)) return false;
-          if (!isNaN(pNum) && numIds.has(pNum)) return false;
-          return true;
-        }),
-        productKeys: (b.productKeys || []).filter(k => {
-          const kStr = String(k.product_id).trim();
-          const kNum = Number(kStr);
-          if (strIds.has(kStr)) return false;
-          if (!isNaN(kNum) && numIds.has(kNum)) return false;
-          return true;
-        })
+        products: (b.products || []).filter(p => !strIds.has(String(p.id))),
+        productKeys: (b.productKeys || []).filter(k => !strIds.has(String(k.product_id)))
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
@@ -4501,7 +4230,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
     // CRITICAL: Delete from Firestore directly
     ids.forEach(id => {
-      const sId = String(id).trim();
+      const sId = String(id);
       deleteDoc(doc(db, 'products', sId)).catch(() => {});
     });
 
@@ -4530,20 +4259,15 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .catch(err => console.warn('Failed to sync batch product deletion to server:', err));
   };
 
-  const deletePanel = (category: string, panelName: string, planIds?: (string | number)[]) => {
+  const deletePanel = (category: string, panelName: string) => {
+    const deletedIds: string[] = [];
+    
     const catNorm = (category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const nameNorm = (panelName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const targetName = (panelName || '').trim().toLowerCase();
 
-    // Compute all target product IDs upfront across both provided planIds and products matching category + panel name
-    const targetProductIds: string[] = [];
-    if (Array.isArray(planIds) && planIds.length > 0) {
-      planIds.forEach(id => targetProductIds.push(String(id).trim()));
-    }
-
-    products.forEach(p => {
-      const pIdStr = String(p.id).trim();
-      if (!targetProductIds.includes(pIdStr)) {
+    setProducts(prev => {
+      const updated = prev.filter(p => {
         const pCatNorm = (p.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const pName = (p.panel_name || p.name || '').trim().toLowerCase();
         const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
@@ -4553,45 +4277,43 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
           (!pCatNorm.includes('non') && pCatNorm.includes('root') && !catNorm.includes('non') && catNorm.includes('root')) ||
           ((pCatNorm.includes('pc') || pCatNorm.includes('emulator')) && (catNorm.includes('pc') || catNorm.includes('emulator')));
 
-        const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === nameNorm) ||
-          (Boolean(p.panel_name) && p.panel_name.trim().toLowerCase() === targetName);
+        const matchName = pName === targetName || (Boolean(pNameNorm) && pNameNorm === nameNorm);
 
         if (matchCat && matchName) {
-          targetProductIds.push(pIdStr);
+          deletedIds.push(String(p.id));
+          return false;
         }
-      }
-    });
-
-    const deleteSet = new Set(targetProductIds);
-    setProducts(prev => {
-      const updated = prev.filter(p => !deleteSet.has(String(p.id).trim()));
+        return true;
+      });
       localStorage.setItem('kalam_bot_products', JSON.stringify(updated));
       offlineStorage.saveProducts(updated);
       return updated;
     });
 
     setProductKeys(prev => {
-      const updated = prev.filter(k => !deleteSet.has(String(k.product_id).trim()));
+      const deletedSet = new Set(deletedIds);
+      const updated = prev.filter(k => !deletedSet.has(String(k.product_id)));
       localStorage.setItem('kalam_bot_keys', JSON.stringify(updated));
       return updated;
     });
 
     setBots(prev => {
+      const deletedSet = new Set(deletedIds);
       const updated = prev.map(b => ({
         ...b,
-        products: (b.products || []).filter(p => !deleteSet.has(String(p.id).trim())),
-        productKeys: (b.productKeys || []).filter(k => !deleteSet.has(String(k.product_id).trim()))
+        products: (b.products || []).filter(p => !deletedSet.has(String(p.id))),
+        productKeys: (b.productKeys || []).filter(k => !deletedSet.has(String(k.product_id)))
       }));
       localStorage.setItem('kalam_bot_instances', JSON.stringify(updated));
       return updated;
     });
 
     // CRITICAL: Delete each document directly from Firestore
-    targetProductIds.forEach(id => {
+    deletedIds.forEach(id => {
       deleteDoc(doc(db, 'products', id)).catch(() => {});
     });
 
-    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category}) - ${targetProductIds.length} plans`);
+    logActivity(12846461, 'ADMIN_DELETE_PANEL', `Deleted panel: ${panelName} (${category})`);
 
     fetch('/api/products', {
       method: 'POST',
@@ -4599,8 +4321,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       body: JSON.stringify({
         action: 'delete_panel',
         category,
-        panelName,
-        productIds: targetProductIds
+        panelName
       })
     })
     .then(res => res.json())
@@ -4770,7 +4491,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       }
 
       localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
       return updated;
     });
 
@@ -4817,7 +4537,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setDoc(userDocRef, {
       user_id: numUserId,
       balance: targetUser ? targetUser.balance : Math.max(0, numDelta),
-      spent: targetUser ? targetUser.spent : 0,
       updated_at: new Date().toISOString()
     }, { merge: true }).catch(() => {});
 
@@ -4836,27 +4555,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     .then(res => res.json())
     .then(data => {
       if (data && Array.isArray(data.users)) {
-        setUsers(prevUsers => {
-          const map = new Map<number, User>();
-          prevUsers.forEach(u => map.set(u.user_id, u));
-          data.users.forEach((su: User) => {
-            const existing = map.get(su.user_id);
-            if (existing) {
-              map.set(su.user_id, {
-                ...su,
-                ...existing,
-                balance: su.balance !== undefined && su.balance !== null ? Number(su.balance) : existing.balance,
-                spent: Math.max(existing.spent ?? 0, su.spent ?? 0)
-              });
-            } else {
-              map.set(su.user_id, su);
-            }
-          });
-          const merged = Array.from(map.values());
-          localStorage.setItem('kalam_bot_users', JSON.stringify(merged));
-          offlineStorage.saveUserBalances(merged);
-          return merged;
-        });
+        setUsers(data.users);
       }
       if (data && Array.isArray(data.transactions)) {
         setTransactions(data.transactions);
@@ -4867,30 +4566,15 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserBan = (userId: number) => {
     let newStatus = 0;
-    let targetUser: User | undefined;
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          newStatus = u.is_banned ? 0 : 1;
-          targetUser = { ...u, is_banned: newStatus };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newStatus = u.is_banned ? 0 : 1;
+        return { ...u, is_banned: newStatus };
+      }
+      return u;
+    }));
     logActivity(12846461, 'ADMIN_TOGGLE_BAN', `User #${userId}`);
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        is_banned: newStatus,
-        updated_at: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    }
+    setDoc(doc(db, 'users', String(userId)), { is_banned: newStatus, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4900,30 +4584,15 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const warnUser = (userId: number, message: string) => {
     let count = 1;
-    let targetUser: User | undefined;
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          count = (u.warnings || 0) + 1;
-          targetUser = { ...u, warnings: count };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        count = (u.warnings || 0) + 1;
+        return { ...u, warnings: count };
+      }
+      return u;
+    }));
     logActivity(12846461, 'ADMIN_WARN_USER', `User #${userId}: ${message}`);
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        warnings: count,
-        updated_at: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    }
+    setDoc(doc(db, 'users', String(userId)), { warnings: count, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4933,34 +4602,19 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserVip = (userId: number) => {
     let newVip = 0;
-    let targetUser: User | undefined;
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          newVip = u.is_vip ? 0 : 1;
-          targetUser = {
-            ...u,
-            is_vip: newVip,
-            vip_since: newVip ? new Date().toISOString().substring(0, 10) : undefined,
-            account_type: 'Regular'
-          };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        is_vip: newVip,
-        updated_at: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    }
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newVip = u.is_vip ? 0 : 1;
+        return {
+          ...u,
+          is_vip: newVip,
+          vip_since: newVip ? new Date().toISOString().substring(0, 10) : undefined,
+          account_type: 'Regular'
+        };
+      }
+      return u;
+    }));
+    setDoc(doc(db, 'users', String(userId)), { is_vip: newVip, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4970,142 +4624,24 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
 
   const toggleUserReseller = (userId: number) => {
     let newReseller = 0;
-    let targetUser: User | undefined;
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          newReseller = u.is_reseller ? 0 : 1;
-          targetUser = {
-            ...u,
-            is_reseller: newReseller,
-            reseller_since: newReseller ? new Date().toISOString().substring(0, 10) : undefined,
-            account_type: newReseller ? 'Reseller' : 'Regular'
-          };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        is_reseller: newReseller,
-        updated_at: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    }
+    setUsers(prev => prev.map(u => {
+      if (u.user_id === userId) {
+        newReseller = u.is_reseller ? 0 : 1;
+        return {
+          ...u,
+          is_reseller: newReseller,
+          reseller_since: newReseller ? new Date().toISOString().substring(0, 10) : undefined,
+          account_type: newReseller ? 'Reseller' : 'Regular'
+        };
+      }
+      return u;
+    }));
+    setDoc(doc(db, 'users', String(userId)), { is_reseller: newReseller, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_role', userId, is_reseller: newReseller })
     }).catch(() => {});
-  };
-
-  const toggleUserAdmin = (userId: number) => {
-    let newAdmin = 0;
-    let targetUser: User | undefined;
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          newAdmin = (u.is_admin === 1 || u.role === 'admin') ? 0 : 1;
-          targetUser = {
-            ...u,
-            is_admin: newAdmin,
-            role: newAdmin ? 'admin' : 'user',
-            account_type: newAdmin ? 'Admin' : 'Regular'
-          };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        is_admin: newAdmin,
-        role: newAdmin ? 'admin' : 'user',
-        account_type: newAdmin ? 'Admin' : 'Regular',
-        updated_at: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    }
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_role', userId, is_admin: newAdmin, role: newAdmin ? 'admin' : 'user' })
-    }).catch(() => {});
-  };
-
-  const promoteUserRole = async (userId: number, role: 'admin' | 'reseller' | 'vip' | 'regular', notifyTelegram = true): Promise<void> => {
-    let targetUser: User | undefined;
-    const nowIso = new Date().toISOString();
-
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === userId) {
-          const is_admin = role === 'admin' ? 1 : 0;
-          const is_reseller = role === 'reseller' ? 1 : 0;
-          const is_vip = role === 'vip' ? 1 : 0;
-          const account_type = role === 'admin' ? 'Admin' : (role === 'reseller' ? 'Reseller' : (role === 'vip' ? 'VIP' : 'Regular'));
-          const userRole = role === 'regular' ? 'user' : role;
-
-          targetUser = {
-            ...u,
-            is_admin,
-            is_reseller,
-            is_vip,
-            role: userRole,
-            account_type: account_type as any,
-            reseller_since: is_reseller ? nowIso.substring(0, 10) : u.reseller_since,
-            vip_since: is_vip ? nowIso.substring(0, 10) : u.vip_since
-          };
-          return targetUser;
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
-
-    logActivity(12846461, 'ADMIN_PROMOTE_ROLE', `User #${userId} promoted to ${role.toUpperCase()}`);
-
-    if (targetUser) {
-      setDoc(doc(db, 'users', String(userId)), {
-        user_id: userId,
-        balance: targetUser.balance,
-        spent: targetUser.spent,
-        is_admin: targetUser.is_admin,
-        is_reseller: targetUser.is_reseller,
-        is_vip: targetUser.is_vip,
-        role: targetUser.role,
-        account_type: targetUser.account_type,
-        updated_at: nowIso
-      }, { merge: true }).catch(() => {});
-    }
-
-    try {
-      await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_role',
-          userId,
-          role,
-          notifyTelegram
-        })
-      });
-    } catch (err) {
-      console.warn('Failed to sync role update to server:', err);
-    }
   };
 
   const createNewCoupon = (code: string, amount: number, uses: number) => {
@@ -5629,7 +5165,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
-    setActiveTab('dashboard');
+    setActiveTab('my_bots');
     // Sync to Firestore
     setDoc(doc(db, 'users', String(matched.user_id)), matched, { merge: true }).catch(() => {});
     confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
@@ -5673,7 +5209,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
       setIsAuthenticated(true);
       localStorage.setItem('kalam_bot_auth_logged_in', 'true');
       setIsAuthModalOpen(false);
-      setActiveTab('dashboard');
+      setActiveTab('my_bots');
       setDoc(doc(db, 'users', String(updated.user_id)), updated, { merge: true }).catch(() => {});
       return { success: true, user: updated };
     }
@@ -5709,7 +5245,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     setIsAuthenticated(true);
     localStorage.setItem('kalam_bot_auth_logged_in', 'true');
     setIsAuthModalOpen(false);
-    setActiveTab('dashboard');
+    setActiveTab('my_bots');
     // Sync to Cloud Firestore
     setDoc(doc(db, 'users', String(newUser.user_id)), newUser, { merge: true }).catch(() => {});
     confetti({ particleCount: 80, spread: 80, origin: { y: 0.6 } });
@@ -5776,9 +5312,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     } else {
       // Create user account with new password so they can log in immediately
       const newUid = Math.floor(10000000 + Math.random() * 90000000);
-      const existingOfflineBal = offlineStorage.getUserBalance(isOwner ? 12846461 : newUid);
-      const initialBalance = existingOfflineBal !== null ? existingOfflineBal : (isOwner ? 1000.0 : 100.0);
-
       const newUser: User = {
         user_id: isOwner ? 12846461 : newUid,
         email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@gmail.com`,
@@ -5787,7 +5320,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         username: cleanEmail.split('@')[0] || `user_${newUid}`,
         auth_provider: 'email',
         avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
-        balance: initialBalance,
+        balance: isOwner ? 1000.0 : 100.0,
         account_type: isOwner ? 'Reseller' : 'Regular',
         orders_count: 0,
         spent: 0,
@@ -5804,43 +5337,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
     }
 
     return { success: true, message: 'Password has been successfully updated!' };
-  };
-
-  const updateUserProfile = (updates: Partial<User>) => {
-    setUsers(prev => {
-      const updated = prev.map(u => {
-        if (u.user_id === currentUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase())) {
-          return {
-            ...u,
-            ...updates,
-            // CRITICAL: Protect user balance so profile/avatar updates never reset or alter it!
-            balance: updates.balance !== undefined ? updates.balance : u.balance,
-            spent: updates.spent !== undefined ? updates.spent : u.spent
-          };
-        }
-        return u;
-      });
-      localStorage.setItem('kalam_bot_users', JSON.stringify(updated));
-      offlineStorage.saveUserBalances(updated);
-      return updated;
-    });
-
-    // Sync to Firestore
-    setDoc(doc(db, 'users', String(currentUserId)), {
-      user_id: currentUserId,
-      ...updates,
-      updated_at: new Date().toISOString()
-    }, { merge: true }).catch(() => {});
-
-    // Sync to Server API
-    fetch('/api/users/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: currentUserId,
-        ...updates
-      })
-    }).catch(err => console.warn('Failed to sync profile update:', err));
   };
 
   const resetDatabaseToDefaults = () => {
@@ -5879,13 +5375,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         logout,
         requestPasswordReset,
         resetPassword,
-        subdomainStores,
-        activeSubdomainStore,
-        activeSubdomainSlug,
-        createSubdomainStore,
-        updateSubdomainStore,
-        deleteSubdomainStore,
-        setActiveSubdomainSlug,
         bots,
         myBots,
         activeBotId,
@@ -5898,8 +5387,7 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         updateActiveBotGateway,
         updateActiveBotResellerApi,
         toggleBotStatus,
-        products: scopedProducts,
-        rawProducts: products,
+        products,
         productKeys,
         orders,
         tickets,
@@ -5953,8 +5441,6 @@ Upgrade your account to access wholesale <b>Reseller Prices</b>!
         warnUser,
         toggleUserVip,
         toggleUserReseller,
-        toggleUserAdmin,
-        promoteUserRole,
         createNewCoupon,
         deleteCoupon,
         replyToTicket,

@@ -1,5 +1,5 @@
 import { dbStore } from './storage';
-import { Product, ProductKey, User, Order, Ticket, BotInstance } from '../src/types';
+import { Product, User, Order, Ticket } from '../src/types';
 import { famGateway } from './famGateway';
 import { bantiResellerService } from './bantiResellerApi';
 import QRCode from 'qrcode';
@@ -84,14 +84,6 @@ export function isCategoryMatch(prodCategory?: string, targetCategory?: string):
   return pNorm === tNorm;
 }
 
-export function isProductActive(p?: any): boolean {
-  if (!p) return false;
-  if (p.is_active === 0 || p.is_active === false || p.is_active === '0' || p.is_active === 'false' || p.is_active === 'inactive') {
-    return false;
-  }
-  return true;
-}
-
 export function getCanonicalCategory(catStr?: string): string {
   if (!catStr) return 'ANDROID NON ROOT PANEL';
   const c = catStr.trim();
@@ -143,13 +135,6 @@ class TelegramEngine {
   private updateOffset: number = 0;
   private watchdogTimer: NodeJS.Timeout | null = null;
 
-  // Context-aware multi-bot execution
-  public activeContextToken: string | null = null;
-  public activeContextBot: BotInstance | null = null;
-
-  // Multi-bot concurrent polling fleet workers (running all bots 24/7 in parallel)
-  private fleetPollers: Map<string, { abortController: AbortController; botId: string; token: string; isRunning: boolean }> = new Map();
-
   // 24/7 Connection Guard & Auto-Restart Metrics
   private autoRestartCount: number = 0;
   private lastAutoRestartTime: string | null = null;
@@ -160,9 +145,6 @@ class TelegramEngine {
   }
 
   public getBotDisplayName(): string {
-    if (this.activeContextBot && this.activeContextBot.name && this.activeContextBot.name.trim()) {
-      return this.activeContextBot.name.trim().toUpperCase();
-    }
     const settings = dbStore.getData().settings;
     if (settings.bot_name && settings.bot_name.trim()) {
       return settings.bot_name.trim().toUpperCase();
@@ -345,8 +327,8 @@ class TelegramEngine {
   /**
    * Helper to make calls to Telegram Bot API
    */
-  public async callApi(method: string, payload: any = {}, overrideToken?: string): Promise<any> {
-    const token = overrideToken || this.activeContextToken || this.getValidTokenFromStore();
+  public async callApi(method: string, payload: any = {}): Promise<any> {
+    const token = this.getValidTokenFromStore();
     if (!token || token.includes('exampleToken')) {
       throw new Error('Valid Telegram Bot Token is required');
     }
@@ -607,14 +589,9 @@ class TelegramEngine {
           console.log(`⚡ Telegram Bot Polling Engine started for @${this.botInfo?.username}`);
         }
 
-        // Run primary poll loop without awaiting so start() completes and reports running
+        // Run poll loop without awaiting so start() completes and reports running
         this.pollLoop(sessionId).catch(err => {
           console.error('Unhandled pollLoop error:', err);
-        });
-
-        // Run multi-bot fleet pollers (all cloned/configured bots run 24/7 in parallel)
-        this.syncFleetPollers().catch(err => {
-          console.warn('syncFleetPollers notice:', err.message);
         });
       } finally {
         this.startPromise = null;
@@ -625,7 +602,7 @@ class TelegramEngine {
   }
 
   /**
-   * Stop long polling engine & all active fleet bot workers
+   * Stop long polling engine
    */
   public async stop(): Promise<void> {
     this.currentPollSessionId++; // Invalidate active loop
@@ -637,138 +614,7 @@ class TelegramEngine {
       } catch {}
       this.pollingAbortController = null;
     }
-    this.stopAllFleetPollers();
-    console.log('Telegram Bot Polling Engine and all fleet workers stopped');
-  }
-
-  /**
-   * Stop all dedicated background workers for fleet bots
-   */
-  public stopAllFleetPollers(): void {
-    for (const [tokenKey, worker] of this.fleetPollers.entries()) {
-      try {
-        worker.abortController.abort();
-      } catch {}
-    }
-    this.fleetPollers.clear();
-  }
-
-  /**
-   * Synchronize & spawn 24/7 long-polling background workers for ALL configured Telegram bots in the fleet
-   */
-  public async syncFleetPollers(): Promise<void> {
-    if (!this.isRunning) return;
-    const bots = dbStore.getBots();
-    const primaryToken = this.getValidTokenFromStore();
-    const activeTokensInDb = new Set<string>();
-
-    for (const bot of bots) {
-      const tok = (bot.bot_token || '').trim();
-      if (!tok || tok.includes('exampleToken') || !tok.includes(':') || tok.length < 20) {
-        continue;
-      }
-      activeTokensInDb.add(tok);
-
-      // Primary token is already polled by main pollLoop
-      if (tok === primaryToken) {
-        continue;
-      }
-
-      if (!this.fleetPollers.has(tok)) {
-        const abortController = new AbortController();
-        this.fleetPollers.set(tok, {
-          abortController,
-          botId: bot.id,
-          token: tok,
-          isRunning: true
-        });
-
-        console.log(`🤖 [Multi-Bot Fleet] Launching dedicated 24/7 background worker for: ${bot.name} (@${bot.username || 'unknown'})`);
-        this.pollBotInstance(bot, abortController).catch(err => {
-          console.warn(`[Multi-Bot Fleet] Worker loop exited for ${bot.name}:`, err.message);
-        });
-      }
-    }
-
-    // Stop workers for bots that were removed from db
-    for (const [tok, worker] of this.fleetPollers.entries()) {
-      if (!activeTokensInDb.has(tok) || tok === primaryToken) {
-        try {
-          worker.abortController.abort();
-        } catch {}
-        this.fleetPollers.delete(tok);
-        console.log(`🤖 [Multi-Bot Fleet] Stopped background worker for removed token: ${tok.slice(0, 6)}...`);
-      }
-    }
-  }
-
-  /**
-   * Dedicated 24/7 long-polling worker loop for an individual fleet bot instance
-   */
-  private async pollBotInstance(bot: BotInstance, abortController: AbortController): Promise<void> {
-    let updateOffset = 0;
-    const tok = bot.bot_token.trim();
-
-    while (this.isRunning && !abortController.signal.aborted) {
-      try {
-        const url = `https://api.telegram.org/bot${tok}/getUpdates`;
-        const pollSignal = AbortSignal.any
-          ? AbortSignal.any([abortController.signal, AbortSignal.timeout(25000)])
-          : abortController.signal;
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            offset: updateOffset,
-            timeout: 15,
-            allowed_updates: ['message', 'callback_query']
-          }),
-          signal: pollSignal
-        });
-
-        if (abortController.signal.aborted || !this.isRunning) break;
-
-        if (response.status === 409 || response.status === 429) {
-          await new Promise(r => setTimeout(r, 4000));
-          continue;
-        }
-
-        if (!response.ok) {
-          await new Promise(r => setTimeout(r, 3000));
-          continue;
-        }
-
-        const data = await response.json();
-        if (data.ok && Array.isArray(data.result)) {
-          for (const update of data.result) {
-            if (abortController.signal.aborted || !this.isRunning) break;
-            updateOffset = update.update_id + 1;
-
-            // Route update in the context of this specific bot
-            this.activeContextToken = tok;
-            this.activeContextBot = bot;
-            try {
-              await this.handleUpdate(update, bot);
-            } catch (err: any) {
-              console.error(`Error handling update for fleet bot @${bot.username}:`, err.message);
-            } finally {
-              this.activeContextToken = null;
-              this.activeContextBot = null;
-            }
-          }
-        } else {
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      } catch (err: any) {
-        if (abortController.signal.aborted || !this.isRunning) break;
-        const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
-        if (isTimeout) {
-          continue;
-        }
-        await new Promise(r => setTimeout(r, 3000));
-      }
-    }
+    console.log('Telegram Bot Polling Engine stopped');
   }
 
   /**
@@ -889,24 +735,15 @@ class TelegramEngine {
     }
   }
 
-  public async handleUpdate(update: any, botContext?: BotInstance) {
-    if (botContext) {
-      this.activeContextBot = botContext;
-      this.activeContextToken = botContext.bot_token;
-    }
+  public async handleUpdate(update: any) {
     try {
       if (update.message) {
-        await this.handleMessage(update.message, botContext);
+        await this.handleMessage(update.message);
       } else if (update.callback_query) {
-        await this.handleCallbackQuery(update.callback_query, botContext);
+        await this.handleCallbackQuery(update.callback_query);
       }
     } catch (err) {
       console.error('Error processing Telegram update:', err);
-    } finally {
-      if (botContext) {
-        this.activeContextBot = null;
-        this.activeContextToken = null;
-      }
     }
   }
 
@@ -965,7 +802,7 @@ class TelegramEngine {
   }
 
   public async sendPhotoBuffer(chatId: number, buffer: Buffer, caption?: string, replyMarkup?: any): Promise<any> {
-    const token = this.activeContextToken || this.getValidTokenFromStore();
+    const token = dbStore.getData().settings.bot_token;
     if (!token || token.includes('exampleToken')) {
       throw new Error('Telegram Bot Token is not configured');
     }
@@ -1346,7 +1183,7 @@ class TelegramEngine {
     }
   }
 
-  private async handleMessage(msg: any, botContext?: BotInstance) {
+  private async handleMessage(msg: any) {
     if (!msg.from || msg.from.is_bot) return;
 
     const fromUser = msg.from;
@@ -1355,24 +1192,8 @@ class TelegramEngine {
     const settings = dbStore.getData().settings;
 
     const isExistingUser = dbStore.getUser(fromUser.id);
-    const currentBots = dbStore.getBots();
-    const matchingBot = botContext || currentBots.find(b => 
-      (this.botInfo?.username && b.username?.replace('@','').toLowerCase() === this.botInfo.username.toLowerCase()) ||
-      (settings.bot_token && b.bot_token === settings.bot_token)
-    ) || (currentBots.length > 0 ? currentBots[0] : null);
-
-    const activeBotId = matchingBot?.id || (this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot'));
-    const activeBotUsername = matchingBot?.username || this.botInfo?.username || settings.bot_username || '';
-    const user = dbStore.getOrCreateUser(
-      fromUser.id,
-      fromUser.first_name,
-      fromUser.username,
-      chatId,
-      activeBotId,
-      activeBotUsername,
-      matchingBot?.owner_id,
-      matchingBot?.owner_email
-    );
+    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
 
     if (user.is_banned === 1) {
       await this.sendMessage(chatId, `🚫 <b>Account Suspended</b>\n\nYour account has been banned from using ${this.getBotDisplayName()}. Contact support if you believe this is an error.`);
@@ -1492,30 +1313,6 @@ class TelegramEngine {
 
       if (lowerText === '/cancel') {
         await this.sendMessage(chatId, '❌ <i>Operation cancelled. Returning to main menu...</i>', this.getMainMenuKeyboard(user));
-        return;
-      }
-
-      if (
-        lowerText.startsWith('/createbot') ||
-        lowerText.startsWith('/newbot') ||
-        lowerText.startsWith('/clonebot') ||
-        lowerText.startsWith('/botbuilder') ||
-        lowerText.startsWith('/botcreator')
-      ) {
-        const creatorBotUsername = (settings.creator_bot_username || '').replace('@', '').trim();
-        const text = `🤖 <b><u>DEDICATED BOT CREATOR STUDIO</u></b> 🤖\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `To create and host a new Telegram bot, please open our official dedicated <b>Bot Creator Bot</b>:\n\n` +
-          (creatorBotUsername ? `👉 <b>@${creatorBotUsername}</b>\n\n` : `👉 <i>Configure the Dedicated Creator Bot token in your Web Admin Panel.</i>\n\n`) +
-          `<i>This shop bot remains 100% dedicated to store catalog, key purchases & wallet topups.</i>`;
-
-        const kb = creatorBotUsername ? {
-          inline_keyboard: [
-            [{ text: `🚀 Open @${creatorBotUsername} (Bot Maker)`, url: `https://t.me/${creatorBotUsername}` }],
-            [{ text: '🔙 Store Main Menu', callback_data: 'main_menu' }]
-          ]
-        } : this.getMainMenuKeyboard(user);
-
-        await this.sendMessage(chatId, text, kb);
         return;
       }
 
@@ -1886,541 +1683,6 @@ class TelegramEngine {
         {
           inline_keyboard: [
             [{ text: '📦 Products Hub', callback_data: 'admin_prods_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    // ========================================================
-    // TELEGRAM IN-BOT BOT CREATOR WIZARD FSM HANDLERS
-    // ========================================================
-    if (fsm && fsm.state === 'bot_create_step1_token') {
-      const rawInput = text.trim();
-      const parts = rawInput.split(/\s+/);
-      const cleanToken = parts[0];
-      const botCustomName = parts.slice(1).join(' ');
-
-      if (!cleanToken || cleanToken.length < 20 || !cleanToken.includes(':')) {
-        await this.sendMessage(
-          chatId,
-          `❌ <b>Invalid Token Format</b>\n\nTelegram Bot Tokens must look like:\n<code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>\n\nPlease copy the HTTP API Token from @BotFather and try again.\n\n<i>Or send /cancel to abort.</i>`,
-          {
-            inline_keyboard: [
-              [{ text: '💬 Open @BotFather', url: 'https://t.me/BotFather' }],
-              [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel' }]
-            ]
-          }
-        );
-        return;
-      }
-
-      await this.sendMessage(chatId, `⏳ <i>Validating Bot Token with Telegram API servers...</i>`);
-
-      try {
-        const valRes = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
-        const valData = await valRes.json();
-
-        if (!valData.ok) {
-          await this.sendMessage(
-            chatId,
-            `❌ <b>Telegram API Validation Failed</b>\n\n` +
-            `Telegram returned: <code>${valData.description || 'Unauthorized'}</code>\n\n` +
-            `Ensure the bot was not deleted or revoked in @BotFather.`,
-            {
-              inline_keyboard: [
-                [{ text: '💬 Open @BotFather', url: 'https://t.me/BotFather' }],
-                [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel' }]
-              ]
-            }
-          );
-          return;
-        }
-
-        const botInfo = valData.result;
-        const finalName = botCustomName || botInfo.first_name || 'VIP Store Bot';
-
-        dbStore.setFsmState(user.user_id, 'bot_create_step2_gateway', {
-          token: cleanToken,
-          botInfo,
-          botName: finalName,
-          username: botInfo.username || ''
-        });
-
-        const step2Text = `✅ <b>STEP 1 COMPLETE: BOT TOKEN VERIFIED!</b> 🤖\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `📛 <b>Bot Name:</b> <b>${escapeHtml(finalName)}</b>\n` +
-          `🔗 <b>Username:</b> @${escapeHtml(botInfo.username || 'unknown')}\n` +
-          `🆔 <b>Bot ID:</b> <code>${botInfo.id}</code>\n\n` +
-          `💳 <b><u>STEP 2 OF 4: PAYMENT GATEWAY (FAMGATEWAY)</u></b>\n` +
-          `Receive automated instant UPI payments (PhonePe, GPay, Paytm, FamPay) with auto-verification directly to your UPI.\n\n` +
-          `👇 <b>Reply directly with your FamGateway API Key or UPI ID:</b>\n` +
-          `<code>FAM_LIVE_xxxxxxxxxxxx</code> or <code>myname@fam</code>\n\n` +
-          `<i>Or tap below to skip and use the default system gateway:</i>`;
-
-        await this.sendMessage(chatId, step2Text, {
-          inline_keyboard: [
-            [{ text: '⏭️ Skip — Use Default Gateway', callback_data: 'bot_create_skip_gw', style: 'primary' }],
-            [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel', style: 'danger' }]
-          ]
-        });
-        return;
-      } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Connection error validating bot token: ${err.message}`);
-        return;
-      }
-    }
-
-    if (fsm && fsm.state === 'bot_create_step2_gateway') {
-      const input = text.trim();
-      const currentData = fsm.data || {};
-      const isUpi = input.includes('@');
-
-      dbStore.setFsmState(user.user_id, 'bot_create_step3_reseller', {
-        ...currentData,
-        gatewayKey: !isUpi ? input : undefined,
-        gatewayUpi: isUpi ? input : undefined
-      });
-
-      const step3Text = `✅ <b>STEP 2 COMPLETE: GATEWAY CONFIGURED!</b> 💳\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `⚡ <b><u>STEP 3 OF 4: 25 RSL RESELLER API</u></b>\n` +
-        `Connect to 25 RSL / Banti Reseller API for automated VIP Key generation & instant delivery.\n\n` +
-        `👇 <b>Reply directly with your 25 RSL Reseller API Key:</b>\n` +
-        `<code>&lt;Your_Reseller_API_Key&gt;</code>\n\n` +
-        `<i>Or tap below to skip and use the master reseller provider:</i>`;
-
-      await this.sendMessage(chatId, step3Text, {
-        inline_keyboard: [
-          [{ text: '⏭️ Skip — Use Master Reseller API', callback_data: 'bot_create_skip_res', style: 'primary' }],
-          [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel', style: 'danger' }]
-        ]
-      });
-      return;
-    }
-
-    if (fsm && fsm.state === 'bot_create_step3_reseller') {
-      const input = text.trim();
-      const currentData = fsm.data || {};
-
-      dbStore.setFsmState(user.user_id, 'bot_create_step4_products', {
-        ...currentData,
-        resellerKey: input
-      });
-
-      const totalPlans = dbStore.getData().products.length;
-      const step4Text = `✅ <b>STEP 3 COMPLETE: RESELLER API CONFIGURED!</b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `📦 <b><u>STEP 4 OF 4: PRODUCT STORE CATALOG</u></b>\n` +
-        `How would you like to set up the catalog for your new bot?\n\n` +
-        `• <b>Clone All Products (${totalPlans} Plans):</b> Automatically copies all current VIP panels, categories (Non-Root, Root, PC), duration packages and pricing into your new bot.\n` +
-        `• <b>Start Empty:</b> Creates a fresh bot with zero products so you can add your custom panels.\n\n` +
-        `👇 <b>Choose an option below to complete setup:</b>`;
-
-      await this.sendMessage(chatId, step4Text, {
-        inline_keyboard: [
-          [{ text: `📦 Clone All Products (${totalPlans} Plans)`, callback_data: 'bot_create_clone_prods', style: 'success' }],
-          [{ text: '➕ Start with Empty Catalog', callback_data: 'bot_create_empty_prods', style: 'primary' }],
-          [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel', style: 'danger' }]
-        ]
-      });
-      return;
-    }
-
-    if (fsm && fsm.state === 'bot_create_step4_products') {
-      const input = text.trim().toLowerCase();
-      const shouldClone = input.includes('yes') || input.includes('clone') || input.includes('all') || input === '1';
-      await this.finishBotCreation(chatId, user, shouldClone);
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_bot_token') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const rawInput = text.trim();
-      const parts = rawInput.split(/\s+/);
-      const cleanToken = parts[0];
-      const botCustomName = parts.slice(1).join(' ');
-
-      if (!cleanToken || cleanToken.length < 20 || !cleanToken.includes(':')) {
-        await this.sendMessage(
-          chatId,
-          `❌ <b>Invalid Token Format</b>\n\nTelegram Bot Tokens must look like:\n<code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>\n\nPlease copy the HTTP API Token from @BotFather and try again.`,
-          { inline_keyboard: [[{ text: '➕ Try Again', callback_data: 'admin_bot_add_start' }]] }
-        );
-        return;
-      }
-
-      await this.sendMessage(chatId, `⏳ <i>Validating Bot Token with Telegram API servers...</i>`);
-
-      try {
-        const valRes = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
-        const valData = await valRes.json();
-
-        if (!valData.ok) {
-          await this.sendMessage(
-            chatId,
-            `❌ <b>Telegram API Validation Failed</b>\n\n` +
-            `Telegram returned: <code>${valData.description || 'Unauthorized'}</code>\n\n` +
-            `Ensure the bot was not deleted or revoked in @BotFather.`,
-            { inline_keyboard: [[{ text: '➕ Try Again', callback_data: 'admin_bot_add_start' }]] }
-          );
-          return;
-        }
-
-        const botInfo = valData.result;
-        const bId = `bot_${botInfo.id}`;
-        const finalName = botCustomName || botInfo.first_name || 'VIP Store Bot';
-
-        const newBot: BotInstance = {
-          id: bId,
-          owner_id: user.user_id,
-          admin_id: user.user_id,
-          admin_chat_id: chatId,
-          name: finalName,
-          username: botInfo.username || '',
-          bot_token: cleanToken,
-          status: 'ONLINE',
-          created_at: new Date().toISOString(),
-          description: 'Created via Telegram Bot Fleet Hub',
-          theme_color: '#06b6d4',
-          payment_gateway: {
-            upi_id: dbStore.getData().settings.fampay_upi_id || 'kalampanel@fam',
-            merchant_name: finalName,
-            qr_image_url: '',
-            gateway_provider: 'famgateway',
-            api_key: dbStore.getData().settings.famgateway_api_key || '',
-            secret_key: '',
-            verify_endpoint: 'https://famgateway.in/api/checkout-status.php',
-            usdt_trc20_address: '',
-            usdt_to_inr_rate: 90,
-            auto_approve: true,
-            min_deposit_inr: 50,
-            max_deposit_inr: 50000
-          },
-          reseller_api: {
-            provider_name: '25 RSL Reseller API',
-            api_url: dbStore.getData().settings.bantibhaiya_api_url || 'https://bantibhaiya.to/api/reseller_v1.php',
-            api_key: dbStore.getData().settings.bantibhaiya_api_key || '',
-            master_key: dbStore.getData().settings.bantibhaiya_master_key || '',
-            status: 'ON',
-            auto_fallback: true,
-            sync_balance: 0
-          },
-          products: [...dbStore.getData().products],
-          productKeys: [...dbStore.getData().productKeys],
-          settings: {
-            ...dbStore.getData().settings,
-            bot_token: cleanToken,
-            bot_username: `@${botInfo.username}`
-          },
-          stats: { total_orders: 0, total_revenue: 0, total_users: 1, total_keys_delivered: 0 }
-        };
-
-        dbStore.saveBot(newBot);
-        await this.syncFleetPollers().catch(() => {});
-
-        // If this is the only bot or currently active, bind it
-        const allBots = dbStore.getBots();
-        if (allBots.length === 1) {
-          dbStore.updateSettings({
-            bot_token: cleanToken,
-            bot_username: `@${botInfo.username}`
-          });
-          await this.restart();
-        }
-
-        const maskedTok = `${cleanToken.slice(0, 8)}...${cleanToken.slice(-6)}`;
-
-        await this.sendMessage(
-          chatId,
-          `🎉 <b>NEW BOT SUCCESSFULLY ADDED TO FLEET!</b> 🤖\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `📛 <b>Bot Name:</b> ${finalName}\n` +
-          `🔗 <b>Username:</b> @${botInfo.username}\n` +
-          `🆔 <b>Telegram Bot ID:</b> <code>${botInfo.id}</code>\n` +
-          `🔑 <b>Token:</b> <code>${maskedTok}</code>\n` +
-          `🟢 <b>Validation:</b> ✅ <b>VERIFIED WITH TELEGRAM API</b>\n\n` +
-          `<i>This bot is now saved in your cluster and synchronized with Cloud Firestore!</i>`,
-          {
-            inline_keyboard: [
-              [{ text: '⭐ Set as Primary Active Bot', callback_data: `admin_bot_activate_${bId}`, style: 'success' }],
-              [{ text: '🤖 Manage in Bot Fleet Hub', callback_data: 'admin_bots_hub', style: 'primary' }],
-              [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-            ]
-          }
-        );
-      } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Network error validating bot: ${err.message}`);
-      }
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_gw_key') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newKey = text.trim();
-      if (!newKey) {
-        await this.sendMessage(chatId, '❌ API Key cannot be empty.');
-        return;
-      }
-
-      dbStore.updateSettings({
-        famgateway_api_key: newKey,
-        fampay_api_key: newKey
-      });
-
-      // Also sync active bot instance
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          payment_gateway: {
-            ...bots[0].payment_gateway,
-            api_key: newKey
-          }
-        });
-      }
-
-      // Test connection live
-      const testRes = await famGateway.testApiKey();
-
-      await this.sendMessage(
-        chatId,
-        `🔑 <b>FAMGATEWAY API KEY UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>Key Configured:</b> <code>${newKey.slice(0, 4)}...${newKey.slice(-4)}</code>\n` +
-        `📡 <b>Test Result:</b> ${testRes.message || 'Saved'}\n\n` +
-        `<i>Instant automated UPI deposits are now live with this key!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '⚡ Test Gateway Connection', callback_data: 'admin_gw_test', style: 'success' }],
-            [{ text: '💳 Payment Gateway Hub', callback_data: 'admin_gateway_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_gw_upi') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newUpi = text.trim();
-      if (!newUpi || !newUpi.includes('@')) {
-        await this.sendMessage(chatId, '❌ Invalid UPI ID format. It must include @ (e.g. kalampanel@fam).');
-        return;
-      }
-
-      dbStore.updateSettings({ fampay_upi_id: newUpi });
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          payment_gateway: {
-            ...bots[0].payment_gateway,
-            upi_id: newUpi
-          }
-        });
-      }
-
-      await this.sendMessage(
-        chatId,
-        `📱 <b>CUSTOM UPI ID UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>New UPI ID:</b> <code>${newUpi}</code>\n\n` +
-        `<i>QR Codes and UPI intent links will now direct payments to this address!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '💳 Payment Gateway Hub', callback_data: 'admin_gateway_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_gw_merchant') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newMerchant = text.trim();
-      if (!newMerchant) {
-        await this.sendMessage(chatId, '❌ Merchant name cannot be empty.');
-        return;
-      }
-
-      dbStore.updateSettings({
-        bot_name: newMerchant,
-        merchant_name: newMerchant
-      });
-
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          payment_gateway: {
-            ...bots[0].payment_gateway,
-            merchant_name: newMerchant
-          }
-        });
-      }
-
-      await this.sendMessage(
-        chatId,
-        `🏷️ <b>MERCHANT DISPLAY NAME UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>New Payee Name:</b> <b>${escapeHtml(newMerchant)}</b>\n\n` +
-        `<i>Customers will see this name on UPI payment apps during checkout!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '💳 Payment Gateway Hub', callback_data: 'admin_gateway_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_gw_limits') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const parts = text.trim().split(/\s+/);
-      const minDep = parseFloat(parts[0]);
-      const maxDep = parseFloat(parts[1]);
-
-      if (isNaN(minDep) || isNaN(maxDep) || minDep <= 0 || maxDep < minDep) {
-        await this.sendMessage(chatId, '❌ Invalid format. Please provide: <code>&lt;Min&gt; &lt;Max&gt;</code> (e.g. <code>50 50000</code>)');
-        return;
-      }
-
-      dbStore.updateSettings({
-        min_deposit_inr: minDep,
-        max_deposit_inr: maxDep
-      });
-
-      await this.sendMessage(
-        chatId,
-        `📊 <b>DEPOSIT LIMITS UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `💵 <b>Minimum Deposit:</b> ₹${minDep}\n` +
-        `💰 <b>Maximum Deposit:</b> ₹${maxDep.toLocaleString()}\n\n` +
-        `<i>Enforced across the bot add balance menu and payment gateway!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '💳 Payment Gateway Hub', callback_data: 'admin_gateway_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_rsl_key') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newKey = text.trim();
-      if (!newKey) {
-        await this.sendMessage(chatId, '❌ Reseller API Key cannot be empty.');
-        return;
-      }
-
-      dbStore.updateSettings({
-        bantibhaiya_api_key: newKey,
-        bantibhaiya_status: 'ON'
-      });
-
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          reseller_api: {
-            ...bots[0].reseller_api,
-            api_key: newKey,
-            status: 'ON'
-          }
-        });
-      }
-
-      const balRes = await bantiResellerService.fetchLiveBalance();
-
-      await this.sendMessage(
-        chatId,
-        `🔑 <b>25 RSL RESELLER API KEY UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>Key Configured:</b> <code>${newKey.slice(0, 4)}...${newKey.slice(-4)}</code>\n` +
-        `💰 <b>Connected Wallet Balance:</b> <b>₹${balRes.balance.toFixed(2)}</b>\n` +
-        `📡 <b>Status:</b> <code>${balRes.status}</code>\n\n` +
-        `<i>Automated upstream key generation is now linked to this API Key!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '⚡ Test Reseller API', callback_data: 'admin_rsl_test', style: 'success' }],
-            [{ text: '⚡ 25 RSL Reseller Hub', callback_data: 'admin_reseller_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_rsl_master') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newMaster = text.trim();
-      if (!newMaster) {
-        await this.sendMessage(chatId, '❌ Master key cannot be empty.');
-        return;
-      }
-
-      dbStore.updateSettings({ bantibhaiya_master_key: newMaster });
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          reseller_api: {
-            ...bots[0].reseller_api,
-            master_key: newMaster
-          }
-        });
-      }
-
-      await this.sendMessage(
-        chatId,
-        `🔐 <b>25 RSL MASTER SECRET KEY UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>Master Key:</b> <code>${newMaster.slice(0, 4)}...${newMaster.slice(-4)}</code>\n\n` +
-        `<i>Used for authenticated encrypted requests to the provider server.</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '⚡ 25 RSL Reseller Hub', callback_data: 'admin_reseller_hub', style: 'primary' }],
-            [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-          ]
-        }
-      );
-      return;
-    }
-
-    if (fsm && fsm.state === 'admin_wait_rsl_url') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      if (!this.isAdmin(user, chatId)) return;
-
-      const newUrl = text.trim();
-      if (!newUrl || !newUrl.startsWith('http')) {
-        await this.sendMessage(chatId, '❌ Invalid URL. Must start with http:// or https://');
-        return;
-      }
-
-      dbStore.updateSettings({ bantibhaiya_api_url: newUrl });
-      const bots = dbStore.getBots();
-      if (bots.length > 0) {
-        dbStore.updateBot(bots[0].id, {
-          reseller_api: {
-            ...bots[0].reseller_api,
-            api_url: newUrl
-          }
-        });
-      }
-
-      await this.sendMessage(
-        chatId,
-        `🌐 <b>RESELLER API URL UPDATED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>API Endpoint:</b> <code>${newUrl}</code>\n\n` +
-        `<i>All upstream key requests will now be routed to this endpoint!</i>`,
-        {
-          inline_keyboard: [
-            [{ text: '⚡ 25 RSL Reseller Hub', callback_data: 'admin_reseller_hub', style: 'primary' }],
             [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
           ]
         }
@@ -3114,261 +2376,6 @@ class TelegramEngine {
         await this.sendMessage(chatId, '📢 <b>Please send your broadcast announcement message text:</b>\n\n<i>Type /cancel to abort.</i>');
         return;
       }
-
-      if (lowerText.startsWith('/bots')) {
-        await this.sendBotsHub(chatId, user);
-        return;
-      }
-
-      if (lowerText.startsWith('/addbot')) {
-        const line = text.replace(/^\/addbot\s*/i, '').trim();
-        if (line) {
-          const parts = line.split(/\s+/);
-          const cleanToken = parts[0];
-          const botName = parts.slice(1).join(' ') || 'VIP Store Bot';
-          if (cleanToken && cleanToken.includes(':')) {
-            await this.sendMessage(chatId, `⏳ Validating token with Telegram API...`);
-            try {
-              const valRes = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
-              const valData = await valRes.json();
-              if (valData.ok) {
-                const bInfo = valData.result;
-                const newBot: BotInstance = {
-                  id: `bot_${bInfo.id}`,
-                  owner_id: user.user_id,
-                  admin_id: user.user_id,
-                  admin_chat_id: chatId,
-                  name: botName || bInfo.first_name,
-                  username: bInfo.username || '',
-                  bot_token: cleanToken,
-                  status: 'ONLINE',
-                  created_at: new Date().toISOString(),
-                  description: 'Created via /addbot command',
-                  theme_color: '#06b6d4',
-                  payment_gateway: {
-                    upi_id: dbStore.getData().settings.fampay_upi_id || 'kalampanel@fam',
-                    merchant_name: botName || bInfo.first_name,
-                    qr_image_url: '',
-                    gateway_provider: 'famgateway',
-                    api_key: dbStore.getData().settings.famgateway_api_key || '',
-                    secret_key: '',
-                    verify_endpoint: 'https://famgateway.in/api/checkout-status.php',
-                    usdt_trc20_address: '',
-                    usdt_to_inr_rate: 90,
-                    auto_approve: true,
-                    min_deposit_inr: 50,
-                    max_deposit_inr: 50000
-                  },
-                  reseller_api: {
-                    provider_name: '25 RSL Reseller API',
-                    api_url: dbStore.getData().settings.bantibhaiya_api_url || 'https://bantibhaiya.to/api/reseller_v1.php',
-                    api_key: dbStore.getData().settings.bantibhaiya_api_key || '',
-                    master_key: dbStore.getData().settings.bantibhaiya_master_key || '',
-                    status: 'ON',
-                    auto_fallback: true,
-                    sync_balance: 0
-                  },
-                  products: [...dbStore.getData().products],
-                  productKeys: [...dbStore.getData().productKeys],
-                  settings: { ...dbStore.getData().settings, bot_token: cleanToken, bot_username: `@${bInfo.username}` },
-                  stats: { total_orders: 0, total_revenue: 0, total_users: 1, total_keys_delivered: 0 }
-                };
-                dbStore.saveBot(newBot);
-
-                await this.sendMessage(
-                  chatId,
-                  `🎉 <b>BOT ADDED TO FLEET!</b> 🤖\n\n` +
-                  `📛 <b>Name:</b> ${newBot.name}\n` +
-                  `🔗 <b>Username:</b> @${bInfo.username}\n` +
-                  `🆔 <b>ID:</b> <code>${bInfo.id}</code>\n\n` +
-                  `<i>Use buttons below to activate or view in Bot Fleet:</i>`,
-                  {
-                    inline_keyboard: [
-                      [{ text: '⭐ Set as Active Bot', callback_data: `admin_bot_activate_${newBot.id}` }],
-                      [{ text: '🤖 Open Fleet Hub', callback_data: 'admin_bots_hub' }]
-                    ]
-                  }
-                );
-                return;
-              } else {
-                await this.sendMessage(chatId, `❌ Telegram rejected token: ${valData.description}`);
-                return;
-              }
-            } catch (err: any) {
-              await this.sendMessage(chatId, `❌ Verification error: ${err.message}`);
-              return;
-            }
-          }
-        }
-        await this.sendMessage(
-          chatId,
-          `ℹ️ <b>Add Bot Usage:</b>\n` +
-          `<code>/addbot &lt;Token&gt; [Bot_Name]</code>\n\n` +
-          `📌 <b>Example:</b>\n<code>/addbot 7829103948:AAFwExAmPlE_kALaM_tOkEn1234 Kalam FF Store</code>`
-        );
-        return;
-      }
-
-      if (lowerText.startsWith('/setbottoken')) {
-        const token = text.replace(/^\/setbottoken\s*/i, '').trim();
-        if (token && token.includes(':')) {
-          dbStore.updateSettings({ bot_token: token });
-          await this.restart();
-          await this.sendMessage(
-            chatId,
-            `✅ <b>Bot token updated & engine restarted!</b>\n<code>${token.slice(0, 8)}...${token.slice(-4)}</code>`,
-            { inline_keyboard: [[{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setbottoken &lt;token&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/gateway')) {
-        await this.sendGatewayHub(chatId, user);
-        return;
-      }
-
-      if (lowerText.startsWith('/setgwkey')) {
-        const key = text.replace(/^\/setgwkey\s*/i, '').trim();
-        if (key) {
-          dbStore.updateSettings({ famgateway_api_key: key, fampay_api_key: key });
-          const testRes = await famGateway.testApiKey();
-          await this.sendMessage(
-            chatId,
-            `✅ <b>FamGateway API Key set!</b>\n📡 <i>${testRes.message || 'Saved'}</i>`,
-            { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setgwkey &lt;FamGateway_API_Key&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/setupi')) {
-        const upi = text.replace(/^\/setupi\s*/i, '').trim();
-        if (upi && upi.includes('@')) {
-          dbStore.updateSettings({ fampay_upi_id: upi });
-          await this.sendMessage(
-            chatId,
-            `✅ <b>UPI ID updated to:</b> <code>${upi}</code>`,
-            { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setupi &lt;upi_id&gt;</code>\nExample: <code>/setupi kalampanel@fam</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/setmerchant')) {
-        const name = text.replace(/^\/setmerchant\s*/i, '').trim();
-        if (name) {
-          dbStore.updateSettings({ bot_name: name, merchant_name: name });
-          await this.sendMessage(
-            chatId,
-            `✅ <b>Merchant Name updated to:</b> <b>${escapeHtml(name)}</b>`,
-            { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setmerchant &lt;name&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/setlimits')) {
-        const parts = text.replace(/^\/setlimits\s*/i, '').trim().split(/\s+/);
-        if (parts.length >= 2) {
-          const min = parseFloat(parts[0]);
-          const max = parseFloat(parts[1]);
-          if (!isNaN(min) && !isNaN(max) && min > 0 && max >= min) {
-            dbStore.updateSettings({ min_deposit_inr: min, max_deposit_inr: max });
-            await this.sendMessage(
-              chatId,
-              `✅ <b>Deposit limits updated:</b> Min ₹${min} • Max ₹${max.toLocaleString()}`,
-              { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-            );
-            return;
-          }
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setlimits &lt;min&gt; &lt;max&gt;</code>\nExample: <code>/setlimits 50 50000</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/testgateway')) {
-        const testRes = await famGateway.testApiKey();
-        await this.sendMessage(
-          chatId,
-          `💳 <b>FAMGATEWAY STATUS:</b>\n${testRes.message || 'Complete'}\n` +
-          `UPI: <code>${famGateway.getUpiId()}</code> | Merchant: <b>${famGateway.getPayeeName()}</b>`,
-          { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-        );
-        return;
-      }
-
-      if (lowerText.startsWith('/resellerapi') || lowerText.startsWith('/rsl')) {
-        await this.sendResellerHub(chatId, user);
-        return;
-      }
-
-      if (lowerText.startsWith('/setreseller')) {
-        const key = text.replace(/^\/setreseller\s*/i, '').trim();
-        if (key) {
-          dbStore.updateSettings({ bantibhaiya_api_key: key, bantibhaiya_status: 'ON' });
-          const bal = await bantiResellerService.fetchLiveBalance();
-          await this.sendMessage(
-            chatId,
-            `✅ <b>25 RSL Reseller Key updated!</b>\n💰 Connected Balance: <b>₹${bal.balance.toFixed(2)}</b>`,
-            { inline_keyboard: [[{ text: '⚡ Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setreseller &lt;key&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/setmasterkey')) {
-        const key = text.replace(/^\/setmasterkey\s*/i, '').trim();
-        if (key) {
-          dbStore.updateSettings({ bantibhaiya_master_key: key });
-          await this.sendMessage(
-            chatId,
-            `✅ <b>25 RSL Master Key saved!</b>`,
-            { inline_keyboard: [[{ text: '⚡ Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setmasterkey &lt;master_key&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/setresellerurl')) {
-        const url = text.replace(/^\/setresellerurl\s*/i, '').trim();
-        if (url && url.startsWith('http')) {
-          dbStore.updateSettings({ bantibhaiya_api_url: url });
-          await this.sendMessage(
-            chatId,
-            `✅ <b>25 RSL API URL updated:</b> <code>${url}</code>`,
-            { inline_keyboard: [[{ text: '⚡ Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-          );
-          return;
-        }
-        await this.sendMessage(chatId, `ℹ️ <b>Usage:</b> <code>/setresellerurl &lt;url&gt;</code>`);
-        return;
-      }
-
-      if (lowerText.startsWith('/testreseller')) {
-        const bal = await bantiResellerService.fetchLiveBalance();
-        await this.sendMessage(
-          chatId,
-          `⚡ <b>25 RSL RESELLER API STATUS:</b>\n` +
-          `Status: <code>${bal.status}</code>\n` +
-          `Balance: <b>₹${bal.balance.toFixed(2)}</b>\n` +
-          `Latency: <code>${bal.latencyMs}ms</code>`,
-          { inline_keyboard: [[{ text: '⚡ Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-        );
-        return;
-      }
     }
 
     // Handle Reply Keyboard Button Clicks & Text Triggers
@@ -3471,7 +2478,7 @@ class TelegramEngine {
     await this.sendWelcomeMessage(chatId, user);
   }
 
-  private async handleCallbackQuery(cb: any, botContext?: BotInstance) {
+  private async handleCallbackQuery(cb: any) {
     const fromUser = cb.from;
     const data = cb.data;
     const msg = cb.message;
@@ -3479,24 +2486,8 @@ class TelegramEngine {
     const messageId = msg.message_id;
 
     const settings = dbStore.getData().settings;
-    const currentBots = dbStore.getBots();
-    const matchingBot = botContext || currentBots.find(b => 
-      (this.botInfo?.username && b.username?.replace('@','').toLowerCase() === this.botInfo.username.toLowerCase()) ||
-      (settings.bot_token && b.bot_token === settings.bot_token)
-    ) || (currentBots.length > 0 ? currentBots[0] : null);
-
-    const activeBotId = matchingBot?.id || (this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot'));
-    const activeBotUsername = matchingBot?.username || this.botInfo?.username || settings.bot_username || '';
-    const user = dbStore.getOrCreateUser(
-      fromUser.id,
-      fromUser.first_name,
-      fromUser.username,
-      chatId,
-      activeBotId,
-      activeBotUsername,
-      matchingBot?.owner_id,
-      matchingBot?.owner_email
-    );
+    const activeBotTag = this.botInfo?.username ? `@${this.botInfo.username}` : (settings.bot_username || 'default_bot');
+    const user = dbStore.getOrCreateUser(fromUser.id, fromUser.first_name, fromUser.username, chatId, activeBotTag, activeBotTag);
 
     if (user.is_banned === 1) {
       await this.answerCallback(cb.id, 'Your account is suspended.', true);
@@ -3751,7 +2742,7 @@ class TelegramEngine {
       }
 
       let allCatProducts = dbStore.getData().products.filter(p => 
-        isProductActive(p) && isCategoryMatch(p.category, categoryName)
+        p.is_active !== 0 && isCategoryMatch(p.category, categoryName)
       );
 
       let text = `🛒 <b>PRODUCT STORE — SHOP</b> 🛒\n` +
@@ -3832,25 +2823,22 @@ class TelegramEngine {
       }
 
       // If not found by direct ID, check if rawProdId matches a panel name or category
-      if (!refProduct || !isProductActive(refProduct)) {
+      if (!refProduct || refProduct.is_active === 0) {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
 
-        const foundAlt = dbStore.getData().products.find(p =>
-          isProductActive(p) && (
+        refProduct = dbStore.getData().products.find(p =>
+          p.is_active !== 0 && (
             (p.panel_name || p.name || '').toLowerCase().trim() === decoded ||
             normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(decoded) ||
             isCategoryMatch(p.category, decoded) ||
             (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
           )
         );
-        if (foundAlt) {
-          refProduct = foundAlt;
-        }
       }
 
       // If product not found by ID or panel name, it was deleted or deactivated
-      if (!refProduct || !isProductActive(refProduct)) {
+      if (!refProduct || refProduct.is_active === 0) {
         await this.answerCallback(cb.id, '❌ This panel is no longer available.', true);
         const text = `❌ <b>PANEL NOT AVAILABLE</b>\n\n` +
           `<i>This panel or package has been removed from the store catalog.</i>`;
@@ -3868,17 +2856,12 @@ class TelegramEngine {
       const targetPanelName = getCanonicalPanelName(refProduct);
 
       let panelPlans = dbStore.getData().products.filter(p =>
-        isProductActive(p) &&
+        p.is_active !== 0 &&
+        isCategoryMatch(p.category, targetCategory) &&
         (
-          String(p.id) === String(refProduct!.id) ||
-          (
-            isCategoryMatch(p.category, targetCategory) &&
-            (
-              getCanonicalPanelName(p).toLowerCase() === targetPanelName.toLowerCase() ||
-              (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
-              normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
-            )
-          )
+          getCanonicalPanelName(p).toLowerCase() === targetPanelName.toLowerCase() ||
+          (p.panel_name || p.name || '').trim().toLowerCase() === targetPanelName.trim().toLowerCase() ||
+          normalizeCategoryName(p.panel_name || p.name || '') === normalizeCategoryName(targetPanelName)
         )
       );
 
@@ -3974,8 +2957,7 @@ class TelegramEngine {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
         product = dbStore.getData().products.find(p =>
-          isProductActive(p) && (
-            String(p.id).trim() === decoded ||
+          (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
             (p.panel_name || '').toLowerCase().trim() === decoded ||
@@ -3985,7 +2967,7 @@ class TelegramEngine {
         );
       }
 
-      if (!product || !isProductActive(product)) {
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
         await this.answerCallback(cb.id, '❌ This product plan is no longer available.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package plan has been removed from the store catalog.</i>`;
@@ -4150,22 +3132,8 @@ class TelegramEngine {
           Number(p.id) === Number(rawProdId)
         );
       }
-      if (!product) {
-        let decoded = '';
-        try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
-        product = dbStore.getData().products.find(p =>
-          isProductActive(p) && (
-            String(p.id).trim() === decoded ||
-            (p.name || '').toLowerCase().trim() === decoded ||
-            (p.validity || '').toLowerCase().trim() === decoded ||
-            (p.panel_name || '').toLowerCase().trim() === decoded ||
-            `${(p.panel_name || '').toLowerCase().trim()} ${(p.name || '').toLowerCase().trim()}` === decoded ||
-            (Boolean(decoded) && (p.panel_name || '').toLowerCase().includes(decoded))
-          )
-        );
-      }
 
-      if (!product || !isProductActive(product)) {
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
         await this.answerCallback(cb.id, '❌ Product no longer available.', true);
         return;
       }
@@ -4305,8 +3273,7 @@ class TelegramEngine {
         let decoded = '';
         try { decoded = decodeURIComponent(rawProdId).toLowerCase().trim(); } catch { decoded = rawProdId.toLowerCase().trim(); }
         product = dbStore.getData().products.find(p =>
-          isProductActive(p) && (
-            String(p.id).trim() === decoded ||
+          (p.is_active !== 0) && (
             (p.name || '').toLowerCase().trim() === decoded ||
             (p.validity || '').toLowerCase().trim() === decoded ||
             (p.panel_name || '').toLowerCase().trim() === decoded ||
@@ -4316,7 +3283,7 @@ class TelegramEngine {
         );
       }
 
-      if (!product || !isProductActive(product)) {
+      if (!product || (product.is_active !== undefined && product.is_active === 0)) {
         await this.answerCallback(cb.id, '❌ This product is no longer available to buy.', true);
         const text = `❌ <b>PRODUCT NOT AVAILABLE</b>\n\n` +
           `<i>This package has been removed or is no longer available for order.</i>`;
@@ -5057,441 +4024,6 @@ class TelegramEngine {
       );
       return;
     }
-
-    // ==========================================
-    // IN-BOT FLEET & CLONER HUB HANDLERS
-    // ==========================================
-    if (data === 'bot_creator_start') {
-      await this.startBotCreatorWizard(chatId, user, messageId);
-      return;
-    }
-
-    if (data === 'bot_create_skip_gw') {
-      const fsm = dbStore.getFsmState(user.user_id);
-      const currentData = fsm?.data || {};
-      dbStore.setFsmState(user.user_id, 'bot_create_step3_reseller', currentData);
-
-      const step3Text = `✅ <b>GATEWAY SKIPPED (USING DEFAULT GATEWAY)</b> 💳\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `⚡ <b><u>STEP 3 OF 4: 25 RSL RESELLER API</u></b>\n` +
-        `Connect to 25 RSL / Banti Reseller API for automated VIP Key generation & instant delivery.\n\n` +
-        `👇 <b>Reply directly with your 25 RSL Reseller API Key:</b>\n` +
-        `<code>&lt;Your_Reseller_API_Key&gt;</code>\n\n` +
-        `<i>Or tap below to skip and use the master reseller provider:</i>`;
-
-      const kb = {
-        inline_keyboard: [
-          [{ text: '⏭️ Skip — Use Master Reseller API', callback_data: 'bot_create_skip_res', style: 'primary' }],
-          [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel', style: 'danger' }]
-        ]
-      };
-      if (messageId) {
-        await this.editMessageText(chatId, messageId, step3Text, kb);
-      } else {
-        await this.sendMessage(chatId, step3Text, kb);
-      }
-      return;
-    }
-
-    if (data === 'bot_create_skip_res') {
-      const fsm = dbStore.getFsmState(user.user_id);
-      const currentData = fsm?.data || {};
-      dbStore.setFsmState(user.user_id, 'bot_create_step4_products', currentData);
-
-      const totalPlans = dbStore.getData().products.length;
-      const step4Text = `✅ <b>RESELLER SKIPPED (USING MASTER PROVIDER)</b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `📦 <b><u>STEP 4 OF 4: PRODUCT STORE CATALOG</u></b>\n` +
-        `How would you like to set up the catalog for your new bot?\n\n` +
-        `• <b>Clone All Products (${totalPlans} Plans):</b> Automatically copies all current VIP panels, categories (Non-Root, Root, PC), duration packages and pricing into your new bot.\n` +
-        `• <b>Start Empty:</b> Creates a fresh bot with zero products so you can add your custom panels.\n\n` +
-        `👇 <b>Choose an option below to complete setup:</b>`;
-
-      const kb = {
-        inline_keyboard: [
-          [{ text: `📦 Clone All Products (${totalPlans} Plans)`, callback_data: 'bot_create_clone_prods', style: 'success' }],
-          [{ text: '➕ Start with Empty Catalog', callback_data: 'bot_create_empty_prods', style: 'primary' }],
-          [{ text: '❌ Cancel Wizard', callback_data: 'bot_create_cancel', style: 'danger' }]
-        ]
-      };
-      if (messageId) {
-        await this.editMessageText(chatId, messageId, step4Text, kb);
-      } else {
-        await this.sendMessage(chatId, step4Text, kb);
-      }
-      return;
-    }
-
-    if (data === 'bot_create_clone_prods') {
-      await this.finishBotCreation(chatId, user, true, messageId);
-      return;
-    }
-
-    if (data === 'bot_create_empty_prods') {
-      await this.finishBotCreation(chatId, user, false, messageId);
-      return;
-    }
-
-    if (data === 'bot_create_cancel') {
-      dbStore.setFsmState(user.user_id, 'idle');
-      await this.answerCallback(cb.id, 'Bot creation wizard cancelled.');
-      if (this.isAdmin(user, chatId)) {
-        await this.sendBotsHub(chatId, user, messageId);
-      } else {
-        await this.sendWelcomeMessage(chatId, user);
-      }
-      return;
-    }
-
-    if (data === 'admin_bots_hub') {
-      if (!this.isAdmin(user, chatId)) return;
-      await this.sendBotsHub(chatId, user, messageId);
-      return;
-    }
-
-    if (data === 'admin_bot_add_start') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_bot_token');
-      const text = `🤖 <b><u>ADD NEW BOT TOKEN (@BotFather)</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `Create a new bot on Telegram using @BotFather and copy the HTTP API Token.\n\n` +
-        `👇 <b>Reply directly in this chat with your new Bot Token:</b>\n\n` +
-        `<code>&lt;Bot_API_Token&gt; [Optional_Bot_Name]</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>7829103948:AAFwExAmPlE_kALaM_tOkEn1234 Kalam FF Store</code>\n\n` +
-        `💡 <i>Or use slash command:</i> <code>/addbot &lt;token&gt; [name]</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`;
-
-      await this.editMessageText(chatId, messageId, text, {
-        inline_keyboard: [
-          [{ text: '🔙 Back to Bot Fleet', callback_data: 'admin_bots_hub' }],
-          [{ text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }]
-        ]
-      });
-      return;
-    }
-
-    if (data === 'admin_bot_test_active') {
-      if (!this.isAdmin(user, chatId)) return;
-      const startTime = Date.now();
-      const testRes = await this.testConnection();
-      const latencyMs = Date.now() - startTime;
-      if (testRes.success) {
-        await this.answerCallback(cb.id, `✅ Connected to @${testRes.bot?.username} (${latencyMs}ms)`, true);
-        await this.sendMessage(
-          chatId,
-          `🟢 <b>ACTIVE BOT CONNECTION VERIFIED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `🤖 <b>Bot Name:</b> ${testRes.bot?.first_name}\n` +
-          `🔗 <b>Username:</b> @${testRes.bot?.username}\n` +
-          `🆔 <b>Bot ID:</b> <code>${testRes.bot?.id}</code>\n` +
-          `⚡ <b>Ping Latency:</b> <code>${latencyMs}ms</code>\n` +
-          `🟢 <b>Status:</b> <b>LIVE & POLLING 24/7</b>`,
-          { inline_keyboard: [[{ text: '🤖 Bot Fleet Hub', callback_data: 'admin_bots_hub' }]] }
-        );
-      } else {
-        await this.answerCallback(cb.id, `❌ Connection error: ${testRes.error || 'Failed'}`, true);
-      }
-      return;
-    }
-
-    if (data.startsWith('admin_bot_view_')) {
-      if (!this.isAdmin(user, chatId)) return;
-      const bId = data.replace('admin_bot_view_', '');
-      await this.sendBotView(chatId, user, bId, messageId);
-      return;
-    }
-
-    if (data.startsWith('admin_bot_test_')) {
-      if (!this.isAdmin(user, chatId)) return;
-      const bId = data.replace('admin_bot_test_', '');
-      const bots = dbStore.getBots();
-      const target = bots.find(b => b.id === bId);
-      if (!target || !target.bot_token) {
-        await this.answerCallback(cb.id, '❌ Bot token not found.', true);
-        return;
-      }
-      const startTime = Date.now();
-      try {
-        const valRes = await fetch(`https://api.telegram.org/bot${target.bot_token}/getMe`);
-        const valData = await valRes.json();
-        const latencyMs = Date.now() - startTime;
-        if (valData.ok) {
-          await this.answerCallback(cb.id, `✅ @${valData.result?.username} is VALID (${latencyMs}ms)`, true);
-          await this.sendMessage(
-            chatId,
-            `🟢 <b>FLEET BOT TEST: SUCCESS!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-            `🤖 <b>Name:</b> ${valData.result?.first_name}\n` +
-            `🔗 <b>Username:</b> @${valData.result?.username}\n` +
-            `🆔 <b>ID:</b> <code>${valData.result?.id}</code>\n` +
-            `⚡ <b>Ping Latency:</b> <code>${latencyMs}ms</code>\n` +
-            `✅ <b>Token Status:</b> <b>AUTHENTICATED</b>`,
-            { inline_keyboard: [[{ text: '🔙 Back to Bot', callback_data: `admin_bot_view_${bId}` }]] }
-          );
-        } else {
-          await this.answerCallback(cb.id, `❌ Invalid token: ${valData.description}`, true);
-        }
-      } catch (e: any) {
-        await this.answerCallback(cb.id, `❌ Test error: ${e.message}`, true);
-      }
-      return;
-    }
-
-    if (data.startsWith('admin_bot_activate_')) {
-      if (!this.isAdmin(user, chatId)) return;
-      const bId = data.replace('admin_bot_activate_', '');
-      const bots = dbStore.getBots();
-      const target = bots.find(b => b.id === bId);
-      if (!target || !target.bot_token) {
-        await this.answerCallback(cb.id, '❌ Bot not found or missing token.', true);
-        return;
-      }
-
-      dbStore.updateSettings({
-        bot_token: target.bot_token,
-        bot_username: target.username ? `@${target.username}` : target.bot_token,
-        admin_id: target.admin_id || target.admin_chat_id || user.user_id
-      });
-      await this.restart();
-
-      await this.answerCallback(cb.id, `⭐ Activated @${target.username || target.name}!`, true);
-      await this.sendMessage(
-        chatId,
-        `⭐ <b>PRIMARY STORE BOT SWITCHED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>Active Bot:</b> ${target.name} (@${target.username})\n` +
-        `🤖 <b>ID:</b> <code>${target.id}</code>\n\n` +
-        `<i>The Telegram Engine has reloaded and is now serving this bot directly!</i>`,
-        { inline_keyboard: [[{ text: '🤖 Bot Fleet Hub', callback_data: 'admin_bots_hub' }]] }
-      );
-      return;
-    }
-
-    if (data.startsWith('admin_bot_del_')) {
-      if (!this.isAdmin(user, chatId)) return;
-      const bId = data.replace('admin_bot_del_', '');
-      const bots = dbStore.getBots();
-      const target = bots.find(b => b.id === bId);
-      const bName = target ? target.name : bId;
-      dbStore.deleteBot(bId);
-      await this.answerCallback(cb.id, `🗑️ Deleted ${bName}`, true);
-      await this.sendBotsHub(chatId, user);
-      return;
-    }
-
-    // ==========================================
-    // PAYMENT GATEWAY (FAMGATEWAY) HUB HANDLERS
-    // ==========================================
-    if (data === 'admin_gateway_hub') {
-      if (!this.isAdmin(user, chatId)) return;
-      await this.sendGatewayHub(chatId, user, messageId);
-      return;
-    }
-
-    if (data === 'admin_gw_set_key') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_gw_key');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `🔑 <b><u>SET FAMGATEWAY API KEY</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your FamGateway API Key:</b>\n\n` +
-        `<code>&lt;FamGateway_API_Key&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>FAM_LIVE_98234abcdef01234567890</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setgwkey &lt;key&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_gw_set_upi') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_gw_upi');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `📱 <b><u>SET CUSTOM UPI ID</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your UPI ID for payments:</b>\n\n` +
-        `<code>&lt;UPI_ID&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>kalampanel@fam</code> or <code>mybusiness@okaxis</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setupi &lt;upi_id&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_gw_set_merchant') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_gw_merchant');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `🏷️ <b><u>SET MERCHANT / PAYEE DISPLAY NAME</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your Merchant Name:</b>\n\n` +
-        `<code>&lt;Merchant_Name&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>Kalam FF VIP Store</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setmerchant &lt;name&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_gw_set_limits') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_gw_limits');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `📊 <b><u>SET MIN / MAX DEPOSIT LIMITS</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply with Minimum and Maximum deposit amounts in INR:</b>\n\n` +
-        `<code>&lt;Min_Amount&gt; &lt;Max_Amount&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>50 50000</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setlimits 50 50000</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_gw_test') {
-      if (!this.isAdmin(user, chatId)) return;
-      await this.answerCallback(cb.id, '⏳ Testing FamGateway connection...', false);
-      const startTime = Date.now();
-      const testRes = await famGateway.testApiKey();
-      const latencyMs = Date.now() - startTime;
-
-      if (testRes.success) {
-        await this.sendMessage(
-          chatId,
-          `✅ <b>FAMGATEWAY CONNECTION SUCCESSFUL!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `⚡ <b>Provider:</b> FamGateway.in Instant UPI API\n` +
-          `📡 <b>Response:</b> ${testRes.message || 'Active'}\n` +
-          `⏱ <b>Latency:</b> <code>${latencyMs}ms</code>\n` +
-          `📱 <b>UPI ID:</b> <code>${famGateway.getUpiId()}</code>\n` +
-          `🏷️ <b>Merchant:</b> <b>${famGateway.getPayeeName()}</b>\n\n` +
-          `<i>Instant auto-verification and user wallet crediting is 100% active!</i>`,
-          { inline_keyboard: [[{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]] }
-        );
-      } else {
-        await this.sendMessage(
-          chatId,
-          `⚠️ <b>FAMGATEWAY CONNECTION NOTICE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `❌ <b>Message:</b> ${testRes.message}\n` +
-          `⏱ <b>Latency:</b> <code>${latencyMs}ms</code>\n\n` +
-          `<i>Note: If your FamGateway API Key is not set or expired, the bot automatically falls back to Direct QR Code payments!</i>`,
-          {
-            inline_keyboard: [
-              [{ text: '🔑 Set API Key Now', callback_data: 'admin_gw_set_key' }],
-              [{ text: '💳 Gateway Hub', callback_data: 'admin_gateway_hub' }]
-            ]
-          }
-        );
-      }
-      return;
-    }
-
-    // ==========================================
-    // 25 RSL RESELLER API HUB HANDLERS
-    // ==========================================
-    if (data === 'admin_reseller_hub') {
-      if (!this.isAdmin(user, chatId)) return;
-      await this.sendResellerHub(chatId, user, messageId);
-      return;
-    }
-
-    if (data === 'admin_rsl_set_key') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_rsl_key');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `🔑 <b><u>SET 25 RSL RESELLER API KEY</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your Upstream Reseller API Key:</b>\n\n` +
-        `<code>&lt;Reseller_API_Key&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>87224c074a021676364829b5b3f0686e</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setreseller &lt;key&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_rsl_set_master') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_rsl_master');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `🔐 <b><u>SET 25 RSL MASTER SECRET KEY</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your Master Key:</b>\n\n` +
-        `<code>&lt;Master_Key&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>a7f3e8b2c9d1f4a6b8c2d5e9f1a3b6c8</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setmasterkey &lt;key&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_rsl_set_url') {
-      if (!this.isAdmin(user, chatId)) return;
-      dbStore.setFsmState(user.user_id, 'admin_wait_rsl_url');
-      await this.editMessageText(
-        chatId,
-        messageId,
-        `🌐 <b><u>SET RESELLER API ENDPOINT URL</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `👇 <b>Reply in chat with your Provider API URL:</b>\n\n` +
-        `<code>&lt;API_URL&gt;</code>\n\n` +
-        `📌 <b>Example:</b>\n` +
-        `<code>https://bantibhaiya.to/api/reseller_v1.php</code>\n\n` +
-        `💡 <i>Or use command:</i> <code>/setresellerurl &lt;url&gt;</code>\n\n` +
-        `<i>Send /cancel to abort.</i>`,
-        { inline_keyboard: [[{ text: '🔙 Back to Reseller Hub', callback_data: 'admin_reseller_hub' }]] }
-      );
-      return;
-    }
-
-    if (data === 'admin_rsl_test') {
-      if (!this.isAdmin(user, chatId)) return;
-      await this.answerCallback(cb.id, '⏳ Querying 25 RSL Reseller API...', false);
-      const startTime = Date.now();
-      const balanceRes = await bantiResellerService.fetchLiveBalance();
-      const latencyMs = Date.now() - startTime;
-
-      if (balanceRes.success) {
-        await this.sendMessage(
-          chatId,
-          `⚡ <b>25 RSL RESELLER API: CONNECTED!</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `💰 <b>Upstream Wallet Balance:</b> <b>₹${balanceRes.balance.toFixed(2)}</b>\n` +
-          `📡 <b>Status:</b> <code>${balanceRes.status}</code>\n` +
-          `⏱ <b>Latency:</b> <code>${latencyMs}ms</code>\n` +
-          `🔑 <b>API Key:</b> <code>${balanceRes.apiKeyMasked}</code>\n` +
-          `🌐 <b>URL:</b> <code>${balanceRes.apiUrl}</code>\n\n` +
-          `<i>Instant automated key generation and delivery is ACTIVE!</i>`,
-          { inline_keyboard: [[{ text: '⚡ 25 RSL Hub', callback_data: 'admin_reseller_hub' }]] }
-        );
-      } else {
-        await this.sendMessage(
-          chatId,
-          `⚠️ <b>25 RSL API RESPONSE</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-          `❌ <b>Message:</b> ${balanceRes.message || 'Could not fetch balance'}\n` +
-          `⏱ <b>Latency:</b> <code>${latencyMs}ms</code>\n` +
-          `🌐 <b>Endpoint:</b> <code>${balanceRes.apiUrl}</code>\n\n` +
-          `<i>Tap 'Set API Key' below to verify your credentials.</i>`,
-          {
-            inline_keyboard: [
-              [{ text: '🔑 Set 25 RSL Key', callback_data: 'admin_rsl_set_key' }],
-              [{ text: '⚡ Reseller Hub', callback_data: 'admin_reseller_hub' }]
-            ]
-          }
-        );
-      }
-      return;
-    }
   }
 
   private getWelcomeText(user: User): string {
@@ -5586,41 +4118,34 @@ class TelegramEngine {
 
     const buttons: any[] = [
       [
-        { text: '🔴 🛒 Buy Now / Store Catalog', callback_data: 'shop_categories', style: 'danger' }
+        { text: '🛒 Buy Now', callback_data: 'shop_categories', style: 'danger' }
       ],
       [
-        { text: '🟢 💸 Add Balance via UPI', callback_data: 'add_balance', style: 'success' },
-        { text: '🔵 📲 Check Update & APKs', callback_data: 'check_update', style: 'primary' }
+        { text: 'Check Update', callback_data: 'check_update', style: 'success' },
+        { text: '💸 Add Balance', callback_data: 'add_balance', style: 'success' }
       ],
       [
-        { text: '🟣 👑 My Profile & Purchased Keys', callback_data: 'profile', style: 'primary' }
+        { text: '👑 My Profile + All History', callback_data: 'profile', style: 'success' }
       ],
       [
-        { text: '🟡 🔗 Refer & Earn Cash', callback_data: 'referral_menu', style: 'warning' },
-        { text: '🔴 🎁 Daily Gift / Rewards', callback_data: 'daily_gift', style: 'danger' }
+        { text: '🔗 Refer And Earn', callback_data: 'referral_menu', style: 'success' },
+        { text: '⁉️ How To Use Bot', callback_data: 'how_to_use', style: 'success' }
       ],
       [
-        { text: '🟣 ⁉️ Video Tutorial & Guide', callback_data: 'how_to_use', style: 'primary' },
-        { text: '🔴 🎧 24/7 VIP Support', callback_data: 'support_menu', style: 'danger' }
+        { text: 'Support', callback_data: 'support_menu', style: 'danger' },
+        { text: '🎁 Daily Gift', callback_data: 'daily_gift', style: 'success' }
       ]
     ];
 
     if (user.is_reseller === 1) {
       buttons.push([
-        { text: '🟡 🌟 Reseller VIP Wholesale Panel', callback_data: 'reseller_panel', style: 'warning' }
-      ]);
-    }
-
-    // Bot Creator / Cloner Factory button accessible for admins and resellers
-    if (user.is_reseller === 1 || this.isAdmin(user, user.user_id)) {
-      buttons.push([
-        { text: '🟣 🤖 Create Your Own Telegram Bot', callback_data: 'bot_creator_start', style: 'primary' }
+        { text: '🌟 Reseller Panel', callback_data: 'reseller_panel', style: 'primary' }
       ]);
     }
 
     if (this.isAdmin(user, user.user_id)) {
       buttons.push([
-        { text: '🔴 ⚙️ Master Admin Terminal (@admin)', callback_data: 'admin_panel', style: 'danger' }
+        { text: '⚙️ Master Admin Terminal (@admin)', callback_data: 'admin_panel', style: 'danger' }
       ]);
     }
 
@@ -6200,27 +4725,17 @@ class TelegramEngine {
       `• Total Orders Processed: <b>${data.orders.length}</b>\n` +
       `• Open Support Tickets: <b>${openTickets}</b>\n\n` +
       `⚡ <b>Quick Admin Slash Commands:</b>\n` +
-      `• <code>/addbot &lt;token&gt; [name]</code> | <code>/bots</code> (Fleet Hub)\n` +
-      `• <code>/setgwkey &lt;key&gt;</code> | <code>/setupi &lt;upi&gt;</code> (Gateway)\n` +
-      `• <code>/setreseller &lt;key&gt;</code> | <code>/setmasterkey &lt;key&gt;</code> (25 RSL API)\n` +
       `• <code>/addproduct Category | Panel | Plan | Price | ResellerPrice | Mode | PID | Duration</code>\n` +
       `• <code>/delproduct &lt;id&gt;</code> or <code>/delpanel &lt;name&gt;</code>\n` +
+      `• <code>/setprovider &lt;id&gt; &lt;pid&gt; &lt;duration&gt;</code>\n` +
       `• <code>/addkey &lt;id&gt; | Key1, Key2</code>\n` +
       `• <code>/addbalance &lt;uid&gt; &lt;amount&gt;</code> | <code>/deduct &lt;uid&gt; &lt;amount&gt;</code>\n\n` +
-      `👇 <i>Control and configure all bot tokens, payment gateways, reseller APIs & products directly inside Telegram:</i>`;
+      `👇 <i>Use the interactive buttons below to manage products, plans & keys right inside Telegram:</i>`;
 
     const keyboard = {
       inline_keyboard: [
         [
           { text: '🚀 Launch Web Admin Hub (Mini App)', web_app: { url: webAppUrl }, style: 'primary' }
-        ],
-        [
-          { text: '🤖 Bot Fleet Hub', callback_data: 'admin_bots_hub', style: 'primary' },
-          { text: '🤖 Bot Creator Wizard', callback_data: 'bot_creator_start', style: 'success' }
-        ],
-        [
-          { text: '💳 Payment Gateway (FamGateway)', callback_data: 'admin_gateway_hub', style: 'primary' },
-          { text: '⚡ 25 RSL Reseller API', callback_data: 'admin_reseller_hub', style: 'primary' }
         ],
         [
           { text: '📦 Manage Products & Plans', callback_data: 'admin_prods_hub', style: 'primary' },
@@ -6257,342 +4772,6 @@ class TelegramEngine {
         [
           { text: '🔄 Refresh Terminal', callback_data: 'admin_refresh', style: 'success' },
           { text: '🔙 Main Menu', callback_data: 'main_menu', style: 'danger' }
-        ]
-      ]
-    };
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, keyboard);
-    } else {
-      await this.sendMessage(chatId, text, keyboard);
-    }
-  }
-
-  /**
-   * Telegram Bot Fleet & Cloner Hub
-   */
-  private async sendBotsHub(chatId: number, user: User, messageId?: number) {
-    if (!this.isAdmin(user, chatId)) return;
-    const bots = dbStore.getBots();
-    const settings = dbStore.getData().settings;
-    const currentToken = this.getValidTokenFromStore();
-
-    let text = `🤖 <b><u>TELEGRAM BOT FLEET & CLONER HUB</u></b> 🤖\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `Create and manage cloned Telegram Bots directly inside Telegram without coding!\n\n` +
-      `📊 <b>Cluster Size:</b> <b>${bots.length} Bot(s) in Fleet</b>\n` +
-      `⚡ <b>Current Engine Bot:</b> <code>@${this.botInfo?.username || settings.bot_username || 'None'}</code>\n\n`;
-
-    const keyboardRows: any[] = [];
-
-    if (bots.length === 0) {
-      text += `<i>No additional bots configured in the fleet yet. Tap ➕ Add New Bot Token below to add a bot from @BotFather!</i>\n\n`;
-    } else {
-      bots.forEach((b, idx) => {
-        const isActive = b.bot_token === currentToken || b.username === settings.bot_username;
-        const statusIcon = isActive ? '🟢 ACTIVE RUNNING' : '⚪ STANDBY';
-        const maskedTok = b.bot_token ? `${b.bot_token.slice(0, 6)}...${b.bot_token.slice(-4)}` : 'No Token';
-        text += `<b>${idx + 1}. ${escapeHtml(b.name || 'Bot')}</b> (@${escapeHtml(b.username || 'unknown')})\n` +
-          `  Status: <b>${statusIcon}</b>\n` +
-          `  Token: <code>${maskedTok}</code>\n` +
-          `  Products: <b>${(b.products || []).length} Plans</b> | Orders: <b>${b.stats?.total_orders || 0}</b>\n\n`;
-
-        keyboardRows.push([
-          {
-            text: `${isActive ? '🟢 Active: ' : '🤖 Manage: '} ${b.name || b.username || `Bot #${idx + 1}`}`,
-            callback_data: `admin_bot_view_${b.id}`
-          }
-        ]);
-      });
-    }
-
-    keyboardRows.push([
-      { text: '🤖 Launch Bot Creator Wizard', callback_data: 'bot_creator_start', style: 'success' },
-      { text: '➕ Quick Add Token', callback_data: 'admin_bot_add_start', style: 'primary' }
-    ]);
-    keyboardRows.push([
-      { text: '🔄 Test Active Engine', callback_data: 'admin_bot_test_active', style: 'primary' },
-      { text: '🚀 Open Web Fleet Manager', web_app: { url: this.getWebAppUrl() } }
-    ]);
-    keyboardRows.push([
-      { text: '⚙️ Admin Terminal', callback_data: 'admin_panel', style: 'danger' }
-    ]);
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, { inline_keyboard: keyboardRows });
-    } else {
-      await this.sendMessage(chatId, text, { inline_keyboard: keyboardRows });
-    }
-  }
-
-  /**
-   * Launch Step-by-Step Interactive Bot Creator Wizard
-   */
-  public async startBotCreatorWizard(chatId: number, user: User, messageId?: number) {
-    dbStore.setFsmState(user.user_id, 'bot_create_step1_token', {});
-    const text = `🤖 <b><u>TELEGRAM BOT CREATOR & CLONER STUDIO</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `Create and launch your own Free Fire VIP Panel Telegram Store Bot directly inside Telegram without any coding!\n\n` +
-      `📌 <b>STEP 1 OF 4: TELEGRAM BOT TOKEN</b>\n` +
-      `1️⃣ Open @BotFather on Telegram.\n` +
-      `2️⃣ Send <code>/newbot</code> and choose a Name and Username (ending with <i>bot</i>).\n` +
-      `3️⃣ Copy the <b>HTTP API Token</b> provided by @BotFather.\n\n` +
-      `👇 <b>Reply directly in this chat with your new Bot Token:</b>\n\n` +
-      `<code>&lt;Bot_API_Token&gt; [Optional_Bot_Name]</code>\n\n` +
-      `📌 <b>Example:</b>\n` +
-      `<code>7829103948:AAFwExAmPlE_kALaM_tOkEn1234 Kalam FF Store</code>\n\n` +
-      `<i>Send /cancel at any time to abort.</i>`;
-
-    const kb = {
-      inline_keyboard: [
-        [{ text: '💬 Open @BotFather on Telegram', url: 'https://t.me/BotFather' }],
-        [{ text: '🔙 Back to Bot Fleet Hub', callback_data: 'admin_bots_hub' }],
-        [{ text: '❌ Cancel', callback_data: 'bot_create_cancel' }]
-      ]
-    };
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, kb);
-    } else {
-      await this.sendMessage(chatId, text, kb);
-    }
-  }
-
-  /**
-   * Finalize Bot Creation & Deploy Dedicated Polling Worker Instantly
-   */
-  public async finishBotCreation(chatId: number, user: User, cloneProducts: boolean, messageId?: number) {
-    const fsm = dbStore.getFsmState(user.user_id);
-    const data = fsm?.data || {};
-    const token = data.token;
-    const bInfo = data.botInfo || {};
-    const botName = data.botName || bInfo.first_name || 'VIP Store Bot';
-    const bId = `bot_${bInfo.id || Date.now()}`;
-
-    if (!token) {
-      await this.sendMessage(chatId, '❌ Bot creation session expired. Please start again with /createbot.');
-      return;
-    }
-
-    const defaultSettings = dbStore.getData().settings;
-    const clonedProducts = cloneProducts ? [...dbStore.getData().products] : [];
-    const clonedKeys = cloneProducts ? [...dbStore.getData().productKeys] : [];
-
-    const newBot: BotInstance = {
-      id: bId,
-      owner_id: user.user_id,
-      admin_id: user.user_id,
-      admin_chat_id: chatId,
-      name: botName,
-      username: bInfo.username || '',
-      bot_token: token,
-      status: 'ONLINE',
-      created_at: new Date().toISOString(),
-      description: 'Created via Telegram In-Bot Factory',
-      theme_color: '#06b6d4',
-      payment_gateway: {
-        upi_id: data.gatewayUpi || defaultSettings.fampay_upi_id || 'kalampanel@fam',
-        merchant_name: botName,
-        qr_image_url: '',
-        gateway_provider: 'famgateway',
-        api_key: data.gatewayKey || defaultSettings.famgateway_api_key || '',
-        secret_key: '',
-        verify_endpoint: 'https://famgateway.in/api/checkout-status.php',
-        usdt_trc20_address: '',
-        usdt_to_inr_rate: 90,
-        auto_approve: true,
-        min_deposit_inr: 50,
-        max_deposit_inr: 50000
-      },
-      reseller_api: {
-        provider_name: '25 RSL Reseller API',
-        api_url: defaultSettings.bantibhaiya_api_url || 'https://bantibhaiya.to/api/reseller_v1.php',
-        api_key: data.resellerKey || defaultSettings.bantibhaiya_api_key || '',
-        master_key: defaultSettings.bantibhaiya_master_key || '',
-        status: 'ON',
-        auto_fallback: true,
-        sync_balance: 0
-      },
-      products: clonedProducts,
-      productKeys: clonedKeys,
-      settings: {
-        ...defaultSettings,
-        bot_token: token,
-        bot_username: `@${bInfo.username || ''}`
-      },
-      stats: { total_orders: 0, total_revenue: 0, total_users: 1, total_keys_delivered: 0 }
-    };
-
-    dbStore.saveBot(newBot);
-    dbStore.setFsmState(user.user_id, 'idle');
-
-    // Launch dedicated 24/7 background worker for this bot immediately
-    await this.syncFleetPollers().catch(() => {});
-
-    const maskedTok = `${token.slice(0, 8)}...${token.slice(-6)}`;
-    const successText = `🎉 <b>CONGRATULATIONS! YOUR NEW TELEGRAM BOT IS LIVE!</b> 🤖\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `📛 <b>Bot Name:</b> <b>${escapeHtml(botName)}</b>\n` +
-      `🔗 <b>Telegram Handle:</b> @${escapeHtml(bInfo.username || 'bot')}\n` +
-      `🆔 <b>Bot ID:</b> <code>${bInfo.id || newBot.id}</code>\n` +
-      `🔑 <b>Token:</b> <code>${maskedTok}</code>\n` +
-      `🟢 <b>Cluster Status:</b> <b>ONLINE & POLLING 24/7</b>\n` +
-      `📦 <b>Catalog:</b> <b>${clonedProducts.length} Plans Active</b>\n` +
-      `💳 <b>Gateway:</b> <code>${newBot.payment_gateway.upi_id}</code>\n` +
-      `⚡ <b>Reseller API:</b> <code>${newBot.reseller_api.status}</code>\n\n` +
-      `🚀 <b>Your bot is active right now! Tap below to open it and test /start immediately on Telegram:</b>`;
-
-    const kb = {
-      inline_keyboard: [
-        [{ text: `🚀 Open @${bInfo.username} on Telegram`, url: `https://t.me/${bInfo.username}` }],
-        [{ text: '⭐ Set as Primary Store Bot', callback_data: `admin_bot_activate_${bId}`, style: 'success' }],
-        [{ text: '🤖 Manage in Bot Fleet Hub', callback_data: 'admin_bots_hub', style: 'primary' }],
-        [{ text: '⚙️ Master Admin Terminal', callback_data: 'admin_panel', style: 'danger' }]
-      ]
-    };
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, successText, kb);
-    } else {
-      await this.sendMessage(chatId, successText, kb);
-    }
-  }
-
-  /**
-   * View & Manage Specific Bot in Fleet
-   */
-  private async sendBotView(chatId: number, user: User, botId: string, messageId?: number) {
-    if (!this.isAdmin(user, chatId)) return;
-    const bots = dbStore.getBots();
-    const bot = bots.find(b => b.id === botId);
-    if (!bot) {
-      await this.sendMessage(chatId, '❌ Bot not found in fleet database.', { inline_keyboard: [[{ text: '🔙 Back to Fleet', callback_data: 'admin_bots_hub' }]] });
-      return;
-    }
-
-    const currentToken = this.getValidTokenFromStore();
-    const isActive = bot.bot_token === currentToken || bot.username === dbStore.getData().settings.bot_username;
-    const maskedTok = bot.bot_token ? `${bot.bot_token.slice(0, 8)}...${bot.bot_token.slice(-6)}` : 'Not Set';
-
-    const text = `🤖 <b><u>BOT FLEET INSTANCE DETAILS</u></b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `📛 <b>Name:</b> <b>${escapeHtml(bot.name)}</b>\n` +
-      `🔗 <b>Username:</b> <code>@${escapeHtml(bot.username || 'none')}</code>\n` +
-      `🆔 <b>Bot ID:</b> <code>${bot.id}</code>\n` +
-      `🔑 <b>API Token:</b> <code>${maskedTok}</code>\n` +
-      `🟢 <b>Cluster Status:</b> <b>${isActive ? '🟢 PRIMARY ACTIVE BOT' : '⚪ STANDBY BOT'}</b>\n` +
-      `📦 <b>Catalog Products:</b> <b>${(bot.products || []).length} Plans</b>\n` +
-      `💳 <b>Gateway UPI:</b> <code>${bot.payment_gateway?.upi_id || 'Default'}</code>\n` +
-      `⚡ <b>Reseller API:</b> <code>${bot.reseller_api?.status === 'ON' ? 'Active' : 'Offline'}</code>\n` +
-      `📊 <b>Performance:</b> ${bot.stats?.total_orders || 0} Orders (₹${bot.stats?.total_revenue || 0})\n\n` +
-      `👇 <i>Choose an action for this bot:</i>`;
-
-    const kbRows: any[] = [];
-    if (!isActive) {
-      kbRows.push([{ text: '⭐ Set as Primary Store Bot', callback_data: `admin_bot_activate_${bot.id}`, style: 'success' }]);
-    }
-    kbRows.push([
-      { text: '⚡ Test Bot Connection', callback_data: `admin_bot_test_${bot.id}`, style: 'primary' },
-      { text: '🗑️ Delete from Fleet', callback_data: `admin_bot_del_${bot.id}`, style: 'danger' }
-    ]);
-    kbRows.push([
-      { text: '🔙 Back to Bot Fleet', callback_data: 'admin_bots_hub' },
-      { text: '⚙️ Admin Terminal', callback_data: 'admin_panel' }
-    ]);
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, { inline_keyboard: kbRows });
-    } else {
-      await this.sendMessage(chatId, text, { inline_keyboard: kbRows });
-    }
-  }
-
-  /**
-   * Payment Gateway Hub (FamGateway.in)
-   */
-  private async sendGatewayHub(chatId: number, user: User, messageId?: number) {
-    if (!this.isAdmin(user, chatId)) return;
-    const apiKey = famGateway.getApiKey();
-    const upiId = famGateway.getUpiId();
-    const payeeName = famGateway.getPayeeName();
-    const minDep = this.getMinDeposit();
-    const maxDep = this.getMaxDeposit();
-
-    const maskedKey = apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : '❌ Not Configured (UPI Fallback)';
-
-    const text = `💳 <b><u>PAYMENT GATEWAY SETUP (FAMGATEWAY.IN)</u></b> 💳\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `⚡ <b>Automated UPI + QR Code payments powered by FamGateway.in</b>\n` +
-      `Instant verification & automatic balance credit for PhonePe, GPay, Paytm & FamPay.\n\n` +
-      `🔑 <b>FamGateway API Key:</b> <code>${maskedKey}</code>\n` +
-      `📱 <b>Custom UPI ID:</b> <code>${upiId}</code>\n` +
-      `🏷️ <b>Merchant Name:</b> <b>${escapeHtml(payeeName)}</b>\n` +
-      `📊 <b>Deposit Limits:</b> Min <code>₹${minDep}</code> • Max <code>₹${maxDep.toLocaleString()}</code>\n` +
-      `⚡ <b>Verification Engine:</b> <code>Background Auto-Polling (Every 7s)</code>\n\n` +
-      `👇 <i>Tap below to update credentials or test connection in real time:</i>`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '🔑 Set FamGateway API Key', callback_data: 'admin_gw_set_key', style: 'primary' },
-          { text: '📱 Set UPI ID', callback_data: 'admin_gw_set_upi', style: 'primary' }
-        ],
-        [
-          { text: '🏷️ Set Merchant Name', callback_data: 'admin_gw_set_merchant', style: 'primary' },
-          { text: '📊 Set Min/Max Limits', callback_data: 'admin_gw_set_limits', style: 'primary' }
-        ],
-        [
-          { text: '⚡ Test Gateway Connection', callback_data: 'admin_gw_test', style: 'success' }
-        ],
-        [
-          { text: '🚀 Web Gateway Settings', web_app: { url: this.getWebAppUrl() } },
-          { text: '🔙 Back to Terminal', callback_data: 'admin_panel', style: 'danger' }
-        ]
-      ]
-    };
-
-    if (messageId) {
-      await this.editMessageText(chatId, messageId, text, keyboard);
-    } else {
-      await this.sendMessage(chatId, text, keyboard);
-    }
-  }
-
-  /**
-   * 25 RSL Reseller API Hub
-   */
-  private async sendResellerHub(chatId: number, user: User, messageId?: number) {
-    if (!this.isAdmin(user, chatId)) return;
-    const settings = dbStore.getData().settings;
-    const balanceState = bantiResellerService.getLatestBalanceState();
-    const apiKey = settings.bantibhaiya_api_key || '';
-    const masterKey = settings.bantibhaiya_master_key || '';
-    const apiUrl = settings.bantibhaiya_api_url || 'https://bantibhaiya.to/api/reseller_v1.php';
-    const status = settings.bantibhaiya_status || 'ON';
-
-    const maskedKey = apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : '❌ Not Configured';
-    const maskedMaster = masterKey ? `${masterKey.slice(0, 4)}...${masterKey.slice(-4)}` : '❌ Not Configured';
-
-    const text = `⚡ <b><u>25 RSL RESELLER API SETUP</u></b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `Connect upstream 25 RSL / BantiBhaiya Reseller API for automated instant key generation & delivery!\n\n` +
-      `🌐 <b>Provider API URL:</b>\n<code>${apiUrl}</code>\n\n` +
-      `🔑 <b>Reseller API Key:</b> <code>${maskedKey}</code>\n` +
-      `🔐 <b>Master Secret Key:</b> <code>${maskedMaster}</code>\n` +
-      `🟢 <b>API System Status:</b> <b>${status === 'ON' ? 'ONLINE & ACTIVE' : 'PAUSED / OFF'}</b>\n` +
-      `💰 <b>Connected Wallet Balance:</b> <b>${balanceState.formatted || 'Click Test Below'}</b>\n\n` +
-      `👇 <i>Manage your Upstream Reseller API parameters directly inside Telegram:</i>`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '🔑 Set 25 RSL API Key', callback_data: 'admin_rsl_set_key', style: 'primary' },
-          { text: '🔐 Set Master Key', callback_data: 'admin_rsl_set_master', style: 'primary' }
-        ],
-        [
-          { text: '🌐 Set Provider API URL', callback_data: 'admin_rsl_set_url', style: 'primary' },
-          { text: '🎯 Map Provider PIDs', callback_data: 'admin_reseller_pid_menu', style: 'primary' }
-        ],
-        [
-          { text: '⚡ Test Connection & Balance', callback_data: 'admin_rsl_test', style: 'success' }
-        ],
-        [
-          { text: '🚀 Web API Manager', web_app: { url: this.getWebAppUrl() } },
-          { text: '🔙 Back to Terminal', callback_data: 'admin_panel', style: 'danger' }
         ]
       ]
     };

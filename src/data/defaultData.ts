@@ -90,10 +90,6 @@ export const UI_TEXTS = {
 export const DEFAULT_SETTINGS: Settings = {
   bot_token: '',
   bot_username: '',
-  creator_bot_token: '',
-  creator_bot_username: '',
-  creator_bot_name: 'VIP Store Bot Maker',
-  creator_bot_status: 'ON',
   admin_id: 12846461,
   admin_contact: '',
   reseller_system_status: 'ON',
@@ -131,31 +127,6 @@ export const DEFAULT_SETTINGS: Settings = {
   min_deposit_inr: 1.0,
   max_deposit_inr: 50000.0,
   payment_qr_logo_url: 'https://img.icons8.com/color/512/phone-pe.png',
-
-  // Web Branding & UI Customization Defaults
-  web_site_title: 'KALAM FF PANEL',
-  web_site_tagline: 'VIP STORE & BOT ENGINE',
-  web_logo_url: '',
-  web_favicon_url: '',
-  web_announcement_bar: '⚡ SPECIAL OFFER: Instant key delivery, 100% Anti-Ban Non-Root & Root FF Injector Panels available 24/7!',
-  web_show_announcement: true,
-  web_announcement_bg: 'emerald',
-  web_primary_theme: 'cyan',
-  web_hero_headline: 'Premium Game Panels & Instant License Vault',
-  web_hero_subheadline: 'Automated 24/7 key fulfillment with instant UPI recharge, wholesale reseller discounts, and multi-bot management.',
-  web_hero_cta_text: '🛒 Browse Panels & Buy Keys',
-  web_hero_banner_url: '',
-  web_footer_copyright: '© 2026 KALAM FF PANEL. All Rights Reserved.',
-  web_seo_meta_title: 'Kalam FF Panel | Official License Key Vault & Bot Store',
-  web_seo_meta_description: 'Buy 100% Anti-Ban Non-Root, Root & PC Game Panels with Instant License Delivery and Automated UPI Recharge.',
-  web_contact_email: 'support@kalampanel.com',
-
-  // Bot Management Defaults
-  bot_welcome_msg: '👋 Welcome to Kalam FF Panel Official Bot! Tap /shop to view active panels.',
-  bot_auto_notify_purchases: true,
-  bot_auto_notify_deposits: true,
-  bot_auto_notify_new_users: true,
-
   bot_commands_enabled: true,
   bot_commands: [
     { command: 'start', description: '✨ Launch Shop & Main Menu' },

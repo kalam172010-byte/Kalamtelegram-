@@ -37,15 +37,9 @@ export const offlineStorage = {
   saveUserBalances: (users: User[]) => {
     try {
       if (Array.isArray(users) && users.length > 0) {
-        let balances: Record<number, number> = {};
-        const existingData = localStorage.getItem(OFFLINE_USER_BALANCES_KEY);
-        if (existingData) {
-          try { balances = JSON.parse(existingData) || {}; } catch {}
-        }
+        const balances: Record<number, number> = {};
         users.forEach(u => {
-          if (u && u.user_id !== undefined && u.balance !== undefined && u.balance !== null) {
-            balances[u.user_id] = Number(u.balance);
-          }
+          balances[u.user_id] = u.balance;
         });
         localStorage.setItem(OFFLINE_USER_BALANCES_KEY, JSON.stringify(balances));
       }
